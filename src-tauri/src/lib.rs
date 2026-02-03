@@ -1,5 +1,8 @@
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::thread;
+use std::time::Duration;
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
@@ -8,6 +11,62 @@ mod commands;
 
 // Store the backend process handle
 static BACKEND_PROCESS: Mutex<Option<Child>> = Mutex::new(None);
+// Flag to stop the monitor thread on shutdown
+static SHOULD_MONITOR: AtomicBool = AtomicBool::new(true);
+
+/// Check if the backend process is still running, restart if it died
+fn check_and_restart_backend() {
+    let mut guard = match BACKEND_PROCESS.lock() {
+        Ok(g) => g,
+        Err(_) => return,
+    };
+
+    let needs_restart = match guard.as_mut() {
+        Some(child) => {
+            // try_wait returns Ok(Some(status)) if the process has exited
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    log::warn!("Backend process exited with status: {:?}", status);
+                    true
+                }
+                Ok(None) => false, // Still running
+                Err(e) => {
+                    log::error!("Error checking backend process status: {}", e);
+                    true // Assume it needs restart on error
+                }
+            }
+        }
+        None => true, // No process exists, need to start one
+    };
+
+    if needs_restart {
+        log::info!("Restarting backend process...");
+        match spawn_backend() {
+            Ok(child) => {
+                log::info!("Backend process restarted with PID: {:?}", child.id());
+                *guard = Some(child);
+            }
+            Err(e) => {
+                log::error!("Failed to restart backend: {}", e);
+            }
+        }
+    }
+}
+
+/// Start a background thread that monitors the backend process
+fn start_backend_monitor() {
+    thread::spawn(|| {
+        // Wait a bit before starting to monitor
+        thread::sleep(Duration::from_secs(5));
+
+        while SHOULD_MONITOR.load(Ordering::Relaxed) {
+            check_and_restart_backend();
+            // Check every 5 seconds
+            thread::sleep(Duration::from_secs(5));
+        }
+        log::info!("Backend monitor thread stopped");
+    });
+}
 
 fn spawn_backend() -> Result<Child, std::io::Error> {
     // Get the directory where the executable is running
@@ -77,13 +136,16 @@ pub fn run() {
             match spawn_backend() {
                 Ok(child) => {
                     *BACKEND_PROCESS.lock().unwrap() = Some(child);
-                    log::info!("Backend process started with PID: {:?}", 
+                    log::info!("Backend process started with PID: {:?}",
                         BACKEND_PROCESS.lock().unwrap().as_ref().map(|c| c.id()));
                 }
                 Err(e) => {
                     log::error!("Failed to start backend: {}", e);
                 }
             }
+
+            // Start the backend monitor thread for auto-restart
+            start_backend_monitor();
 
             // Configure logging with file output and rotation
             let log_plugin = tauri_plugin_log::Builder::default()
@@ -107,6 +169,9 @@ pub fn run() {
         })
         .on_window_event(|_window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
+                // Stop the monitor thread first to prevent restart attempts
+                SHOULD_MONITOR.store(false, Ordering::Relaxed);
+
                 // Kill the backend process when the window closes
                 if let Ok(mut guard) = BACKEND_PROCESS.lock() {
                     if let Some(ref mut child) = *guard {
