@@ -1,0 +1,213 @@
+/* ========================================
+   Comment Analysis Styles
+   ======================================== */
+
+/* Analyze button in header */
+.analyze-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.analyze-btn .analyze-count {
+  background: var(--bg-tertiary);
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 11px;
+}
+
+.analyze-btn.analyzing {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* Auto-analyze toggle */
+.auto-analyze-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+.auto-analyze-toggle:hover {
+  color: var(--text-primary);
+}
+
+.auto-analyze-checkbox {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  accent-color: var(--accent-color);
+}
+
+.auto-analyze-label {
+  white-space: nowrap;
+}
+
+.analyze-btn .spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--border-color);
+  border-top-color: var(--accent-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* Analysis section in thread */
+.comment-analysis {
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  border-left: 3px solid var(--accent-color);
+}
+
+.comment-analysis.fix {
+  border-left-color: var(--warning-color, #ffaa44);
+}
+
+.comment-analysis.reply {
+  border-left-color: var(--success-color, #107c10);
+}
+
+.comment-analysis.clarify {
+  border-left-color: var(--info-color, #0078d4);
+}
+
+.analysis-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.analysis-recommendation {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.analysis-recommendation.fix { color: var(--warning-color, #ffaa44); }
+.analysis-recommendation.reply { color: var(--success-color, #107c10); }
+.analysis-recommendation.clarify { color: var(--info-color, #0078d4); }
+
+.analysis-refresh-btn {
+  padding: 4px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-tertiary);
+  border-radius: 4px;
+}
+
+.analysis-refresh-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.analysis-reasoning {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+/* Fix recommendation styles */
+.analysis-fix-description {
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.analysis-suggested-code {
+  margin: 8px 0;
+  padding: 8px;
+  background: var(--bg-primary);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  border: 1px solid var(--border-color);
+}
+
+.analysis-fix-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.analysis-fix-input {
+  flex: 1;
+  padding: 6px 8px;
+  font-size: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.analysis-fix-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* Reply/Clarify styles */
+.analysis-message-container {
+  margin-top: 8px;
+}
+
+.analysis-message {
+  width: 100%;
+  padding: 8px;
+  font-size: 13px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  resize: vertical;
+  min-height: 60px;
+  font-family: inherit;
+}
+
+.analysis-message:read-only {
+  background: var(--bg-secondary);
+  cursor: default;
+}
+
+.analysis-message-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* Posted indicator */
+.analysis-posted {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: var(--bg-success-subtle, rgba(16, 124, 16, 0.1));
+  color: var(--success-color);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+/* Error state */
+.analysis-error {
+  padding: 8px;
+  background: var(--bg-error-subtle, rgba(209, 52, 56, 0.1));
+  color: var(--error-color);
+  border-radius: 4px;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+/* Spinner animation */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

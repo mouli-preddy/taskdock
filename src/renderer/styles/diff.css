@@ -1,0 +1,1058 @@
+/* ========================================
+   Diff Viewer - Clean, Simple Design
+   ======================================== */
+
+/* File Container */
+.diff-file {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+/* File Header */
+.diff-file-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.diff-file-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.diff-file-icon.add { background: var(--success-bg); color: var(--success); }
+.diff-file-icon.edit { background: var(--warning-bg); color: var(--warning); }
+.diff-file-icon.delete { background: var(--error-bg); color: var(--error); }
+.diff-file-icon.rename { background: var(--info-bg); color: var(--accent-purple); }
+
+.diff-file-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.diff-file-path {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff-file-path .folder { color: var(--text-secondary); }
+.diff-file-path .filename { color: var(--text-primary); font-weight: 500; }
+
+.diff-file-stats {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.diff-stat.add { color: var(--success); }
+.diff-stat.del { color: var(--error); }
+
+/* Split View */
+.diff-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.diff-pane {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+}
+
+.diff-pane:first-child {
+  border-right: 1px solid var(--border-color);
+}
+
+.diff-pane-header {
+  display: none;
+}
+
+.diff-split.show-headers .diff-pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.diff-pane-content {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+
+/* Unified View */
+.diff-unified {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+
+/* Diff Lines Container */
+.diff-lines {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* Individual Line */
+.diff-line {
+  display: flex;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.diff-line:hover {
+  background: var(--bg-hover);
+}
+
+/* Gutter */
+.diff-gutter {
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  background: var(--bg-secondary);
+  user-select: none;
+}
+
+.diff-gutter-inner {
+  display: flex;
+  align-items: center;
+}
+
+.diff-line-num {
+  width: 40px;
+  padding: 0 8px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  line-height: 22px;
+}
+
+.diff-line-marker {
+  width: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+/* Line Content */
+.diff-content {
+  flex: 1;
+  padding: 0 16px 0 8px;
+  white-space: pre;
+  overflow-x: auto;
+  height: 22px;
+  line-height: 22px;
+  display: flex;
+  align-items: center;
+}
+
+.diff-content code {
+  font-family: inherit;
+  font-size: inherit;
+  background: none !important;
+  padding: 0 !important;
+  color: inherit;
+}
+
+.diff-content-inner {
+  display: inline;
+}
+
+/* Line Types */
+
+/* Added Lines */
+.diff-line.add .diff-gutter {
+  background: var(--diff-add-gutter);
+}
+
+.diff-line.add .diff-line-marker {
+  color: var(--success);
+}
+
+.diff-line.add .diff-line-marker::before {
+  content: '+';
+}
+
+.diff-line.add .diff-content {
+  background: var(--diff-add-bg);
+}
+
+/* Deleted Lines */
+.diff-line.del .diff-gutter {
+  background: var(--diff-del-gutter);
+}
+
+.diff-line.del .diff-line-marker {
+  color: var(--error);
+}
+
+.diff-line.del .diff-line-marker::before {
+  content: '−';
+}
+
+.diff-line.del .diff-content {
+  background: var(--diff-del-bg);
+}
+
+/* Context Lines */
+.diff-line.ctx .diff-gutter {
+  background: var(--bg-secondary);
+}
+
+/* Empty Lines (for split view alignment) */
+.diff-line.empty {
+  background: var(--bg-tertiary);
+}
+
+.diff-line.empty .diff-gutter {
+  background: var(--bg-tertiary);
+}
+
+.diff-line.empty .diff-content {
+  background: var(--bg-tertiary);
+}
+
+/* ========================================
+   Word-Level Highlighting
+   ======================================== */
+.diff-word-add {
+  background: var(--diff-add-word);
+  border-radius: 2px;
+  padding: 1px 2px;
+  margin: -1px -2px;
+}
+
+.diff-word-del {
+  background: var(--diff-del-word);
+  border-radius: 2px;
+  padding: 1px 2px;
+  margin: -1px -2px;
+}
+
+/* ========================================
+   Code Expansion
+   ======================================== */
+.diff-expand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2);
+  background: var(--bg-secondary);
+  border-top: 1px dashed var(--border-color);
+  border-bottom: 1px dashed var(--border-color);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.diff-expand:hover {
+  background: var(--bg-hover);
+}
+
+.diff-expand-text {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-link);
+}
+
+.diff-expand-text svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* ========================================
+   Comment Indicators
+   ======================================== */
+.diff-line.has-comment {
+  position: relative;
+}
+
+.diff-line.has-comment::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--accent-blue);
+  z-index: 1;
+}
+
+.diff-comment-badge {
+  position: absolute;
+  right: var(--space-3);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 var(--space-2);
+  background: var(--accent-blue);
+  color: white;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  z-index: 5;
+}
+
+.diff-comment-badge:hover {
+  background: var(--accent-blue-hover);
+}
+
+/* ========================================
+   Line Selection (for adding comments)
+   ======================================== */
+
+/* Selectable gutter hover state */
+.diff-gutter.selectable {
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.diff-gutter.selectable:hover {
+  background: var(--info-bg) !important;
+}
+
+.diff-gutter.selectable:hover .diff-line-num {
+  color: var(--accent-blue);
+}
+
+/* Show a subtle + indicator on gutter hover */
+.diff-gutter.selectable::after {
+  content: '+';
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: bold;
+  color: var(--accent-blue);
+  background: var(--bg-primary);
+  border: 1px solid var(--accent-blue);
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.diff-line:hover .diff-gutter.selectable::after {
+  opacity: 1;
+}
+
+/* Make gutter position relative for the + indicator */
+.diff-gutter.selectable {
+  position: relative;
+}
+
+/* Selected lines */
+.diff-line.selected {
+  position: relative;
+  z-index: 1;
+}
+
+.diff-line.selected .diff-gutter {
+  background: var(--info-bg) !important;
+}
+
+.diff-line.selected .diff-gutter .diff-line-num {
+  color: var(--accent-blue);
+}
+
+.diff-line.selecting .diff-content,
+.diff-line.selected .diff-content {
+  background: var(--info-bg) !important;
+}
+
+.diff-line.selected::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--accent-blue);
+  z-index: 2;
+}
+
+/* Selection actions - floating button in gutter */
+.diff-selection-actions {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 8px;
+  z-index: 100;
+  animation: pop-in 0.15s ease-out;
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+}
+
+.diff-add-comment-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--accent-blue);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: var(--shadow-md);
+  transition: all var(--transition-fast);
+}
+
+.diff-add-comment-btn:hover {
+  background: var(--accent-blue-hover);
+  transform: scale(1.02);
+}
+
+.diff-add-comment-btn svg {
+  flex-shrink: 0;
+}
+
+.diff-add-comment-label {
+  opacity: 0.9;
+}
+
+/* Change Highlight (for navigation) */
+.diff-line.change-highlight {
+  position: relative;
+}
+
+.diff-line.change-highlight::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--accent-blue);
+  z-index: 2;
+}
+
+.diff-line.change-highlight .diff-content {
+  background: var(--info-bg) !important;
+}
+
+/* Scroll-to highlight animation */
+.diff-line.highlight {
+  animation: line-highlight 2s ease-out;
+}
+
+@keyframes line-highlight {
+  0%, 30% {
+    background: var(--info-bg);
+    box-shadow: inset 4px 0 0 var(--accent-blue);
+  }
+  100% {
+    background: transparent;
+    box-shadow: none;
+  }
+}
+
+/* ========================================
+   Diff Content Wrapper (for minimap layout)
+   ======================================== */
+.diff-content-wrapper {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.diff-content-wrapper .diff-split,
+.diff-content-wrapper .diff-unified {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ========================================
+   Minimap / Preview Bar
+   ======================================== */
+.diff-minimap {
+  width: 14px;
+  background: var(--bg-tertiary);
+  border-left: 1px solid var(--border-color);
+  position: relative;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.minimap-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+}
+
+.minimap-marker {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  min-height: 2px;
+  border-radius: 1px;
+  cursor: pointer;
+  transition: opacity 0.1s;
+}
+
+.minimap-marker:hover {
+  opacity: 1 !important;
+  filter: brightness(1.2);
+}
+
+.minimap-marker.add {
+  background: var(--success);
+  opacity: 0.8;
+}
+
+.minimap-marker.del {
+  background: var(--error);
+  opacity: 0.8;
+}
+
+.minimap-marker.comment {
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: var(--accent-blue);
+  border-radius: 0;
+  opacity: 0.9;
+  z-index: 1;
+}
+
+.minimap-marker.comment::before {
+  content: '';
+  position: absolute;
+  left: -2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-right: 4px solid var(--accent-blue);
+}
+
+.minimap-viewport {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: var(--text-primary);
+  opacity: 0.15;
+  border-radius: 2px;
+  cursor: grab;
+  transition: opacity 0.1s;
+}
+
+.minimap-viewport:hover {
+  opacity: 0.25;
+}
+
+.minimap-viewport:active {
+  cursor: grabbing;
+  opacity: 0.3;
+}
+
+/* Hide minimap on small screens */
+@media (max-width: 900px) {
+  .diff-minimap {
+    display: none;
+  }
+}
+
+/* ========================================
+   Binary/Large File Placeholders
+   ======================================== */
+.diff-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-10);
+  background: var(--bg-secondary);
+  text-align: center;
+  flex: 1;
+}
+
+.diff-placeholder-icon {
+  width: 48px;
+  height: 48px;
+  margin-bottom: var(--space-4);
+  color: var(--text-tertiary);
+  opacity: 0.5;
+}
+
+.diff-placeholder-title {
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.diff-placeholder-text {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  max-width: 300px;
+}
+
+/* ========================================
+   Image Diff
+   ======================================== */
+.diff-image {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-6);
+  padding: var(--space-6);
+  background: var(--bg-secondary);
+  flex: 1;
+}
+
+.diff-image-pane {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.diff-image-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.diff-image-label.original { color: var(--error); }
+.diff-image-label.modified { color: var(--success); }
+
+.diff-image-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: repeating-conic-gradient(
+    var(--bg-tertiary) 0% 25%,
+    var(--bg-primary) 0% 50%
+  ) 50% / 16px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  min-height: 200px;
+  max-height: 400px;
+  overflow: hidden;
+}
+
+.diff-image-container img {
+  max-width: 100%;
+  max-height: 360px;
+  object-fit: contain;
+}
+
+/* ========================================
+   Loading State
+   ======================================== */
+.diff-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-10);
+  flex: 1;
+  height: 200px;
+  color: var(--text-secondary);
+  gap: 12px;
+}
+
+.diff-loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border-color);
+  border-top-color: var(--accent-blue);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: var(--space-4);
+}
+
+.diff-loading-text {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Generic spinner class for inline use */
+.loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--border-color);
+  border-top-color: var(--accent-blue);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* ========================================
+   Error State
+   ======================================== */
+.diff-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: var(--error);
+  gap: 8px;
+}
+
+.diff-error .error-icon {
+  font-size: 20px;
+}
+
+/* ========================================
+   Skeleton Loading
+   ======================================== */
+.diff-skeleton {
+  padding: var(--space-4);
+}
+
+.diff-skeleton-line {
+  display: flex;
+  align-items: center;
+  height: 20px;
+  margin-bottom: 2px;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.diff-skeleton-gutter {
+  width: 72px;
+  height: 20px;
+  background: var(--bg-tertiary);
+  margin-right: var(--space-3);
+}
+
+.diff-skeleton-content {
+  flex: 1;
+  height: 14px;
+  background: var(--bg-tertiary);
+  border-radius: 2px;
+}
+
+.diff-skeleton-line:nth-child(odd) .diff-skeleton-content {
+  width: 80%;
+}
+
+.diff-skeleton-line:nth-child(even) .diff-skeleton-content {
+  width: 60%;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ========================================
+   Inline Comment Form
+   ======================================== */
+.diff-inline-comment {
+  margin: var(--space-3) 0;
+  margin-left: 72px;
+  margin-right: var(--space-4);
+  padding: var(--space-4);
+  background: var(--bg-secondary);
+  border: 1px solid var(--accent-blue);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.diff-inline-comment-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+
+.diff-inline-comment-lines {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--accent-blue);
+  background: var(--info-bg);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.diff-inline-comment textarea {
+  width: 100%;
+  min-height: 80px;
+  padding: var(--space-3);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  resize: vertical;
+}
+
+.diff-inline-comment textarea:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.3);
+}
+
+.diff-inline-comment-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+/* ========================================
+   Syntax Highlighting (GitHub Dark)
+   ======================================== */
+.diff-content .hljs-comment,
+.diff-content .hljs-quote {
+  color: #8b949e;
+  font-style: italic;
+}
+
+.diff-content .hljs-keyword,
+.diff-content .hljs-selector-tag {
+  color: #ff7b72;
+}
+
+.diff-content .hljs-string,
+.diff-content .hljs-doctag {
+  color: #a5d6ff;
+}
+
+.diff-content .hljs-number,
+.diff-content .hljs-literal {
+  color: #79c0ff;
+}
+
+.diff-content .hljs-title,
+.diff-content .hljs-function {
+  color: #d2a8ff;
+}
+
+.diff-content .hljs-type,
+.diff-content .hljs-class {
+  color: #7ee787;
+}
+
+.diff-content .hljs-attr,
+.diff-content .hljs-attribute {
+  color: #79c0ff;
+}
+
+.diff-content .hljs-built_in {
+  color: #ffa657;
+}
+
+.diff-content .hljs-variable {
+  color: #ffa657;
+}
+
+.diff-content .hljs-symbol {
+  color: #79c0ff;
+}
+
+.diff-content .hljs-regexp {
+  color: #7ee787;
+}
+
+.diff-content .hljs-meta {
+  color: #8b949e;
+}
+
+/* ========================================
+   Scroll Sync Indicator
+   ======================================== */
+.diff-scroll-sync {
+  position: fixed;
+  bottom: var(--space-4);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--space-2) var(--space-4);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-md);
+  opacity: 0;
+  transition: opacity var(--transition-normal);
+  pointer-events: none;
+  z-index: 100;
+}
+
+.diff-scroll-sync.visible {
+  opacity: 1;
+}
+
+/* ========================================
+   Responsive
+   ======================================== */
+@media (max-width: 1000px) {
+  .diff-split {
+    grid-template-columns: 1fr;
+  }
+
+  .diff-pane:first-child {
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .diff-split.show-headers .diff-pane-header {
+    display: flex;
+  }
+}
+
+/* ========================================
+   Print Styles
+   ======================================== */
+@media print {
+  .diff-file-header {
+    position: static;
+    background: white;
+    border-color: #ddd;
+  }
+
+  .diff-line.add .diff-content {
+    background: #e6ffed !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .diff-line.del .diff-content {
+    background: #ffeef0 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+/* ========================================
+   Preview Mode (Markdown Preview)
+   ======================================== */
+.view-btn.preview-btn.hidden {
+  display: none;
+}
+
+.preview-badge {
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--accent-color);
+  color: white;
+  border-radius: var(--radius-sm);
+  margin-left: auto;
+}
+
+.diff-preview {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+  background: var(--bg-primary);
+}
+
+.diff-preview-content {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.preview-loading {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-secondary);
+}
+
+.preview-error {
+  text-align: center;
+  padding: 40px;
+  color: var(--error);
+}
+
+/* Markdown content inherits from ai-review.css .markdown-content styles */
+.diff-preview-content img {
+  max-width: 100%;
+  height: auto;
+}
+
+.diff-preview-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+}
+
+.diff-preview-content th,
+.diff-preview-content td {
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+}
+
+.diff-preview-content th {
+  background: var(--bg-tertiary);
+}

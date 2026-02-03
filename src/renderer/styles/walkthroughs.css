@@ -1,0 +1,177 @@
+/* Walkthroughs View Styles */
+
+/* Full-height section within walkthroughs panel */
+.walkthroughs-section {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.walkthroughs-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-primary);
+}
+
+.walkthroughs-header {
+  padding: var(--space-3) var(--space-4);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.walkthroughs-header span:first-child {
+  flex: 1;
+}
+
+.walkthrough-count {
+  background: var(--bg-secondary);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+}
+
+.new-walkthrough-btn,
+.close-walkthroughs-btn {
+  padding: var(--space-1);
+  color: var(--text-secondary);
+}
+
+.new-walkthrough-btn:hover,
+.close-walkthroughs-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.walkthroughs-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-1) var(--space-2);
+}
+
+.walkthroughs-empty {
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.walkthroughs-empty .hint {
+  font-size: var(--text-sm);
+  margin-top: var(--space-2);
+}
+
+.walkthrough-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2);
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: var(--text-sm);
+}
+
+.walkthrough-item:last-child {
+  border-bottom: none;
+}
+
+.walkthrough-item:hover {
+  background: var(--bg-hover);
+}
+
+.walkthrough-item.active {
+  background: var(--accent-blue-alpha, rgba(56, 139, 253, 0.15));
+  border-left: 2px solid var(--accent-blue, #388bfd);
+}
+
+.walkthrough-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  flex-shrink: 0;
+  margin-top: 5px; /* Align with first line of text */
+}
+
+/* Status: preparing/generating - warning color with pulse */
+.walkthrough-item.preparing .walkthrough-status-dot,
+.walkthrough-item.generating .walkthrough-status-dot {
+  background: var(--warning);
+  animation: pulse 1s infinite;
+}
+
+/* Status: complete - success color */
+.walkthrough-item.complete .walkthrough-status-dot {
+  background: var(--success);
+}
+
+/* Status: error - error color */
+.walkthrough-item.error .walkthrough-status-dot {
+  background: var(--error);
+}
+
+/* Status: cancelled - tertiary text color */
+.walkthrough-item.cancelled .walkthrough-status-dot {
+  background: var(--text-tertiary);
+}
+
+/* Status: saved (not active session) - tertiary text color */
+.walkthrough-item.saved .walkthrough-status-dot {
+  background: var(--text-tertiary);
+}
+
+.walkthrough-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.walkthrough-name,
+.walkthrough-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;
+  padding: 0;
+  margin: 0;
+  text-indent: 0;
+  text-decoration: none;
+  border: none;
+}
+
+.walkthrough-meta {
+  color: var(--text-tertiary);
+}
+
+/* Close button in walkthrough list items - hidden until hover */
+.walkthrough-item .walkthrough-close-btn {
+  opacity: 0;
+  background: none;
+  border: none;
+  padding: var(--space-1);
+  cursor: pointer;
+  color: var(--text-tertiary);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.walkthrough-item:hover .walkthrough-close-btn {
+  opacity: 1;
+}
+
+.walkthrough-item .walkthrough-close-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}

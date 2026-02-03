@@ -1,0 +1,29 @@
+{
+  "name": "agent-demo",
+  "version": "1.0.0",
+  "description": "Sample app demonstrating Claude Code SDK and GitHub Copilot SDK with WorkIQ MCP for work item design and creation",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "design": "tsx src/index.ts design",
+    "plan": "tsx src/index.ts plan",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.12",
+    "@github/copilot-sdk": "^0.1.13",
+    "commander": "^12.1.0",
+    "chalk": "^5.3.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0",
+    "tsx": "^4.19.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "electron-terminal-claude",
+  "version": "1.0.0",
+  "description": "Electron app hosting a terminal with Claude Code, featuring a restart button",
+  "main": "src/main.js",
+  "type": "module",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev"
+  },
+  "dependencies": {
+    "@lydell/node-pty": "^1.2.0-beta.3",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
+    "electron": "^32.3.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

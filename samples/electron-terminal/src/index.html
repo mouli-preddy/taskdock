@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
+  <title>Claude Code Terminal</title>
+  <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="toolbar">
+      <div class="toolbar-left">
+        <h1 class="app-title">Claude Code Terminal</h1>
+        <span class="status-indicator" id="status">
+          <span class="status-dot"></span>
+          <span class="status-text">Ready</span>
+        </span>
+      </div>
+      <div class="toolbar-right">
+        <button id="restart-btn" class="btn btn-primary" title="Close current session and start a new Claude Code instance">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+          <span>Restart Claude</span>
+        </button>
+      </div>
+    </header>
+    <main class="terminal-container">
+      <div id="terminal"></div>
+    </main>
+  </div>
+  <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
+  <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>
