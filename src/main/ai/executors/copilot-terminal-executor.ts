@@ -6,7 +6,7 @@
 import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { BaseReviewExecutor } from './base-executor.js';
+import { BaseReviewExecutor, checkCliAvailability } from './base-executor.js';
 import { getTerminalManager } from '../../terminal/terminal-manager.js';
 import { buildReviewPrompt } from '../../terminal/review-prompt.js';
 import { getLogger } from '../../services/logger-service.js';
@@ -30,9 +30,14 @@ export class CopilotTerminalExecutor extends BaseReviewExecutor {
 
   async isAvailable(): Promise<{ available: boolean; error?: string }> {
     const logger = getLogger();
-    logger.debug(LOG_CATEGORY, 'Copilot terminal executor always available');
-    // Terminal executor is always available (CLI availability checked at runtime)
-    return { available: true };
+    logger.debug(LOG_CATEGORY, 'Checking Copilot CLI availability');
+    const result = await checkCliAvailability('copilot');
+    if (result.available) {
+      logger.info(LOG_CATEGORY, 'Copilot CLI is available');
+    } else {
+      logger.warn(LOG_CATEGORY, 'Copilot CLI not available', { error: result.error });
+    }
+    return result;
   }
 
   async execute(

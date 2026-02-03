@@ -3543,6 +3543,12 @@ After this, respond with a simple text response to greet the user and ask them w
     const presets = await window.electronAPI.presetsGetReviewPresets();
     const providers = await window.electronAPI.aiGetProviders();
 
+    // Check if at least one provider is available
+    const hasAvailableProvider = providers.some(p => p.available);
+    if (!hasAvailableProvider) {
+      Toast.warning('No AI providers are available. Please install Claude CLI or Copilot CLI, or configure API credentials.');
+    }
+
     const result = await showReviewDialog({ presets, availableProviders: providers });
     if (!result) return;
 

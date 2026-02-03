@@ -1,0 +1,262 @@
+# TaskDock PR Review Guide
+
+TaskDock is an AI-powered pull request review tool for Azure DevOps that helps you review code faster and more thoroughly. It combines intelligent code analysis with automated workflows to streamline your code review process.
+
+> **Quick Start:** Connect to Azure DevOps → Link your local repositories → Start reviewing PRs with AI assistance!
+
+## Table of Contents
+
+- [Prerequisites](#prerequisites)
+- [Getting Started](#getting-started)
+- [PR Review Interface](#pr-review-interface)
+- [AI-Powered Code Review](#ai-powered-code-review)
+- [AI Walkthrough](#ai-walkthrough)
+- [PR Chat Copilot](#pr-chat-copilot)
+- [Mermaid Diagram Support](#mermaid-diagram-support)
+- [Auto-Fix from Comments](#auto-fix-from-comments)
+- [Tips and Troubleshooting](#tips-and-troubleshooting)
+
+---
+
+## Prerequisites
+
+Before using TaskDock, ensure you have the required tools installed:
+
+- **Azure CLI** - Required for Azure DevOps authentication
+- **Claude Code** or **GitHub Copilot CLI** - At least one AI provider for code reviews
+
+For detailed installation instructions, see the [Developer Tools Setup](README.md#developer-tools-setup-windows) section in the README.
+
+---
+
+## Getting Started
+
+### 1. Connect to Azure DevOps
+
+Configure your Azure DevOps organization and project in **Settings**. TaskDock uses Azure CLI for authentication, so ensure you're logged in with `az login`.
+
+![Azure DevOps Connection](assets/image-1.png)
+
+### 2. Link Local Repositories
+
+Add local repository paths so the AI agent can use **git worktrees** for full context during reviews. This enables the AI to understand your entire codebase, not just the changed files.
+
+![Console Repos](assets/image-2.png)
+
+### 3. Monitor Repositories
+
+Add repositories to monitor and automatically see all open PRs. You can track PRs from multiple repositories in one place.
+
+![Monitored Repositories](assets/image-3.png)
+
+> **Tip:** Link local repositories first before adding them to monitoring. This ensures AI reviews have full codebase context via git worktrees.
+
+---
+
+## PR Review Interface
+
+### Browse Pull Requests
+
+View all your assigned PRs, PRs you created, and PRs from monitored repositories. The interface provides quick access to PR details, status, and review actions.
+
+![Pull Request List](assets/image.png)
+
+---
+
+## AI-Powered Code Review
+
+### Start an AI Review
+
+Run AI reviews focused on what matters most to you:
+- **Security** - Identify vulnerabilities and security issues
+- **Performance** - Find performance bottlenecks and optimization opportunities
+- **Bugs** - Detect potential bugs and edge cases
+- **Code Style** - Ensure consistency with coding standards
+
+You can also create **custom review prompts** for specific concerns:
+- Null reference exceptions and null safety
+- Backward compatibility with existing APIs
+- SDP (Secure Development Practices) compliance
+- Team-specific coding guidelines
+
+![Start AI Review](assets/image-6.png)
+
+### Full Context Reviews
+
+AI reviews run in a **git worktree** with full repository context. When enabled, reviews also include data from **WorkIQ** (Microsoft 365 integration) for additional context about related work items, discussions, and documentation.
+
+![AI Review in Worktree](assets/image-4.png)
+
+### Review Results
+
+View AI-generated comments with:
+- **Severity levels** - Critical, Warning, Suggestion, Praise
+- **Categories** - Security, Performance, Bug, Style, etc.
+- **Suggested fixes** - Code snippets you can apply directly
+
+![AI Review Results](assets/image-5.png)
+
+### Parallel Reviews
+
+Run multiple reviews focused on different aspects of the PR simultaneously. For example, run a security audit and performance review at the same time.
+
+![Parallel Reviews](assets/image-10.png)
+
+> **Best Practice:** For large PRs, run security and bug detection reviews in parallel to get comprehensive feedback quickly.
+
+---
+
+## AI Walkthrough
+
+### Guided Code Walkthrough
+
+Get a step-by-step guided walkthrough of the PR with AI-generated explanations. Perfect for understanding complex changes or onboarding to unfamiliar code.
+
+Walkthroughs can be customized to focus on specific aspects:
+- **Architecture Changes** - How the PR affects system design
+- **Data Flow** - How data moves through the changed code
+- **Testing Strategy** - What tests cover and potential gaps
+- **Custom Focus** - Your own criteria (e.g., null safety, backward compatibility, SDP compliance)
+
+![AI Walkthrough](assets/image-7.png)
+
+### Visual Architecture Diagrams
+
+See visual representations of the PR changes with auto-generated Mermaid diagrams showing:
+- Component relationships
+- Data flow
+- Architecture changes
+
+![Visual PR Representation](assets/image-8.png)
+
+### Step-by-Step Explanations
+
+Navigate through each change with detailed explanations of what the code does and why. The walkthrough highlights:
+- Key changes and their impact
+- Related files affected
+- Design decisions
+
+![Step by Step Walkthrough](assets/image-9.png)
+
+> **Tip:** Use walkthroughs when onboarding new team members to unfamiliar code areas. The AI-generated explanations help build understanding quickly.
+
+---
+
+## PR Chat Copilot
+
+### Ask Questions About the PR
+
+Built-in copilot with full context access to:
+- The repository codebase
+- PR changes and history
+- WorkIQ data (emails, meetings, documents)
+
+Ask natural language questions like:
+- "What does this function do?"
+- "Are there any security concerns with these changes?"
+- "How does this relate to the feature request?"
+
+![PR Chat Copilot](assets/image-11.png)
+
+**Chat with Copilot to:**
+
+| Goal | Example Prompt |
+|------|----------------|
+| Understand impact | "What other parts of the codebase might be affected by these changes?" |
+| Check completeness | "Are there any edge cases or error scenarios not handled in this PR?" |
+| Verify testing | "What test cases should be added to cover these changes?" |
+| Get context | "What was the original issue or requirement this PR addresses?" |
+| Review API changes | "Does this PR introduce any breaking changes to existing APIs?" |
+| Draft feedback | "Help me write a review comment explaining why this null check is needed" |
+| Check SDP compliance | "Is this PR following Secure Development Practices (SDP) guidelines?" |
+
+---
+
+## Mermaid Diagram Support
+
+### Auto-Generated Diagrams
+
+Built-in support for Mermaid diagrams generated by the AI as part of design documentation. Diagrams are rendered inline for easy viewing.
+
+![Mermaid Diagram Support](assets/image-12.png)
+
+![Mermaid Diagram Example](assets/image-13.png)
+
+---
+
+## Auto-Fix from Comments
+
+### One-Click Fixes
+
+Apply changes requested in PR comments from your peers at the click of a button. The AI understands the comment context and generates appropriate code fixes.
+
+![Auto-Fix Comments](assets/image-14.png)
+
+![Apply Changes](assets/image-15.png)
+
+### Comment Triaging and Auto-Apply
+
+Automatically analyze and triage comments with AI recommendations:
+- **Fix** - Comment requires a code change
+- **Reply** - Comment needs a response
+- **Clarify** - Comment needs clarification
+
+![Automatic Triaging](assets/image-18.png)
+
+### Queued Commits
+
+Applied changes are queued and committed **one change per commit** for clean history. Each commit includes:
+- Clear commit message describing the fix
+- Reference to the original comment
+- Atomic, reviewable changes
+
+![Changes Queue](assets/image-16.png)
+
+![Commit History](assets/image-17.png)
+
+> **Best Practice:** Review the queued commits before pushing to ensure all changes are correct. Each atomic commit makes it easy to revert individual fixes if needed.
+
+---
+
+## Tips and Troubleshooting
+
+### Getting Better AI Reviews
+
+- **Link local repos:** AI reviews are significantly better with full codebase context via git worktrees
+- **Use specific prompts:** Custom review prompts focused on your concerns yield more relevant feedback
+- **Enable WorkIQ:** Connect Microsoft 365 for additional context from related discussions and documents
+
+### Common Issues
+
+| Issue | Solution |
+|-------|----------|
+| AI review shows limited context | Ensure the local repository path is linked in Settings |
+| Authentication errors | Run `az login` to refresh your Azure CLI session |
+| Slow reviews on large PRs | Run focused reviews (e.g., security-only) instead of comprehensive reviews |
+| Missing repositories in monitor | Check that you have access to the repository in Azure DevOps |
+
+### Keyboard Shortcuts
+
+| Action | Shortcut |
+|--------|----------|
+| Start AI Review | `Ctrl+Shift+R` |
+| Open PR Chat | `Ctrl+Shift+C` |
+| Apply Fix | `Ctrl+Enter` |
+| Next Comment | `Ctrl+]` |
+| Previous Comment | `Ctrl+[` |
+
+---
+
+## Learn More
+
+- [Full Feature List](README.md#features)
+- [Developer Tools Setup](README.md#developer-tools-setup-windows)
+- [Configuration Options](README.md#configuration)
+
+---
+
+## Feedback
+
+Have suggestions or found an issue? We'd love to hear from you:
+- Report bugs or request features through your team's internal channels
+- Share your custom review prompts that work well for your team

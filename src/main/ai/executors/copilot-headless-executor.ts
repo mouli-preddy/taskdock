@@ -7,7 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import { spawn, ChildProcess } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
-import { BaseReviewExecutor } from './base-executor.js';
+import { BaseReviewExecutor, checkCliAvailability } from './base-executor.js';
 import { buildReviewPrompt } from '../../terminal/review-prompt.js';
 import { getLogger } from '../../services/logger-service.js';
 import type {
@@ -30,9 +30,14 @@ export class CopilotHeadlessExecutor extends BaseReviewExecutor {
 
   async isAvailable(): Promise<{ available: boolean; error?: string }> {
     const logger = getLogger();
-    logger.debug(LOG_CATEGORY, 'Copilot headless executor always available');
-    // Headless executor is always available (CLI availability checked at runtime)
-    return { available: true };
+    logger.debug(LOG_CATEGORY, 'Checking Copilot CLI availability');
+    const result = await checkCliAvailability('copilot');
+    if (result.available) {
+      logger.info(LOG_CATEGORY, 'Copilot CLI is available');
+    } else {
+      logger.warn(LOG_CATEGORY, 'Copilot CLI not available', { error: result.error });
+    }
+    return result;
   }
 
   async execute(
@@ -53,34 +58,41 @@ export class CopilotHeadlessExecutor extends BaseReviewExecutor {
     });
 
     try {
-      // 1. Build prompt using buildReviewPrompt()
-      let prompt = buildReviewPrompt({
-        guid: context.guid,
-        contextPath: context.contextPath,
-        outputPath: context.outputPath,
-        hasRepoContext: context.hasRepoContext,
-        repoPath: context.repoPath,
-        generatedFilePatterns: options.generatedFilePatterns,
-        enableWorkIQ: options.enableWorkIQ,
-      });
+      // 1. Build prompt - use customPrompt if provided, otherwise build review prompt
+      let prompt: string;
 
-      // Add depth and focus area instructions
-      const depthInstruction = {
-        quick: '\n\n## Review Depth: Quick\nFocus only on critical bugs and security issues. Be concise.',
-        standard: '\n\n## Review Depth: Standard\nReview for bugs, security, performance, and style issues.',
-        thorough: '\n\n## Review Depth: Thorough\nPerform an in-depth review covering all aspects including edge cases, documentation, and best practices.',
-      }[options.depth];
-      prompt += depthInstruction;
+      if (options.customPrompt) {
+        prompt = options.customPrompt;
+        logger.debug(LOG_CATEGORY, 'Using custom prompt', { promptLength: prompt.length });
+      } else {
+        prompt = buildReviewPrompt({
+          guid: context.guid,
+          contextPath: context.contextPath,
+          outputPath: context.outputPath,
+          hasRepoContext: context.hasRepoContext,
+          repoPath: context.repoPath,
+          generatedFilePatterns: options.generatedFilePatterns,
+          enableWorkIQ: options.enableWorkIQ,
+        });
 
-      if (options.focusAreas.length > 0) {
-        prompt += `\n\n## Focus Areas\nPay special attention to: ${options.focusAreas.join(', ')}`;
+        // Add depth and focus area instructions
+        const depthInstruction = {
+          quick: '\n\n## Review Depth: Quick\nFocus only on critical bugs and security issues. Be concise.',
+          standard: '\n\n## Review Depth: Standard\nReview for bugs, security, performance, and style issues.',
+          thorough: '\n\n## Review Depth: Thorough\nPerform an in-depth review covering all aspects including edge cases, documentation, and best practices.',
+        }[options.depth];
+        prompt += depthInstruction;
+
+        if (options.focusAreas.length > 0) {
+          prompt += `\n\n## Focus Areas\nPay special attention to: ${options.focusAreas.join(', ')}`;
+        }
+
+        if (!options.generateWalkthrough) {
+          prompt += '\n\n## Walkthrough\nSkip generating the walkthrough.json file - focus only on review.json.';
+        }
+
+        logger.debug(LOG_CATEGORY, 'Built review prompt', { promptLength: prompt.length });
       }
-
-      if (!options.generateWalkthrough) {
-        prompt += '\n\n## Walkthrough\nSkip generating the walkthrough.json file - focus only on review.json.';
-      }
-
-      logger.debug(LOG_CATEGORY, 'Built review prompt', { promptLength: prompt.length });
 
       // 2. Write prompt to file (safer than command-line argument)
       const promptFilePath = path.join(context.outputPath, 'prompt.txt');
@@ -122,7 +134,7 @@ export class CopilotHeadlessExecutor extends BaseReviewExecutor {
       options.onStatusChange?.('Reading results...');
 
       // 7. Read and return results
-      return this.readResults(context);
+      return this.readResults(context, options.customOutputFile);
     } catch (error: any) {
       logger.error(LOG_CATEGORY, 'Copilot headless review execution failed', {
         error: error.message,
@@ -336,16 +348,9 @@ export class CopilotHeadlessExecutor extends BaseReviewExecutor {
     this.killProcess();
   }
 
-  private readResults(context: ReviewContextInfo): ReviewExecutorResult {
+  private readResults(context: ReviewContextInfo, customOutputFile?: string): ReviewExecutorResult {
     const logger = getLogger();
     const outputDir = context.outputPath;
-    const reviewPath = path.join(outputDir, 'review.json');
-    const walkthroughPath = path.join(outputDir, 'walkthrough.json');
-
-    logger.info(LOG_CATEGORY, 'Reading results', { outputDir, reviewPath, walkthroughPath });
-
-    let comments: AIReviewComment[] = [];
-    let walkthrough: CodeWalkthrough | undefined;
 
     // Check what files exist in output dir
     if (fs.existsSync(outputDir)) {
@@ -354,6 +359,35 @@ export class CopilotHeadlessExecutor extends BaseReviewExecutor {
     } else {
       logger.warn(LOG_CATEGORY, 'Output directory does not exist', { outputDir });
     }
+
+    // If customOutputFile specified, read raw output and return
+    if (customOutputFile) {
+      const customPath = path.join(outputDir, customOutputFile);
+      logger.info(LOG_CATEGORY, 'Reading custom output file', { customPath });
+
+      if (fs.existsSync(customPath)) {
+        try {
+          const rawOutput = fs.readFileSync(customPath, 'utf-8');
+          logger.info(LOG_CATEGORY, 'Read custom output', { size: rawOutput.length });
+          return { comments: [], rawOutput };
+        } catch (error: any) {
+          logger.error(LOG_CATEGORY, 'Failed to read custom output file', { error: error.message });
+          return { comments: [], error: `Failed to read output: ${error.message}` };
+        }
+      } else {
+        logger.warn(LOG_CATEGORY, 'Custom output file not found', { customPath });
+        return { comments: [], error: 'Output file not found' };
+      }
+    }
+
+    // Standard review results
+    const reviewPath = path.join(outputDir, 'review.json');
+    const walkthroughPath = path.join(outputDir, 'walkthrough.json');
+
+    logger.info(LOG_CATEGORY, 'Reading results', { outputDir, reviewPath, walkthroughPath });
+
+    let comments: AIReviewComment[] = [];
+    let walkthrough: CodeWalkthrough | undefined;
 
     // Read review.json
     if (fs.existsSync(reviewPath)) {

@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "TaskDock",
-  "version": "1.0.0",
+  "version": "0.0.2-beta",
   "identifier": "com.taskdock.desktop",
   "build": {
     "frontendDist": "../dist/renderer",
