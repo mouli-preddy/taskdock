@@ -68,6 +68,12 @@ Run AI reviews focused on what matters most to you:
 - **Bugs** - Detect potential bugs and edge cases
 - **Code Style** - Ensure consistency with coding standards
 
+You can also create **custom review prompts** for specific concerns:
+- Null reference exceptions and null safety
+- Backward compatibility with existing APIs
+- SDP (Secure Development Practices) compliance
+- Team-specific coding guidelines
+
 ![Start AI Review](image-6.png)
 
 ### Full Context Reviews
@@ -98,6 +104,12 @@ Run multiple reviews focused on different aspects of the PR simultaneously. For 
 ### Guided Code Walkthrough
 
 Get a step-by-step guided walkthrough of the PR with AI-generated explanations. Perfect for understanding complex changes or onboarding to unfamiliar code.
+
+Walkthroughs can be customized to focus on specific aspects:
+- **Architecture Changes** - How the PR affects system design
+- **Data Flow** - How data moves through the changed code
+- **Testing Strategy** - What tests cover and potential gaps
+- **Custom Focus** - Your own criteria (e.g., null safety, backward compatibility, SDP compliance)
 
 ![AI Walkthrough](image-7.png)
 
