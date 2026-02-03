@@ -7,7 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import { spawn, ChildProcess } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
-import { BaseReviewExecutor } from './base-executor.js';
+import { BaseReviewExecutor, checkCliAvailability } from './base-executor.js';
 import { buildReviewPrompt } from '../../terminal/review-prompt.js';
 import { getLogger } from '../../services/logger-service.js';
 import type {
@@ -30,9 +30,14 @@ export class ClaudeHeadlessExecutor extends BaseReviewExecutor {
 
   async isAvailable(): Promise<{ available: boolean; error?: string }> {
     const logger = getLogger();
-    logger.debug(LOG_CATEGORY, 'Headless executor always available');
-    // Headless executor is always available (CLI availability checked at runtime)
-    return { available: true };
+    logger.debug(LOG_CATEGORY, 'Checking Claude CLI availability');
+    const result = await checkCliAvailability('claude');
+    if (result.available) {
+      logger.info(LOG_CATEGORY, 'Claude CLI is available');
+    } else {
+      logger.warn(LOG_CATEGORY, 'Claude CLI not available', { error: result.error });
+    }
+    return result;
   }
 
   async execute(

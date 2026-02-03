@@ -2,6 +2,8 @@
 
 TaskDock is an AI-powered pull request review tool for Azure DevOps that helps you review code faster and more thoroughly. It combines intelligent code analysis with automated workflows to streamline your code review process.
 
+> **Quick Start:** Connect to Azure DevOps → Link your local repositories → Start reviewing PRs with AI assistance!
+
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
@@ -12,6 +14,7 @@ TaskDock is an AI-powered pull request review tool for Azure DevOps that helps y
 - [PR Chat Copilot](#pr-chat-copilot)
 - [Mermaid Diagram Support](#mermaid-diagram-support)
 - [Auto-Fix from Comments](#auto-fix-from-comments)
+- [Tips and Troubleshooting](#tips-and-troubleshooting)
 
 ---
 
@@ -45,6 +48,8 @@ Add local repository paths so the AI agent can use **git worktrees** for full co
 Add repositories to monitor and automatically see all open PRs. You can track PRs from multiple repositories in one place.
 
 ![Monitored Repositories](image-3.png)
+
+> **Tip:** Link local repositories first before adding them to monitoring. This ensures AI reviews have full codebase context via git worktrees.
 
 ---
 
@@ -97,6 +102,8 @@ Run multiple reviews focused on different aspects of the PR simultaneously. For 
 
 ![Parallel Reviews](image-10.png)
 
+> **Best Practice:** For large PRs, run security and bug detection reviews in parallel to get comprehensive feedback quickly.
+
 ---
 
 ## AI Walkthrough
@@ -131,13 +138,15 @@ Navigate through each change with detailed explanations of what the code does an
 
 ![Step by Step Walkthrough](image-9.png)
 
+> **Tip:** Use walkthroughs when onboarding new team members to unfamiliar code areas. The AI-generated explanations help build understanding quickly.
+
 ---
 
 ## PR Chat Copilot
 
 ### Ask Questions About the PR
 
-Built-in copilot with full context to:
+Built-in copilot with full context access to:
 - The repository codebase
 - PR changes and history
 - WorkIQ data (emails, meetings, documents)
@@ -148,6 +157,18 @@ Ask natural language questions like:
 - "How does this relate to the feature request?"
 
 ![PR Chat Copilot](image-11.png)
+
+**Chat with Copilot to:**
+
+| Goal | Example Prompt |
+|------|----------------|
+| Understand impact | "What other parts of the codebase might be affected by these changes?" |
+| Check completeness | "Are there any edge cases or error scenarios not handled in this PR?" |
+| Verify testing | "What test cases should be added to cover these changes?" |
+| Get context | "What was the original issue or requirement this PR addresses?" |
+| Review API changes | "Does this PR introduce any breaking changes to existing APIs?" |
+| Draft feedback | "Help me write a review comment explaining why this null check is needed" |
+| Check SDP compliance | "Is this PR following Secure Development Practices (SDP) guidelines?" |
 
 ---
 
@@ -193,10 +214,49 @@ Applied changes are queued and committed **one change per commit** for clean his
 
 ![Commit History](image-17.png)
 
+> **Best Practice:** Review the queued commits before pushing to ensure all changes are correct. Each atomic commit makes it easy to revert individual fixes if needed.
+
+---
+
+## Tips and Troubleshooting
+
+### Getting Better AI Reviews
+
+- **Link local repos:** AI reviews are significantly better with full codebase context via git worktrees
+- **Use specific prompts:** Custom review prompts focused on your concerns yield more relevant feedback
+- **Enable WorkIQ:** Connect Microsoft 365 for additional context from related discussions and documents
+
+### Common Issues
+
+| Issue | Solution |
+|-------|----------|
+| AI review shows limited context | Ensure the local repository path is linked in Settings |
+| Authentication errors | Run `az login` to refresh your Azure CLI session |
+| Slow reviews on large PRs | Run focused reviews (e.g., security-only) instead of comprehensive reviews |
+| Missing repositories in monitor | Check that you have access to the repository in Azure DevOps |
+
+### Keyboard Shortcuts
+
+| Action | Shortcut |
+|--------|----------|
+| Start AI Review | `Ctrl+Shift+R` |
+| Open PR Chat | `Ctrl+Shift+C` |
+| Apply Fix | `Ctrl+Enter` |
+| Next Comment | `Ctrl+]` |
+| Previous Comment | `Ctrl+[` |
+
 ---
 
 ## Learn More
 
 - [Full Feature List](README.md#features)
 - [Developer Tools Setup](README.md#developer-tools-setup-windows)
-- [Keyboard Shortcuts](README.md#keyboard-shortcuts)
+- [Configuration Options](README.md#configuration)
+
+---
+
+## Feedback
+
+Have suggestions or found an issue? We'd love to hear from you:
+- Report bugs or request features through your team's internal channels
+- Share your custom review prompts that work well for your team

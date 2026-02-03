@@ -51,7 +51,7 @@ export class ReviewExecutorService {
   }
 
   async getAvailableProviders(): Promise<{ provider: AIProviderType; available: boolean; error?: string }[]> {
-    // Return cached results if available
+    // Return cached results if available (populated at bootstrap)
     if (this.cachedProviderAvailability) {
       return this.cachedProviderAvailability;
     }
@@ -59,27 +59,36 @@ export class ReviewExecutorService {
     // If warmup is in progress, wait for it
     if (this.cacheWarmupPromise) {
       await this.cacheWarmupPromise;
-      if (this.cachedProviderAvailability) {
-        return this.cachedProviderAvailability;
-      }
     }
 
-    // Fallback: check availability synchronously (shouldn't happen normally)
-    return this.checkProviderAvailability();
+    // Return cached results (should always be set after warmup)
+    // If still null, return empty array to avoid blocking the dialog
+    return this.cachedProviderAvailability ?? [];
   }
 
   /**
    * Warm up the provider availability cache at app startup.
    * This runs the availability checks in the background so the dialog opens instantly.
+   * MUST be called at bootstrap - the dialog relies on cached results.
    */
   async warmupProviderCache(): Promise<void> {
     if (this.cacheWarmupPromise) {
       return this.cacheWarmupPromise;
     }
 
-    this.cacheWarmupPromise = this.checkProviderAvailability().then(results => {
-      this.cachedProviderAvailability = results;
-    });
+    this.cacheWarmupPromise = this.checkProviderAvailability()
+      .then(results => {
+        this.cachedProviderAvailability = results;
+      })
+      .catch(() => {
+        // On complete failure, mark all providers as unavailable
+        // This ensures the dialog can still open
+        this.cachedProviderAvailability = Array.from(this.executors.keys()).map(provider => ({
+          provider,
+          available: false,
+          error: 'Failed to check provider availability',
+        }));
+      });
 
     return this.cacheWarmupPromise;
   }
@@ -98,13 +107,22 @@ export class ReviewExecutorService {
 
   private async checkProviderAvailability(): Promise<{ provider: AIProviderType; available: boolean; error?: string }[]> {
     // Run all provider checks in parallel for faster startup
+    // Each check is wrapped in try-catch to ensure one failure doesn't break all checks
     const checks = Array.from(this.executors.entries()).map(async ([provider, executor]) => {
-      const status = await executor.isAvailable();
-      return {
-        provider,
-        available: status.available,
-        error: status.error,
-      };
+      try {
+        const status = await executor.isAvailable();
+        return {
+          provider,
+          available: status.available,
+          error: status.error,
+        };
+      } catch (error: any) {
+        return {
+          provider,
+          available: false,
+          error: error.message || `Failed to check ${provider} availability`,
+        };
+      }
     });
 
     return Promise.all(checks);
