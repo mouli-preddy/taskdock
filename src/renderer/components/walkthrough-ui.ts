@@ -1,0 +1,727 @@
+/**
+ * Walkthrough UI
+ * Floating overlay for AI-guided code navigation
+ */
+
+import type { CodeWalkthrough, WalkthroughStep, WalkthroughPreset } from '../../shared/ai-types.js';
+import {
+  renderMarkdown,
+  renderDiagramToElement,
+  initializeMermaid,
+} from '../utils/markdown-renderer.js';
+import { escapeHtml } from '../utils/html-utils.js';
+import {
+  iconHtml,
+  Bot,
+  X,
+  Maximize2,
+  Minus,
+  GripVertical,
+  Clock,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  LayoutGrid,
+} from '../utils/icons.js';
+
+/**
+ * Extended walkthrough with display metadata
+ */
+export interface ExtendedWalkthrough extends CodeWalkthrough {
+  displayName?: string;
+  preset?: WalkthroughPreset;
+  customPrompt?: string;
+}
+
+export class WalkthroughUI {
+  private overlay: HTMLElement | null = null;
+  private walkthrough: CodeWalkthrough | null = null;
+  private currentStep = 0;
+  private isMinimized = false;
+  private position = { x: 20, y: 100 };
+  private size = { width: 420, height: 500 };
+  private isDragging = false;
+  private dragStart = { mouseX: 0, mouseY: 0, posX: 0, posY: 0 };
+  private isResizing = false;
+  private resizeDirection = '';
+  private resizeStart = { x: 0, y: 0, width: 0, height: 0, right: 0, bottom: 0 };
+
+  // Display metadata for walkthrough name and source
+  private displayName?: string;
+  private preset?: WalkthroughPreset;
+  private customPrompt?: string;
+
+  // Track which tab this walkthrough belongs to
+  private tabId: string | null = null;
+
+  private navigateCallback?: (filePath: string, line: number) => void;
+  private closeCallback?: () => void;
+
+  // Bound handlers for cleanup
+  private boundMouseMove: ((e: MouseEvent) => void) | null = null;
+  private boundMouseUp: (() => void) | null = null;
+
+  onNavigate(callback: (filePath: string, line: number) => void): void {
+    this.navigateCallback = callback;
+  }
+
+  onClose(callback: () => void): void {
+    this.closeCallback = callback;
+  }
+
+  show(walkthrough: ExtendedWalkthrough, tabId?: string): void {
+    initializeMermaid();
+    this.walkthrough = walkthrough;
+    this.currentStep = 0;
+    this.isMinimized = false;
+
+    // Store display metadata
+    this.displayName = walkthrough.displayName;
+    this.preset = walkthrough.preset;
+    this.customPrompt = walkthrough.customPrompt;
+
+    // Track which tab this walkthrough belongs to
+    this.tabId = tabId || null;
+
+    this.createOverlay();
+    this.render();
+    this.attachKeyboardListeners();
+  }
+
+  hide(): void {
+    if (this.overlay) {
+      this.overlay.remove();
+      this.overlay = null;
+    }
+    this.tabId = null;
+    this.removeKeyboardListeners();
+    this.removeMouseListeners();
+    this.closeCallback?.();
+  }
+
+  /**
+   * Get the tab ID this walkthrough belongs to
+   */
+  getTabId(): string | null {
+    return this.tabId;
+  }
+
+  /**
+   * Check if the walkthrough is currently visible
+   */
+  isVisible(): boolean {
+    return this.overlay !== null;
+  }
+
+  /**
+   * Hide the walkthrough if it doesn't belong to the specified tab
+   */
+  hideIfNotOnTab(currentTabId: string): void {
+    if (this.overlay && this.tabId && this.tabId !== currentTabId) {
+      this.hide();
+    }
+  }
+
+  private removeMouseListeners(): void {
+    if (this.boundMouseMove) {
+      document.removeEventListener('mousemove', this.boundMouseMove);
+      this.boundMouseMove = null;
+    }
+    if (this.boundMouseUp) {
+      document.removeEventListener('mouseup', this.boundMouseUp);
+      this.boundMouseUp = null;
+    }
+  }
+
+  /**
+   * Get total number of pages (1 for summary + number of steps)
+   */
+  private getTotalPages(): number {
+    return 1 + (this.walkthrough?.steps.length || 0);
+  }
+
+  /**
+   * Check if currently showing the summary page (page 0)
+   */
+  private isOnSummaryPage(): boolean {
+    return this.currentStep === 0;
+  }
+
+  /**
+   * Get the current step object (null if on summary page)
+   */
+  private getCurrentStep(): WalkthroughStep | null {
+    if (!this.walkthrough || this.currentStep === 0) return null;
+    return this.walkthrough.steps[this.currentStep - 1] || null;
+  }
+
+  nextStep(): void {
+    if (!this.walkthrough) return;
+    const totalPages = this.getTotalPages();
+    if (this.currentStep < totalPages - 1) {
+      this.currentStep++;
+      this.render();
+      this.navigateToCurrentStep();
+    }
+  }
+
+  previousStep(): void {
+    if (this.currentStep > 0) {
+      this.currentStep--;
+      this.render();
+      // Only navigate to file if we're on a step page (not summary)
+      if (this.currentStep > 0) {
+        this.navigateToCurrentStep();
+      }
+    }
+  }
+
+  goToStep(pageNumber: number): void {
+    if (!this.walkthrough) return;
+    const totalPages = this.getTotalPages();
+    if (pageNumber >= 0 && pageNumber < totalPages) {
+      this.currentStep = pageNumber;
+      this.render();
+      // Only navigate to file if we're on a step page (not summary)
+      if (this.currentStep > 0) {
+        this.navigateToCurrentStep();
+      }
+    }
+  }
+
+  private createOverlay(): void {
+    if (this.overlay) {
+      this.overlay.remove();
+    }
+
+    this.overlay = document.createElement('div');
+    this.overlay.id = 'walkthroughOverlay';
+    this.overlay.className = 'walkthrough-overlay';
+    document.body.appendChild(this.overlay);
+
+    this.updatePosition();
+    this.updateSize();
+    this.attachGlobalMouseListeners();
+  }
+
+  private attachGlobalMouseListeners(): void {
+    // Only attach global listeners once
+    if (!this.boundMouseMove) {
+      this.boundMouseMove = (e: MouseEvent) => this.handleMouseMove(e);
+      this.boundMouseUp = () => this.handleMouseUp();
+      document.addEventListener('mousemove', this.boundMouseMove);
+      document.addEventListener('mouseup', this.boundMouseUp);
+    }
+  }
+
+  private updatePosition(): void {
+    if (!this.overlay) return;
+    this.overlay.style.right = `${this.position.x}px`;
+    this.overlay.style.bottom = `${this.position.y}px`;
+  }
+
+  private updateSize(): void {
+    if (!this.overlay || this.isMinimized) return;
+    this.overlay.style.width = `${this.size.width}px`;
+    this.overlay.style.height = `${this.size.height}px`;
+  }
+
+  private render(): void {
+    if (!this.overlay || !this.walkthrough) return;
+
+    const totalPages = this.getTotalPages();
+    const step = this.getCurrentStep();
+    const progress = totalPages > 0
+      ? ((this.currentStep + 1) / totalPages) * 100
+      : 0;
+
+    // Display text for step indicator
+    const stepIndicatorText = this.isOnSummaryPage()
+      ? 'Overview'
+      : `Step ${this.currentStep} of ${this.walkthrough.steps.length}`;
+
+    // Toggle minimized class on overlay
+    this.overlay.classList.toggle('minimized', this.isMinimized);
+
+    if (this.isMinimized) {
+      // Get current file and step title for display
+      const currentFile = step?.filePath?.split('/').pop() || '';
+      const lineInfo = step ? `:${step.startLine}` : '';
+      const stepTitle = step?.title || 'Overview';
+
+      this.overlay.innerHTML = `
+        <div class="walkthrough-minimized">
+          <div class="walkthrough-mini-header">
+            ${iconHtml(Bot, { size: 16, class: 'robot-icon' })}
+            <span class="walkthrough-mini-title">${escapeHtml(this.displayName || 'Walkthrough')}</span>
+            <span class="walkthrough-mini-divider">•</span>
+            <span class="walkthrough-mini-step-title">${escapeHtml(stepTitle)}</span>
+            ${currentFile ? `
+              <span class="walkthrough-mini-divider">•</span>
+              <span class="walkthrough-mini-file" title="${step?.filePath || ''}">${currentFile}${lineInfo}</span>
+            ` : ''}
+          </div>
+          <div class="walkthrough-mini-nav">
+            <button class="btn btn-icon walkthrough-prev-btn" title="Previous" ${this.currentStep === 0 ? 'disabled' : ''}>
+              ${iconHtml(ChevronLeft, { size: 14 })}
+            </button>
+            <span class="walkthrough-mini-progress">${this.currentStep + 1}/${totalPages}</span>
+            <button class="btn btn-icon walkthrough-next-btn" title="Next" ${this.currentStep >= totalPages - 1 ? 'disabled' : ''}>
+              ${iconHtml(ChevronRight, { size: 14 })}
+            </button>
+          </div>
+          <div class="walkthrough-mini-actions">
+            <button class="btn btn-icon walkthrough-expand-btn" title="Expand">
+              ${iconHtml(Maximize2, { size: 16 })}
+            </button>
+            <button class="btn btn-icon walkthrough-close-btn" title="Close">
+              ${iconHtml(X, { size: 16 })}
+            </button>
+          </div>
+        </div>
+      `;
+    } else {
+      this.overlay.innerHTML = `
+        <div class="walkthrough-header">
+          <div class="walkthrough-drag-handle">
+            ${iconHtml(GripVertical, { size: 16 })}
+          </div>
+          <div class="walkthrough-title-section">
+            <div class="walkthrough-title">
+              ${iconHtml(Bot, { size: 18, class: 'robot-icon' })}
+              <span>${escapeHtml(this.displayName || 'Code Walkthrough')}</span>
+            </div>
+            ${this.preset ? `
+              <span class="walkthrough-source">From preset: ${escapeHtml(this.preset.name)}</span>
+            ` : this.customPrompt ? `
+              <span class="walkthrough-source">Custom request</span>
+            ` : ''}
+          </div>
+          <div class="walkthrough-header-actions">
+            <button class="btn btn-icon walkthrough-minimize-btn" title="Minimize">
+              ${iconHtml(Minus, { size: 16 })}
+            </button>
+            <button class="btn btn-icon walkthrough-close-btn" title="Close">
+              ${iconHtml(X, { size: 16 })}
+            </button>
+          </div>
+        </div>
+
+        <div class="walkthrough-progress">
+          <div class="walkthrough-progress-bar" style="width: ${progress}%"></div>
+        </div>
+
+        <div class="walkthrough-meta">
+          <span class="walkthrough-step-indicator">${stepIndicatorText}</span>
+          <span class="walkthrough-time">
+            ${iconHtml(Clock, { size: 12 })}
+            ~${this.walkthrough.estimatedReadTime || Math.max(1, Math.ceil(this.walkthrough.steps.length * 0.5))} min read
+          </span>
+        </div>
+
+        <div class="walkthrough-content">
+          ${step ? this.renderStepSync(step) : this.renderSummarySync()}
+        </div>
+
+        <div class="walkthrough-nav">
+          <button class="btn btn-secondary walkthrough-prev-btn" ${this.currentStep === 0 ? 'disabled' : ''}>
+            ${iconHtml(ChevronLeft, { size: 16 })}
+            Previous
+          </button>
+          <div class="walkthrough-step-dots">
+            <button class="step-dot ${this.currentStep === 0 ? 'active' : ''}"
+                    data-step="0"
+                    title="Overview">
+            </button>
+            ${this.walkthrough.steps.map((_, i) => `
+              <button class="step-dot ${(i + 1) === this.currentStep ? 'active' : ''}"
+                      data-step="${i + 1}"
+                      title="Step ${i + 1}">
+              </button>
+            `).join('')}
+          </div>
+          <button class="btn btn-primary walkthrough-next-btn" ${this.currentStep >= totalPages - 1 ? 'disabled' : ''}>
+            Next
+            ${iconHtml(ChevronRight, { size: 16 })}
+          </button>
+        </div>
+
+        <div class="walkthrough-keyboard-hint">
+          <kbd>←</kbd> <kbd>→</kbd> or <kbd>n</kbd> <kbd>p</kbd> to navigate
+        </div>
+
+        <!-- Resize handles -->
+        <div class="walkthrough-resize-handle walkthrough-resize-n" data-direction="n"></div>
+        <div class="walkthrough-resize-handle walkthrough-resize-s" data-direction="s"></div>
+        <div class="walkthrough-resize-handle walkthrough-resize-e" data-direction="e"></div>
+        <div class="walkthrough-resize-handle walkthrough-resize-w" data-direction="w"></div>
+        <div class="walkthrough-resize-handle walkthrough-resize-nw" data-direction="nw"></div>
+        <div class="walkthrough-resize-handle walkthrough-resize-ne" data-direction="ne"></div>
+        <div class="walkthrough-resize-handle walkthrough-resize-sw" data-direction="sw"></div>
+        <div class="walkthrough-resize-handle walkthrough-resize-se" data-direction="se"></div>
+      `;
+    }
+
+    this.attachEventListeners();
+    this.attachDragListeners();
+    this.attachResizeListeners();
+    this.updateSize();
+
+    // Async render markdown content after initial render
+    this.renderMarkdownContent();
+  }
+
+  private renderStepSync(step: WalkthroughStep): string {
+    const fileName = step.filePath.split('/').pop() || step.filePath;
+
+    return `
+      <div class="walkthrough-step">
+        <h3 class="walkthrough-step-title">${escapeHtml(step.title)}</h3>
+
+        <div class="walkthrough-step-location"
+             data-file="${step.filePath}"
+             data-line="${step.startLine}">
+          ${iconHtml(FileText, { size: 14 })}
+          <span class="walkthrough-file">${fileName}</span>
+          <span class="walkthrough-line">:${step.startLine}${step.endLine !== step.startLine ? `-${step.endLine}` : ''}</span>
+        </div>
+
+        <div class="walkthrough-step-description markdown-content" data-markdown="${encodeURIComponent(step.description)}">
+          <div class="loading-markdown">Loading...</div>
+        </div>
+
+        ${step.diagram ? `
+          <div class="walkthrough-step-diagram mermaid-diagram" data-diagram="${encodeURIComponent(step.diagram)}">
+            <div class="loading-diagram">Loading diagram...</div>
+          </div>
+        ` : ''}
+
+        ${step.relatedFiles && step.relatedFiles.length > 0 ? `
+          <div class="walkthrough-related">
+            <span class="walkthrough-related-label">Related files:</span>
+            ${step.relatedFiles.map(f => `
+              <span class="walkthrough-related-file" data-file="${f}">
+                ${f.split('/').pop()}
+              </span>
+            `).join('')}
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  private renderSummarySync(): string {
+    const hasArchDiagram = this.walkthrough?.architectureDiagram;
+
+    return `
+      <div class="walkthrough-summary">
+        <h3>Summary</h3>
+        <div class="walkthrough-summary-text markdown-content" data-markdown="${encodeURIComponent(this.walkthrough?.summary || '')}">
+          <div class="loading-markdown">Loading...</div>
+        </div>
+
+        ${hasArchDiagram ? `
+          <div class="walkthrough-architecture-diagram">
+            <h4>
+              ${iconHtml(LayoutGrid, { size: 16 })}
+              Architecture Overview
+            </h4>
+            <div class="mermaid-diagram" data-diagram="${encodeURIComponent(this.walkthrough?.architectureDiagram || '')}">
+              <div class="loading-diagram">Loading diagram...</div>
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  /**
+   * Async render markdown and mermaid content after initial HTML render
+   */
+  private async renderMarkdownContent(): Promise<void> {
+    if (!this.overlay) return;
+
+    // Render markdown content
+    const markdownElements = this.overlay.querySelectorAll('.markdown-content[data-markdown]');
+    for (const el of markdownElements) {
+      const markdown = decodeURIComponent((el as HTMLElement).dataset.markdown || '');
+      if (markdown) {
+        try {
+          const html = await renderMarkdown(markdown);
+          el.innerHTML = html;
+        } catch (error) {
+          console.error('Failed to render markdown:', error);
+          el.innerHTML = `<p>${escapeHtml(markdown)}</p>`;
+        }
+      }
+    }
+
+    // Render mermaid diagrams
+    const diagramElements = this.overlay.querySelectorAll('.mermaid-diagram[data-diagram]');
+    for (const el of diagramElements) {
+      const diagramCode = decodeURIComponent((el as HTMLElement).dataset.diagram || '');
+      if (diagramCode) {
+        try {
+          // Convert escaped newlines to actual newlines
+          const normalizedCode = diagramCode.replace(/\\n/g, '\n');
+          await renderDiagramToElement(normalizedCode, el as HTMLElement);
+        } catch (error) {
+          console.error('Failed to render diagram:', error);
+          el.innerHTML = `<div class="mermaid-error">Failed to render diagram</div>`;
+        }
+      }
+    }
+  }
+
+  private navigateToCurrentStep(): void {
+    if (!this.walkthrough || !this.navigateCallback) return;
+    const step = this.getCurrentStep();
+    if (step) {
+      this.navigateCallback(step.filePath, step.startLine);
+    }
+  }
+
+  private attachEventListeners(): void {
+    if (!this.overlay) return;
+
+    // Close button
+    this.overlay.querySelectorAll('.walkthrough-close-btn').forEach(btn => {
+      btn.addEventListener('click', () => this.hide());
+    });
+
+    // Minimize button
+    this.overlay.querySelector('.walkthrough-minimize-btn')?.addEventListener('click', () => {
+      this.isMinimized = true;
+      this.render();
+    });
+
+    // Expand button
+    this.overlay.querySelector('.walkthrough-expand-btn')?.addEventListener('click', () => {
+      this.isMinimized = false;
+      this.render();
+    });
+
+    // Navigation buttons (in both expanded and minimized states)
+    this.overlay.querySelectorAll('.walkthrough-prev-btn').forEach(btn => {
+      btn.addEventListener('click', () => this.previousStep());
+    });
+
+    this.overlay.querySelectorAll('.walkthrough-next-btn').forEach(btn => {
+      btn.addEventListener('click', () => this.nextStep());
+    });
+
+    // Step dots
+    this.overlay.querySelectorAll('.step-dot').forEach(dot => {
+      dot.addEventListener('click', () => {
+        const step = parseInt((dot as HTMLElement).dataset.step || '0');
+        this.goToStep(step);
+      });
+    });
+
+    // Location click (expanded view)
+    this.overlay.querySelector('.walkthrough-step-location')?.addEventListener('click', () => {
+      this.navigateToCurrentStep();
+    });
+
+    // Mini file click (minimized view) - navigate to current step
+    this.overlay.querySelector('.walkthrough-mini-file')?.addEventListener('click', (e) => {
+      e.stopPropagation(); // Don't trigger drag
+      this.navigateToCurrentStep();
+    });
+
+    // Related file clicks
+    this.overlay.querySelectorAll('.walkthrough-related-file').forEach(el => {
+      el.addEventListener('click', () => {
+        const file = (el as HTMLElement).dataset.file;
+        if (file && this.navigateCallback) {
+          this.navigateCallback(file, 1);
+        }
+      });
+    });
+  }
+
+  private attachDragListeners(): void {
+    if (!this.overlay) return;
+
+    const header = this.overlay.querySelector('.walkthrough-header, .walkthrough-minimized');
+    if (!header) return;
+
+    header.addEventListener('mousedown', (e: Event) => {
+      const mouseEvent = e as MouseEvent;
+      if ((mouseEvent.target as HTMLElement).closest('button')) return;
+      // Don't allow dragging when minimized (pinned to bottom)
+      if (this.isMinimized) return;
+
+      this.isDragging = true;
+
+      // Store starting positions
+      this.dragStart = {
+        mouseX: mouseEvent.clientX,
+        mouseY: mouseEvent.clientY,
+        posX: this.position.x,
+        posY: this.position.y,
+      };
+
+      this.overlay!.classList.add('dragging');
+    });
+  }
+
+  private handleMouseMove(e: MouseEvent): void {
+    if (this.isDragging && this.overlay) {
+      // Calculate how much the mouse has moved
+      const deltaX = e.clientX - this.dragStart.mouseX;
+      const deltaY = e.clientY - this.dragStart.mouseY;
+
+      // Since we use right/bottom positioning:
+      // - Moving mouse right (positive deltaX) should decrease 'right' value
+      // - Moving mouse down (positive deltaY) should decrease 'bottom' value
+      this.position = {
+        x: this.dragStart.posX - deltaX,
+        y: this.dragStart.posY - deltaY,
+      };
+
+      // Constrain to viewport
+      this.position.x = Math.max(10, Math.min(this.position.x, window.innerWidth - 50));
+      this.position.y = Math.max(10, Math.min(this.position.y, window.innerHeight - 50));
+
+      this.updatePosition();
+    }
+
+    if (this.isResizing && this.overlay) {
+      this.handleResize(e);
+    }
+  }
+
+  private handleMouseUp(): void {
+    if (this.isDragging) {
+      this.isDragging = false;
+      this.overlay?.classList.remove('dragging');
+    }
+    if (this.isResizing) {
+      this.isResizing = false;
+      this.resizeDirection = '';
+      this.overlay?.classList.remove('resizing');
+      document.body.style.cursor = '';
+    }
+  }
+
+  private attachResizeListeners(): void {
+    if (!this.overlay) return;
+
+    this.overlay.querySelectorAll('.walkthrough-resize-handle').forEach(handle => {
+      handle.addEventListener('mousedown', (e: Event) => {
+        const mouseEvent = e as MouseEvent;
+        mouseEvent.preventDefault();
+        mouseEvent.stopPropagation();
+
+        this.isResizing = true;
+        this.resizeDirection = (handle as HTMLElement).dataset.direction || '';
+
+        const rect = this.overlay!.getBoundingClientRect();
+        this.resizeStart = {
+          x: mouseEvent.clientX,
+          y: mouseEvent.clientY,
+          width: rect.width,
+          height: rect.height,
+          right: window.innerWidth - rect.right,
+          bottom: window.innerHeight - rect.bottom,
+        };
+
+        this.overlay!.classList.add('resizing');
+        document.body.style.cursor = this.getCursorForDirection(this.resizeDirection);
+      });
+    });
+  }
+
+  private getCursorForDirection(direction: string): string {
+    const cursors: Record<string, string> = {
+      'n': 'ns-resize',
+      's': 'ns-resize',
+      'e': 'ew-resize',
+      'w': 'ew-resize',
+      'nw': 'nwse-resize',
+      'se': 'nwse-resize',
+      'ne': 'nesw-resize',
+      'sw': 'nesw-resize',
+    };
+    return cursors[direction] || 'default';
+  }
+
+  private handleResize(e: MouseEvent): void {
+    if (!this.overlay) return;
+
+    const dx = e.clientX - this.resizeStart.x;
+    const dy = e.clientY - this.resizeStart.y;
+    const dir = this.resizeDirection;
+
+    let newWidth = this.resizeStart.width;
+    let newHeight = this.resizeStart.height;
+    let newRight = this.resizeStart.right;
+    let newBottom = this.resizeStart.bottom;
+
+    const minWidth = 300;
+    const minHeight = 200;
+    const maxWidth = window.innerWidth - 40;
+    const maxHeight = window.innerHeight - 40;
+
+    // Handle horizontal resizing
+    if (dir.includes('e')) {
+      // East: shrink from right (since we use right positioning)
+      newWidth = Math.max(minWidth, Math.min(maxWidth, this.resizeStart.width + dx));
+      newRight = this.resizeStart.right - dx;
+    }
+    if (dir.includes('w')) {
+      // West: grow/shrink width, position stays
+      newWidth = Math.max(minWidth, Math.min(maxWidth, this.resizeStart.width - dx));
+    }
+
+    // Handle vertical resizing
+    if (dir.includes('s')) {
+      // South: shrink from bottom (since we use bottom positioning)
+      newHeight = Math.max(minHeight, Math.min(maxHeight, this.resizeStart.height + dy));
+      newBottom = this.resizeStart.bottom - dy;
+    }
+    if (dir.includes('n')) {
+      // North: grow/shrink height, position stays
+      newHeight = Math.max(minHeight, Math.min(maxHeight, this.resizeStart.height - dy));
+    }
+
+    // Apply size
+    this.size.width = newWidth;
+    this.size.height = newHeight;
+
+    // Apply position changes for e/s directions
+    if (dir.includes('e')) {
+      this.position.x = Math.max(10, newRight);
+    }
+    if (dir.includes('s')) {
+      this.position.y = Math.max(10, newBottom);
+    }
+
+    this.updateSize();
+    this.updatePosition();
+  }
+
+  private keyboardHandler = (e: KeyboardEvent): void => {
+    // Skip if typing in an input
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+      return;
+    }
+
+    if (e.key === 'ArrowRight' || e.key === 'n') {
+      this.nextStep();
+    } else if (e.key === 'ArrowLeft' || e.key === 'p') {
+      this.previousStep();
+    } else if (e.key === 'Escape') {
+      this.hide();
+    }
+  };
+
+  private attachKeyboardListeners(): void {
+    document.addEventListener('keydown', this.keyboardHandler);
+  }
+
+  private removeKeyboardListeners(): void {
+    document.removeEventListener('keydown', this.keyboardHandler);
+  }
+}

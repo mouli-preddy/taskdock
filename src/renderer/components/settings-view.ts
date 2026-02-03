@@ -1,0 +1,764 @@
+import { Toast } from './toast.js';
+import type { ConsoleReviewSettings, MonitoredRepository } from '../../shared/terminal-types.js';
+import { DEFAULT_CONSOLE_REVIEW_SETTINGS } from '../../shared/terminal-types.js';
+import type { PollingSettings } from '../../shared/types.js';
+import { DEFAULT_POLLING_SETTINGS } from '../../shared/types.js';
+import { escapeHtml } from '../utils/html-utils.js';
+import { getIcon, Eye, Plus, X, Globe, MessageSquare, Wand2 } from '../utils/icons.js';
+
+export interface ReviewSettings {
+  organization: string;
+  project: string;
+  pat: string;
+}
+
+export class SettingsView {
+  private container: HTMLElement;
+  private settings: ReviewSettings = { organization: '', project: '', pat: '' };
+  private consoleReviewSettings: ConsoleReviewSettings = { ...DEFAULT_CONSOLE_REVIEW_SETTINGS };
+  private pollingSettings: PollingSettings = { ...DEFAULT_POLLING_SETTINGS };
+  private saveCallback: ((settings: ReviewSettings) => Promise<void>) | null = null;
+  private testCallback: ((settings: ReviewSettings) => Promise<boolean>) | null = null;
+  private consoleSettingsSavedCallback: ((settings: ConsoleReviewSettings) => void) | null = null;
+  private pollingSettingsSavedCallback: ((settings: PollingSettings) => void) | null = null;
+
+  constructor(containerId: string) {
+    this.container = document.getElementById(containerId)!;
+    this.render();
+    this.loadConsoleReviewSettings();
+    this.loadPollingSettings();
+  }
+
+  onSave(callback: (settings: ReviewSettings) => Promise<void>) {
+    this.saveCallback = callback;
+  }
+
+  onTest(callback: (settings: ReviewSettings) => Promise<boolean>) {
+    this.testCallback = callback;
+  }
+
+  onConsoleSettingsSaved(callback: (settings: ConsoleReviewSettings) => void) {
+    this.consoleSettingsSavedCallback = callback;
+  }
+
+  onPollingSettingsSaved(callback: (settings: PollingSettings) => void) {
+    this.pollingSettingsSavedCallback = callback;
+  }
+
+  setSettings(settings: Partial<ReviewSettings>) {
+    this.settings = { ...this.settings, ...settings };
+    this.updateFormValues();
+  }
+
+  getSettings(): ReviewSettings {
+    return { ...this.settings };
+  }
+
+  private render() {
+    this.container.innerHTML = `
+      <div class="settings-view">
+        <div class="settings-header">
+          <h1 class="settings-page-title">Settings</h1>
+          <button type="button" class="btn btn-primary" id="saveAllSettingsBtn">
+            <span class="btn-text">Save All Settings</span>
+            <span class="btn-loading">
+              <span class="spinner"></span>
+              Saving...
+            </span>
+          </button>
+        </div>
+        <div class="settings-content">
+          <div class="settings-section">
+            <h2 class="settings-section-title">Azure DevOps Connection</h2>
+            <p class="settings-section-description">Configure your Azure DevOps connection to browse and review pull requests.</p>
+
+            <form class="settings-form" id="settingsForm">
+              <div class="form-group">
+                <label for="settingsOrganization">Organization</label>
+                <input type="text" id="settingsOrganization" placeholder="e.g., mycompany" required>
+                <span class="form-hint">Your Azure DevOps organization name</span>
+              </div>
+
+              <div class="form-group">
+                <label for="settingsProject">Project</label>
+                <input type="text" id="settingsProject" placeholder="e.g., myproject" required>
+                <span class="form-hint">The project containing your repositories</span>
+              </div>
+
+              <div class="form-group">
+                <label for="settingsPat">Personal Access Token (Optional)</label>
+                <div class="input-with-toggle">
+                  <input type="password" id="settingsPat" placeholder="Leave empty to use Azure CLI auth">
+                  <button type="button" class="btn btn-icon toggle-visibility" id="togglePatVisibility" title="Show/hide">
+                    ${getIcon(Eye, 16)}
+                  </button>
+                </div>
+                <span class="form-hint">Optional: Provide a PAT if not using <code>az login</code></span>
+              </div>
+
+              <div class="form-actions">
+                <button type="button" class="btn btn-secondary" id="testConnectionBtn">
+                  <span class="btn-text">Test Connection</span>
+                  <span class="btn-loading">
+                    <span class="spinner"></span>
+                    Testing...
+                  </span>
+                </button>
+              </div>
+            </form>
+
+            <div class="connection-status" id="connectionStatus"></div>
+          </div>
+
+          <div class="settings-section">
+            <h3 class="settings-section-title">Authentication Help</h3>
+            <div class="settings-help">
+              <p>You can authenticate using either:</p>
+              <ol>
+                <li><strong>Azure CLI (Recommended):</strong> Run <code>az login</code> in your terminal</li>
+                <li><strong>Personal Access Token:</strong> Create a PAT with "Code (Read)" scope</li>
+              </ol>
+            </div>
+          </div>
+
+          <div class="settings-section full-width">
+            <h2 class="settings-section-title">Monitored Repositories</h2>
+            <p class="settings-section-description">Add Azure DevOps repositories to monitor. Pull requests from these repositories will appear in a separate tab on the home page.</p>
+
+            <div class="form-group">
+              <label>Repository URLs</label>
+              <div class="repo-list" id="monitoredReposList"></div>
+              <div class="monitored-repo-add-form">
+                <input type="text" id="monitoredRepoUrl" placeholder="https://dev.azure.com/org/project/_git/repo" class="monitored-repo-input">
+                <button type="button" class="btn btn-secondary btn-sm" id="addMonitoredRepoBtn">
+                  ${getIcon(Plus, 14)}
+                  Add
+                </button>
+              </div>
+              <span class="form-hint">Enter Azure DevOps repository URLs (dev.azure.com or visualstudio.com). PRs from these repos will show in the "Monitored" tab.</span>
+            </div>
+          </div>
+
+          <div class="settings-section full-width">
+            <h2 class="settings-section-title">Console Review (Deep Review)</h2>
+            <p class="settings-section-description">Configure how console-based AI reviews work with your local repositories.</p>
+
+            <div class="form-group">
+              <label>Linked Repositories</label>
+              <div class="repo-list" id="linkedReposList"></div>
+              <button type="button" class="btn btn-secondary btn-sm" id="addRepoBtn">
+                ${getIcon(Plus, 14)}
+                Add Repository
+              </button>
+              <span class="form-hint">Git repositories to link with ADO PRs (matched by remote origin URL)</span>
+            </div>
+
+            <div class="form-group">
+              <label for="whenRepoFound">When Local Repository Found</label>
+              <select id="whenRepoFound">
+                <option value="worktree">Use git worktree (Recommended)</option>
+                <option value="ask">Ask me each time</option>
+                <option value="tempOnly">Always use temp folder only</option>
+              </select>
+              <span class="form-hint">What to do when a matching local repository is found</span>
+            </div>
+
+            <div class="form-group">
+              <label for="whenRepoNotFound">When No Local Repository</label>
+              <select id="whenRepoNotFound">
+                <option value="immediate">Proceed without repo context</option>
+                <option value="ask">Ask me each time</option>
+                <option value="clone">Clone repository first</option>
+              </select>
+              <span class="form-hint">What to do when no matching local repository is found</span>
+            </div>
+
+            <div class="form-group">
+              <label for="worktreeCleanup">Worktree Cleanup</label>
+              <select id="worktreeCleanup">
+                <option value="auto">Auto-cleanup after review</option>
+                <option value="ask">Ask me each time</option>
+                <option value="never">Keep worktrees</option>
+              </select>
+              <span class="form-hint">How to handle git worktrees after review completes</span>
+            </div>
+
+            <div class="form-group checkbox-group">
+              <label>
+                <input type="checkbox" id="autoCloseTerminal">
+                <span>Auto-close terminal when review completes</span>
+              </label>
+            </div>
+
+            <div class="form-group checkbox-group">
+              <label>
+                <input type="checkbox" id="showNotification">
+                <span>Show notification when review completes</span>
+              </label>
+            </div>
+
+            <div class="form-group">
+              <label for="generatedFilePatterns">Generated File Patterns</label>
+              <textarea id="generatedFilePatterns" rows="3" placeholder="*.g.cs&#10;*.generated.ts&#10;*.json"></textarea>
+              <span class="form-hint">Glob patterns for generated files (one per line). These files will be hidden by default in PRs and marked as generated for AI review.</span>
+            </div>
+
+            <div class="form-group checkbox-group">
+              <label>
+                <input type="checkbox" id="enableWorkIQ">
+                <span>Enable WorkIQ context gathering</span>
+              </label>
+              <span class="form-hint">When enabled, AI will use WorkIQ to gather context from your recent meetings related to this PR.</span>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h2 class="settings-section-title">AI Providers</h2>
+            <p class="settings-section-description">Configure AI providers for comment analysis and applying fixes.</p>
+
+            <div class="ai-provider-cards">
+              <div class="ai-provider-card">
+                <div class="ai-provider-header">
+                  <div class="ai-provider-title-group">
+                    <span class="ai-provider-icon">${getIcon(MessageSquare, 16)}</span>
+                    <span class="ai-provider-title">Analyze Comments</span>
+                  </div>
+                </div>
+                <div class="ai-provider-settings">
+                  <div class="ai-provider-row">
+                    <select id="analyzeCommentsProvider" class="ai-provider-select">
+                      <option value="claude-sdk">Claude SDK</option>
+                      <option value="claude-terminal">Claude Terminal</option>
+                      <option value="copilot-sdk">Copilot SDK</option>
+                      <option value="copilot-terminal">Copilot Terminal</option>
+                    </select>
+                    <label class="ai-provider-checkbox">
+                      <input type="checkbox" id="analyzeCommentsShowTerminal">
+                      <span>Show terminal</span>
+                    </label>
+                    <div class="ai-provider-timeout">
+                      <input type="number" id="analyzeCommentsTimeout" min="1" max="30" value="5">
+                      <span>min</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="ai-provider-card">
+                <div class="ai-provider-header">
+                  <div class="ai-provider-title-group">
+                    <span class="ai-provider-icon">${getIcon(Wand2, 16)}</span>
+                    <span class="ai-provider-title">Apply Changes</span>
+                  </div>
+                </div>
+                <div class="ai-provider-settings">
+                  <div class="ai-provider-row">
+                    <select id="applyChangesProvider" class="ai-provider-select">
+                      <option value="claude-sdk">Claude SDK</option>
+                      <option value="claude-terminal">Claude Terminal</option>
+                      <option value="copilot-sdk">Copilot SDK</option>
+                      <option value="copilot-terminal">Copilot Terminal</option>
+                    </select>
+                    <label class="ai-provider-checkbox">
+                      <input type="checkbox" id="applyChangesShowTerminal">
+                      <span>Show terminal</span>
+                    </label>
+                    <div class="ai-provider-timeout">
+                      <input type="number" id="applyChangesTimeout" min="1" max="30" value="5">
+                      <span>min</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="ai-provider-card">
+                <div class="ai-provider-header">
+                  <div class="ai-provider-title-group">
+                    <span class="ai-provider-icon">${getIcon(MessageSquare, 16)}</span>
+                    <span class="ai-provider-title">Chat Panel Default</span>
+                  </div>
+                </div>
+                <div class="ai-provider-settings">
+                  <div class="ai-provider-row">
+                    <select id="defaultChatAI" class="ai-provider-select">
+                      <option value="copilot">Copilot</option>
+                      <option value="claude">Claude</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h2 class="settings-section-title">PR Polling</h2>
+            <p class="settings-section-description">Configure automatic polling for PR updates (new commits, comments).</p>
+
+            <div class="form-group checkbox-group">
+              <label>
+                <input type="checkbox" id="pollingEnabled">
+                <span>Enable automatic polling for open PR tabs</span>
+              </label>
+            </div>
+
+            <div class="form-group">
+              <label for="pollingInterval">Polling Interval (seconds)</label>
+              <input type="number" id="pollingInterval" min="10" max="300" step="5" value="30">
+              <span class="form-hint">How often to check for updates (10-300 seconds)</span>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    `;
+
+    this.attachEventListeners();
+  }
+
+  private attachEventListeners() {
+    const form = this.container.querySelector('#settingsForm') as HTMLFormElement;
+    const testBtn = this.container.querySelector('#testConnectionBtn') as HTMLButtonElement;
+    const toggleBtn = this.container.querySelector('#togglePatVisibility') as HTMLButtonElement;
+    const patInput = this.container.querySelector('#settingsPat') as HTMLInputElement;
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      await this.handleSaveAll();
+    });
+
+    testBtn.addEventListener('click', async () => {
+      await this.handleTest();
+    });
+
+    toggleBtn.addEventListener('click', () => {
+      patInput.type = patInput.type === 'password' ? 'text' : 'password';
+    });
+
+    ['settingsOrganization', 'settingsProject', 'settingsPat'].forEach(id => {
+      const input = this.container.querySelector(`#${id}`) as HTMLInputElement;
+      input.addEventListener('input', () => {
+        this.settings = {
+          organization: (this.container.querySelector('#settingsOrganization') as HTMLInputElement).value.trim(),
+          project: (this.container.querySelector('#settingsProject') as HTMLInputElement).value.trim(),
+          pat: (this.container.querySelector('#settingsPat') as HTMLInputElement).value.trim(),
+        };
+      });
+    });
+
+    // Monitored repositories
+    const addMonitoredRepoBtn = this.container.querySelector('#addMonitoredRepoBtn');
+    addMonitoredRepoBtn?.addEventListener('click', () => this.handleAddMonitoredRepo());
+
+    const monitoredRepoInput = this.container.querySelector('#monitoredRepoUrl') as HTMLInputElement;
+    monitoredRepoInput?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this.handleAddMonitoredRepo();
+      }
+    });
+
+    // Console review settings
+    const addRepoBtn = this.container.querySelector('#addRepoBtn');
+    addRepoBtn?.addEventListener('click', () => this.handleAddRepo());
+
+    // Global save button
+    const saveAllBtn = this.container.querySelector('#saveAllSettingsBtn');
+    saveAllBtn?.addEventListener('click', () => this.handleSaveAll());
+  }
+
+  private updateFormValues() {
+    (this.container.querySelector('#settingsOrganization') as HTMLInputElement).value = this.settings.organization;
+    (this.container.querySelector('#settingsProject') as HTMLInputElement).value = this.settings.project;
+    (this.container.querySelector('#settingsPat') as HTMLInputElement).value = this.settings.pat;
+  }
+
+  private async handleSaveAll() {
+    const saveBtn = this.container.querySelector('#saveAllSettingsBtn') as HTMLButtonElement;
+    saveBtn.classList.add('loading');
+
+    try {
+      // 1. Save ADO connection settings
+      await this.saveCallback?.(this.settings);
+
+      // 2. Gather and save Console Review settings
+      const whenRepoFound = (this.container.querySelector('#whenRepoFound') as HTMLSelectElement).value as ConsoleReviewSettings['whenRepoFound'];
+      const whenRepoNotFound = (this.container.querySelector('#whenRepoNotFound') as HTMLSelectElement).value as ConsoleReviewSettings['whenRepoNotFound'];
+      const worktreeCleanup = (this.container.querySelector('#worktreeCleanup') as HTMLSelectElement).value as ConsoleReviewSettings['worktreeCleanup'];
+      const autoCloseTerminal = (this.container.querySelector('#autoCloseTerminal') as HTMLInputElement).checked;
+      const showNotification = (this.container.querySelector('#showNotification') as HTMLInputElement).checked;
+      const generatedFilePatternsText = (this.container.querySelector('#generatedFilePatterns') as HTMLTextAreaElement).value;
+      const generatedFilePatterns = generatedFilePatternsText
+        .split('\n')
+        .map(p => p.trim())
+        .filter(p => p.length > 0);
+      const enableWorkIQ = (this.container.querySelector('#enableWorkIQ') as HTMLInputElement).checked;
+
+      // 3. Gather AI Provider settings
+      const analyzeCommentsProvider = (this.container.querySelector('#analyzeCommentsProvider') as HTMLSelectElement).value as ConsoleReviewSettings['analyzeComments']['provider'];
+      const analyzeCommentsShowTerminal = (this.container.querySelector('#analyzeCommentsShowTerminal') as HTMLInputElement).checked;
+      let analyzeCommentsTimeoutMinutes = parseInt((this.container.querySelector('#analyzeCommentsTimeout') as HTMLInputElement).value, 10);
+      analyzeCommentsTimeoutMinutes = Math.max(1, Math.min(30, analyzeCommentsTimeoutMinutes || 5));
+
+      const applyChangesProvider = (this.container.querySelector('#applyChangesProvider') as HTMLSelectElement).value as ConsoleReviewSettings['applyChanges']['provider'];
+      const applyChangesShowTerminal = (this.container.querySelector('#applyChangesShowTerminal') as HTMLInputElement).checked;
+      let applyChangesTimeoutMinutes = parseInt((this.container.querySelector('#applyChangesTimeout') as HTMLInputElement).value, 10);
+      applyChangesTimeoutMinutes = Math.max(1, Math.min(30, applyChangesTimeoutMinutes || 5));
+
+      const defaultChatAI = (this.container.querySelector('#defaultChatAI') as HTMLSelectElement).value as 'copilot' | 'claude';
+
+      // 4. Gather Polling settings
+      const pollingEnabled = (this.container.querySelector('#pollingEnabled') as HTMLInputElement).checked;
+      let pollingIntervalSeconds = parseInt((this.container.querySelector('#pollingInterval') as HTMLInputElement).value, 10);
+      pollingIntervalSeconds = Math.max(10, Math.min(300, pollingIntervalSeconds || 30));
+
+      // Update and save Console Review settings (includes AI providers)
+      this.consoleReviewSettings = {
+        ...this.consoleReviewSettings,
+        whenRepoFound,
+        whenRepoNotFound,
+        worktreeCleanup,
+        autoCloseTerminal,
+        showNotification,
+        generatedFilePatterns,
+        enableWorkIQ,
+        defaultChatAI,
+        analyzeComments: {
+          provider: analyzeCommentsProvider,
+          showTerminal: analyzeCommentsShowTerminal,
+          timeoutMinutes: analyzeCommentsTimeoutMinutes,
+        },
+        applyChanges: {
+          provider: applyChangesProvider,
+          showTerminal: applyChangesShowTerminal,
+          timeoutMinutes: applyChangesTimeoutMinutes,
+        },
+      };
+      await window.electronAPI.setConsoleReviewSettings(this.consoleReviewSettings);
+      this.consoleSettingsSavedCallback?.(this.consoleReviewSettings);
+
+      // Update and save Polling settings
+      this.pollingSettings = {
+        enabled: pollingEnabled,
+        intervalSeconds: pollingIntervalSeconds,
+      };
+      await window.electronAPI.setPollingSettings(this.pollingSettings);
+      this.pollingSettingsSavedCallback?.(this.pollingSettings);
+
+      Toast.success('All settings saved');
+      this.showStatus('connected', 'Settings saved successfully');
+    } catch (error: any) {
+      Toast.error(error.message || 'Failed to save settings');
+      this.showStatus('error', error.message || 'Failed to save settings');
+    } finally {
+      saveBtn.classList.remove('loading');
+    }
+  }
+
+  private async handleTest() {
+    const testBtn = this.container.querySelector('#testConnectionBtn') as HTMLButtonElement;
+    testBtn.classList.add('loading');
+    this.showStatus('testing', 'Testing connection...');
+
+    try {
+      const success = await this.testCallback?.(this.settings);
+      if (success) {
+        Toast.success('Connection successful');
+        this.showStatus('connected', 'Connection successful');
+      } else {
+        throw new Error('Connection failed');
+      }
+    } catch (error: any) {
+      Toast.error(error.message || 'Connection failed');
+      this.showStatus('error', error.message || 'Connection failed');
+    } finally {
+      testBtn.classList.remove('loading');
+    }
+  }
+
+  private showStatus(type: 'connected' | 'error' | 'testing', message: string) {
+    const statusEl = this.container.querySelector('#connectionStatus') as HTMLElement;
+    statusEl.className = `connection-status ${type}`;
+    statusEl.textContent = message;
+    statusEl.classList.add('visible');
+  }
+
+  // Console Review Settings Methods
+
+  private async loadConsoleReviewSettings(): Promise<void> {
+    try {
+      const loaded = await window.electronAPI.getConsoleReviewSettings();
+      // Merge with defaults to handle new fields added in updates
+      this.consoleReviewSettings = { ...DEFAULT_CONSOLE_REVIEW_SETTINGS, ...loaded };
+      this.updateConsoleReviewFormValues();
+    } catch (error) {
+      console.error('Failed to load console review settings:', error);
+    }
+  }
+
+  private async renderLinkedReposList(): Promise<void> {
+    const container = this.container.querySelector('#linkedReposList') as HTMLElement;
+    if (!container) return;
+
+    if (this.consoleReviewSettings.linkedRepositories.length === 0) {
+      container.innerHTML = '<div class="folder-empty">No repositories linked</div>';
+      return;
+    }
+
+    // Fetch normalized URLs for all repos
+    const reposWithNormalized = await Promise.all(
+      this.consoleReviewSettings.linkedRepositories.map(async (repo) => {
+        const normalized = await window.electronAPI.gitNormalizeAdoUrl(repo.originUrl);
+        return { ...repo, normalized };
+      })
+    );
+
+    container.innerHTML = reposWithNormalized.map((repo, index) => `
+      <div class="repo-item" data-index="${index}">
+        <div class="repo-info">
+          <span class="repo-path">${escapeHtml(repo.path)}</span>
+          <span class="repo-normalized">${escapeHtml(repo.normalized)}</span>
+          <span class="repo-origin">${escapeHtml(repo.originUrl)}</span>
+        </div>
+        <button type="button" class="btn btn-icon btn-danger-subtle remove-repo-btn" data-index="${index}" title="Remove">
+          ${getIcon(X, 14)}
+        </button>
+      </div>
+    `).join('');
+
+    // Attach remove listeners
+    container.querySelectorAll('.remove-repo-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const index = parseInt((e.currentTarget as HTMLElement).dataset.index || '0');
+        this.consoleReviewSettings.linkedRepositories.splice(index, 1);
+        this.renderLinkedReposList();
+      });
+    });
+  }
+
+  private async handleAddRepo(): Promise<void> {
+    const folder = await window.electronAPI.browseFolder();
+    if (!folder) return;
+
+    // Check if it's a git repository
+    const isRepo = await window.electronAPI.gitIsRepo(folder);
+    if (!isRepo) {
+      Toast.error('Selected folder is not a git repository');
+      return;
+    }
+
+    // Get the origin URL
+    const originUrl = await window.electronAPI.gitGetOriginUrl(folder);
+    if (!originUrl) {
+      Toast.error('Could not get git remote origin URL');
+      return;
+    }
+
+    // Check if already linked
+    const alreadyLinked = this.consoleReviewSettings.linkedRepositories.some(
+      r => r.path === folder || r.originUrl === originUrl
+    );
+    if (alreadyLinked) {
+      Toast.error('This repository is already linked');
+      return;
+    }
+
+    this.consoleReviewSettings.linkedRepositories.push({ path: folder, originUrl });
+    this.renderLinkedReposList();
+  }
+
+  private updateConsoleReviewFormValues(): void {
+    const whenRepoFound = this.container.querySelector('#whenRepoFound') as HTMLSelectElement;
+    const whenRepoNotFound = this.container.querySelector('#whenRepoNotFound') as HTMLSelectElement;
+    const worktreeCleanup = this.container.querySelector('#worktreeCleanup') as HTMLSelectElement;
+    const autoCloseTerminal = this.container.querySelector('#autoCloseTerminal') as HTMLInputElement;
+    const showNotification = this.container.querySelector('#showNotification') as HTMLInputElement;
+    const generatedFilePatterns = this.container.querySelector('#generatedFilePatterns') as HTMLTextAreaElement;
+    const enableWorkIQ = this.container.querySelector('#enableWorkIQ') as HTMLInputElement;
+
+    // Analyze Comments settings
+    const analyzeCommentsProvider = this.container.querySelector('#analyzeCommentsProvider') as HTMLSelectElement;
+    const analyzeCommentsShowTerminal = this.container.querySelector('#analyzeCommentsShowTerminal') as HTMLInputElement;
+    const analyzeCommentsTimeout = this.container.querySelector('#analyzeCommentsTimeout') as HTMLInputElement;
+
+    // Apply Changes settings
+    const applyChangesProvider = this.container.querySelector('#applyChangesProvider') as HTMLSelectElement;
+    const applyChangesShowTerminal = this.container.querySelector('#applyChangesShowTerminal') as HTMLInputElement;
+    const applyChangesTimeout = this.container.querySelector('#applyChangesTimeout') as HTMLInputElement;
+
+    if (whenRepoFound) whenRepoFound.value = this.consoleReviewSettings.whenRepoFound;
+    if (whenRepoNotFound) whenRepoNotFound.value = this.consoleReviewSettings.whenRepoNotFound;
+    if (worktreeCleanup) worktreeCleanup.value = this.consoleReviewSettings.worktreeCleanup;
+    if (autoCloseTerminal) autoCloseTerminal.checked = this.consoleReviewSettings.autoCloseTerminal;
+    if (showNotification) showNotification.checked = this.consoleReviewSettings.showNotification;
+    if (generatedFilePatterns) generatedFilePatterns.value = (this.consoleReviewSettings.generatedFilePatterns || []).join('\n');
+    if (enableWorkIQ) enableWorkIQ.checked = this.consoleReviewSettings.enableWorkIQ ?? true;
+
+    // Analyze Comments form values
+    const analyzeComments = this.consoleReviewSettings.analyzeComments || { provider: 'claude-sdk', showTerminal: false, timeoutMinutes: 5 };
+    if (analyzeCommentsProvider) analyzeCommentsProvider.value = analyzeComments.provider;
+    if (analyzeCommentsShowTerminal) analyzeCommentsShowTerminal.checked = analyzeComments.showTerminal;
+    if (analyzeCommentsTimeout) analyzeCommentsTimeout.value = String(analyzeComments.timeoutMinutes);
+
+    // Apply Changes form values
+    const applyChanges = this.consoleReviewSettings.applyChanges || { provider: 'claude-terminal', showTerminal: false, timeoutMinutes: 5 };
+    if (applyChangesProvider) applyChangesProvider.value = applyChanges.provider;
+    if (applyChangesShowTerminal) applyChangesShowTerminal.checked = applyChanges.showTerminal;
+    if (applyChangesTimeout) applyChangesTimeout.value = String(applyChanges.timeoutMinutes);
+
+    // Default Chat AI form value
+    const defaultChatAI = this.container.querySelector('#defaultChatAI') as HTMLSelectElement;
+    if (defaultChatAI) defaultChatAI.value = this.consoleReviewSettings.defaultChatAI || 'copilot';
+
+    this.renderLinkedReposList();
+    this.renderMonitoredReposList();
+  }
+
+  // Monitored Repositories Methods
+
+  private renderMonitoredReposList(): void {
+    const container = this.container.querySelector('#monitoredReposList') as HTMLElement;
+    if (!container) return;
+
+    const repos = this.consoleReviewSettings.monitoredRepositories || [];
+
+    if (repos.length === 0) {
+      container.innerHTML = '<div class="folder-empty">No repositories monitored</div>';
+      return;
+    }
+
+    container.innerHTML = repos.map((repo, index) => `
+      <div class="repo-item" data-index="${index}">
+        <div class="repo-info">
+          <span class="repo-path">${escapeHtml(repo.name)}</span>
+          <span class="repo-origin">${escapeHtml(repo.organization)}/${escapeHtml(repo.project)}/${escapeHtml(repo.repository)}</span>
+        </div>
+        <button type="button" class="btn btn-icon btn-danger-subtle remove-monitored-repo-btn" data-index="${index}" title="Remove">
+          ${getIcon(X, 14)}
+        </button>
+      </div>
+    `).join('');
+
+    // Attach remove listeners
+    container.querySelectorAll('.remove-monitored-repo-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const index = parseInt((e.currentTarget as HTMLElement).dataset.index || '0');
+        this.consoleReviewSettings.monitoredRepositories.splice(index, 1);
+        this.renderMonitoredReposList();
+        // Auto-save when removing
+        await this.saveMonitoredReposSettings();
+      });
+    });
+  }
+
+  private parseAdoRepoUrl(url: string): { organization: string; project: string; repository: string } | null {
+    // Handle supported formats:
+    // https://dev.azure.com/{org}/{project}/_git/{repo}
+    // https://{org}.visualstudio.com/{project}/_git/{repo}
+    // https://{org}.visualstudio.com/DefaultCollection/{project}/_git/{repo}
+    const devAzureMatch = url.match(/https:\/\/dev\.azure\.com\/([^/]+)\/([^/]+)\/_git\/([^/]+)/);
+    if (devAzureMatch) {
+      return {
+        organization: devAzureMatch[1],
+        project: devAzureMatch[2],
+        repository: devAzureMatch[3],
+      };
+    }
+
+    // Check DefaultCollection format first (more specific pattern)
+    const vsDefaultCollectionMatch = url.match(/https:\/\/([^.]+)\.visualstudio\.com\/DefaultCollection\/([^/]+)\/_git\/([^/]+)/i);
+    if (vsDefaultCollectionMatch) {
+      return {
+        organization: vsDefaultCollectionMatch[1],
+        project: vsDefaultCollectionMatch[2],
+        repository: vsDefaultCollectionMatch[3],
+      };
+    }
+
+    const vsMatch = url.match(/https:\/\/([^.]+)\.visualstudio\.com\/([^/]+)\/_git\/([^/]+)/);
+    if (vsMatch) {
+      return {
+        organization: vsMatch[1],
+        project: vsMatch[2],
+        repository: vsMatch[3],
+      };
+    }
+
+    return null;
+  }
+
+  private async handleAddMonitoredRepo(): Promise<void> {
+    const input = this.container.querySelector('#monitoredRepoUrl') as HTMLInputElement;
+    const url = input.value.trim();
+
+    if (!url) {
+      Toast.error('Please enter a repository URL');
+      return;
+    }
+
+    const parsed = this.parseAdoRepoUrl(url);
+    if (!parsed) {
+      Toast.error('Invalid Azure DevOps repository URL. Expected format: https://dev.azure.com/org/project/_git/repo');
+      return;
+    }
+
+    // Initialize array if not present
+    if (!this.consoleReviewSettings.monitoredRepositories) {
+      this.consoleReviewSettings.monitoredRepositories = [];
+    }
+
+    // Check if already monitored
+    const alreadyMonitored = this.consoleReviewSettings.monitoredRepositories.some(
+      r => r.organization === parsed.organization &&
+           r.project === parsed.project &&
+           r.repository === parsed.repository
+    );
+    if (alreadyMonitored) {
+      Toast.error('This repository is already being monitored');
+      return;
+    }
+
+    const newRepo: MonitoredRepository = {
+      url,
+      name: parsed.repository,
+      organization: parsed.organization,
+      project: parsed.project,
+      repository: parsed.repository,
+    };
+
+    this.consoleReviewSettings.monitoredRepositories.push(newRepo);
+    input.value = '';
+    this.renderMonitoredReposList();
+
+    // Auto-save when adding
+    await this.saveMonitoredReposSettings();
+    Toast.success(`Added ${parsed.repository} to monitored repositories`);
+  }
+
+  private async saveMonitoredReposSettings(): Promise<void> {
+    try {
+      await window.electronAPI.setConsoleReviewSettings(this.consoleReviewSettings);
+      this.consoleSettingsSavedCallback?.(this.consoleReviewSettings);
+    } catch (error: any) {
+      Toast.error(error.message || 'Failed to save settings');
+    }
+  }
+
+  // Polling Settings Methods
+
+  private async loadPollingSettings(): Promise<void> {
+    try {
+      this.pollingSettings = await window.electronAPI.getPollingSettings();
+      this.updatePollingFormValues();
+    } catch (error) {
+      console.error('Failed to load polling settings:', error);
+    }
+  }
+
+  private updatePollingFormValues(): void {
+    const pollingEnabled = this.container.querySelector('#pollingEnabled') as HTMLInputElement;
+    const pollingInterval = this.container.querySelector('#pollingInterval') as HTMLInputElement;
+
+    if (pollingEnabled) pollingEnabled.checked = this.pollingSettings.enabled;
+    if (pollingInterval) pollingInterval.value = String(this.pollingSettings.intervalSeconds);
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "pkg": {
+    "scripts": ["dist/sidecar/**/*.js"],
+    "assets": [
+      "node_modules/@lydell/node-pty/**/*",
+      "node_modules/@lydell/node-pty-win32-x64/**/*"
+    ],
+    "targets": ["node20-win-x64"],
+    "outputPath": "src-tauri/binaries"
+  }
+}

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' ws://localhost:5198 https://dev.azure.com https://vssps.dev.azure.com">
+  <title>TaskDock</title>
+  <link rel="stylesheet" href="./styles/main.css">
+  <link rel="stylesheet" href="./styles/section-sidebar.css">
+  <link rel="stylesheet" href="./styles/tab-bar.css">
+  <link rel="stylesheet" href="./styles/settings-view.css">
+  <link rel="stylesheet" href="./styles/diff.css">
+  <link rel="stylesheet" href="./styles/components.css">
+  <link rel="stylesheet" href="./styles/hljs-theme.css">
+  <link rel="stylesheet" href="./styles/ai-review.css">
+  <link rel="stylesheet" href="./styles/terminals.css">
+  <link rel="stylesheet" href="./styles/workitems.css">
+  <link rel="stylesheet" href="./styles/walkthroughs.css">
+  <link rel="stylesheet" href="./styles/apply-changes.css">
+  <link rel="stylesheet" href="./styles/comment-analysis.css">
+  <link rel="stylesheet" href="./styles/about-view.css">
+  <link rel="stylesheet" href="./lib/xterm/xterm.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Title Bar (for macOS) -->
+    <header class="title-bar" id="titleBar">
+      <div class="title-bar-drag-region"></div>
+      <div class="title-bar-content">
+        <span class="app-title">TaskDock</span>
+      </div>
+    </header>
+
+    <!-- Main App Container -->
+    <div class="app-container">
+      <!-- Section Sidebar -->
+      <nav class="section-sidebar" id="sectionSidebar"></nav>
+
+      <!-- Content Area -->
+      <div class="content-area">
+        <!-- Tab Bar -->
+        <div class="tab-bar" id="tabBar"></div>
+
+        <!-- Tab Content Panels -->
+        <div class="tab-content" id="tabContent">
+          <!-- Review Section Content -->
+          <div class="section-content" id="reviewSectionContent">
+            <!-- Home Tab Content (PR List) -->
+            <div class="tab-panel" id="homeTabPanel"></div>
+
+            <!-- PR Review Tab Panels Container (dynamically created) -->
+            <div id="prTabPanelsContainer"></div>
+          </div>
+
+          <!-- Settings Section Content -->
+          <div class="section-content hidden" id="settingsSectionContent">
+            <!-- Settings Tab Content -->
+            <div class="tab-panel active" id="settingsTabPanel"></div>
+          </div>
+
+          <!-- Work Items Section Content -->
+          <div class="section-content hidden" id="workItemsSectionContent">
+            <div class="tab-panel active" id="workItemsListPanel"></div>
+            <div id="workItemTabPanelsContainer"></div>
+          </div>
+
+          <!-- Terminals Section Content -->
+          <div class="section-content hidden" id="terminalsSectionContent">
+            <div id="terminalsScreen" class="screen terminals-screen">
+              <div id="terminalsView"></div>
+            </div>
+          </div>
+
+          <!-- About Section Content -->
+          <div class="section-content hidden" id="aboutSectionContent">
+            <div class="tab-panel active" id="aboutTabPanel"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Setup Modal -->
+    <div class="modal-backdrop hidden" id="setupModalBackdrop">
+      <div class="setup-modal" id="setupModal">
+        <div class="setup-modal-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+          </svg>
+        </div>
+        <h2>Welcome to TaskDock</h2>
+        <p>Please configure your Azure DevOps connection to get started.</p>
+        <button class="btn btn-primary" id="goToSettingsBtn">Go to Settings</button>
+      </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay hidden" id="loadingOverlay">
+      <div class="loading-content">
+        <div class="loading-spinner"></div>
+        <p class="loading-text">Loading...</p>
+      </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+  </div>
+
+  <script src="./lib/xterm/xterm.js"></script>
+  <script src="./lib/xterm/addon-fit.js"></script>
+  <!-- Initialize Tauri API before app loads -->
+  <script type="module" src="./tauri-api.ts"></script>
+  <script type="module" src="./app.ts"></script>
+</body>
+</html>
