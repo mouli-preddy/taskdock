@@ -12,7 +12,8 @@
     "@lydell/node-pty": "^1.2.0-beta.3",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
-    "electron": "^32.3.3"
+    "electron": "^35.1.5",
+    "taskdock": "file:../.."
   },
   "engines": {
     "node": ">=20.0.0"
