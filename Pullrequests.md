@@ -1,6 +1,28 @@
 # TaskDock PR Review Guide
 
-TaskDock is an AI-powered pull request review tool for Azure DevOps that helps you review code faster and more thoroughly.
+TaskDock is an AI-powered pull request review tool for Azure DevOps that helps you review code faster and more thoroughly. It combines intelligent code analysis with automated workflows to streamline your code review process.
+
+## Table of Contents
+
+- [Prerequisites](#prerequisites)
+- [Getting Started](#getting-started)
+- [PR Review Interface](#pr-review-interface)
+- [AI-Powered Code Review](#ai-powered-code-review)
+- [AI Walkthrough](#ai-walkthrough)
+- [PR Chat Copilot](#pr-chat-copilot)
+- [Mermaid Diagram Support](#mermaid-diagram-support)
+- [Auto-Fix from Comments](#auto-fix-from-comments)
+
+---
+
+## Prerequisites
+
+Before using TaskDock, ensure you have the required tools installed:
+
+- **Azure CLI** - Required for Azure DevOps authentication
+- **Claude Code** or **GitHub Copilot CLI** - At least one AI provider for code reviews
+
+For detailed installation instructions, see the [Developer Tools Setup](README.md#developer-tools-setup-windows) section in the README.
 
 ---
 
@@ -8,19 +30,19 @@ TaskDock is an AI-powered pull request review tool for Azure DevOps that helps y
 
 ### 1. Connect to Azure DevOps
 
-Configure your Azure DevOps organization and project in Settings.
+Configure your Azure DevOps organization and project in **Settings**. TaskDock uses Azure CLI for authentication, so ensure you're logged in with `az login`.
 
 ![Azure DevOps Connection](image-1.png)
 
 ### 2. Link Local Repositories
 
-Add local repository paths so the AI agent can use git worktrees for full context during reviews.
+Add local repository paths so the AI agent can use **git worktrees** for full context during reviews. This enables the AI to understand your entire codebase, not just the changed files.
 
 ![Console Repos](image-2.png)
 
 ### 3. Monitor Repositories
 
-Add repositories to monitor and automatically see all open PRs.
+Add repositories to monitor and automatically see all open PRs. You can track PRs from multiple repositories in one place.
 
 ![Monitored Repositories](image-3.png)
 
@@ -30,7 +52,7 @@ Add repositories to monitor and automatically see all open PRs.
 
 ### Browse Pull Requests
 
-View all your assigned PRs, PRs you created, and PRs from monitored repositories.
+View all your assigned PRs, PRs you created, and PRs from monitored repositories. The interface provides quick access to PR details, status, and review actions.
 
 ![Pull Request List](image.png)
 
@@ -40,25 +62,32 @@ View all your assigned PRs, PRs you created, and PRs from monitored repositories
 
 ### Start an AI Review
 
-Run AI reviews focused on what matters most to you - security, performance, bugs, or code style.
+Run AI reviews focused on what matters most to you:
+- **Security** - Identify vulnerabilities and security issues
+- **Performance** - Find performance bottlenecks and optimization opportunities
+- **Bugs** - Detect potential bugs and edge cases
+- **Code Style** - Ensure consistency with coding standards
 
 ![Start AI Review](image-6.png)
 
 ### Full Context Reviews
 
-AI reviews run in a git worktree with full repository context and data from WorkIQ (Microsoft 365 integration).
+AI reviews run in a **git worktree** with full repository context. When enabled, reviews also include data from **WorkIQ** (Microsoft 365 integration) for additional context about related work items, discussions, and documentation.
 
 ![AI Review in Worktree](image-4.png)
 
 ### Review Results
 
-View AI-generated comments with severity levels, categories, and suggested fixes.
+View AI-generated comments with:
+- **Severity levels** - Critical, Warning, Suggestion, Praise
+- **Categories** - Security, Performance, Bug, Style, etc.
+- **Suggested fixes** - Code snippets you can apply directly
 
 ![AI Review Results](image-5.png)
 
 ### Parallel Reviews
 
-Run multiple reviews focused on different aspects of the PR simultaneously.
+Run multiple reviews focused on different aspects of the PR simultaneously. For example, run a security audit and performance review at the same time.
 
 ![Parallel Reviews](image-10.png)
 
@@ -68,19 +97,25 @@ Run multiple reviews focused on different aspects of the PR simultaneously.
 
 ### Guided Code Walkthrough
 
-Get a step-by-step guided walkthrough of the PR with AI-generated explanations.
+Get a step-by-step guided walkthrough of the PR with AI-generated explanations. Perfect for understanding complex changes or onboarding to unfamiliar code.
 
 ![AI Walkthrough](image-7.png)
 
 ### Visual Architecture Diagrams
 
-See visual representations of the PR changes with auto-generated diagrams.
+See visual representations of the PR changes with auto-generated Mermaid diagrams showing:
+- Component relationships
+- Data flow
+- Architecture changes
 
 ![Visual PR Representation](image-8.png)
 
 ### Step-by-Step Explanations
 
-Navigate through each change with detailed explanations of what the code does and why.
+Navigate through each change with detailed explanations of what the code does and why. The walkthrough highlights:
+- Key changes and their impact
+- Related files affected
+- Design decisions
 
 ![Step by Step Walkthrough](image-9.png)
 
@@ -90,7 +125,15 @@ Navigate through each change with detailed explanations of what the code does an
 
 ### Ask Questions About the PR
 
-Built-in copilot with full context to the repository, PR changes, and WorkIQ data.
+Built-in copilot with full context to:
+- The repository codebase
+- PR changes and history
+- WorkIQ data (emails, meetings, documents)
+
+Ask natural language questions like:
+- "What does this function do?"
+- "Are there any security concerns with these changes?"
+- "How does this relate to the feature request?"
 
 ![PR Chat Copilot](image-11.png)
 
@@ -100,7 +143,7 @@ Built-in copilot with full context to the repository, PR changes, and WorkIQ dat
 
 ### Auto-Generated Diagrams
 
-Built-in support for Mermaid diagrams generated by the AI as part of design documentation.
+Built-in support for Mermaid diagrams generated by the AI as part of design documentation. Diagrams are rendered inline for easy viewing.
 
 ![Mermaid Diagram Support](image-12.png)
 
@@ -112,16 +155,36 @@ Built-in support for Mermaid diagrams generated by the AI as part of design docu
 
 ### One-Click Fixes
 
-Apply changes requested in PR comments from your peers at the click of a button.
+Apply changes requested in PR comments from your peers at the click of a button. The AI understands the comment context and generates appropriate code fixes.
 
 ![Auto-Fix Comments](image-14.png)
 
 ![Apply Changes](image-15.png)
 
+### Comment Triaging and Auto-Apply
+
+Automatically analyze and triage comments with AI recommendations:
+- **Fix** - Comment requires a code change
+- **Reply** - Comment needs a response
+- **Clarify** - Comment needs clarification
+
+![Automatic Triaging](image-18.png)
+
 ### Queued Commits
 
-Applied changes are queued and committed one change per commit for clean history.
+Applied changes are queued and committed **one change per commit** for clean history. Each commit includes:
+- Clear commit message describing the fix
+- Reference to the original comment
+- Atomic, reviewable changes
 
 ![Changes Queue](image-16.png)
 
 ![Commit History](image-17.png)
+
+---
+
+## Learn More
+
+- [Full Feature List](README.md#features)
+- [Developer Tools Setup](README.md#developer-tools-setup-windows)
+- [Keyboard Shortcuts](README.md#keyboard-shortcuts)
