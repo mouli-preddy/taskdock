@@ -1,4 +1,5 @@
 import { execSync } from 'child_process';
+import { existsSync } from 'fs';
 import type {
   PullRequest,
   PullRequestIteration,
@@ -9,6 +10,26 @@ import type {
 
 const ADO_RESOURCE_ID = '499b84ac-1321-427f-aa17-267ca6975798';
 const API_VERSION = '7.1';
+
+function findAzCommand(): string {
+  if (process.platform !== 'win32') {
+    return 'az';
+  }
+
+  const knownPaths = [
+    'C:\\Program Files\\Microsoft SDKs\\Azure\\CLI2\\wbin\\az.cmd',
+    'C:\\Program Files (x86)\\Microsoft SDKs\\Azure\\CLI2\\wbin\\az.cmd',
+  ];
+
+  for (const azPath of knownPaths) {
+    if (existsSync(azPath)) {
+      return `"${azPath}"`;
+    }
+  }
+
+  // Fall back to PATH lookup
+  return 'az';
+}
 
 export class AdoApiClient {
   private tokenCache: { token: string; expiresAt: number } | null = null;
@@ -26,11 +47,8 @@ export class AdoApiClient {
     }
 
     try {
-      // Use full path to az CLI on Windows if available
-      const azCommand = process.platform === 'win32' 
-        ? '"C:\\Program Files\\Microsoft SDKs\\Azure\\CLI2\\wbin\\az.cmd"'
-        : 'az';
-      
+      const azCommand = findAzCommand();
+
       const result = execSync(
         `${azCommand} account get-access-token --resource ${ADO_RESOURCE_ID} --output json`,
         { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
