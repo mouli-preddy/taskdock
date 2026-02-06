@@ -27,6 +27,112 @@ export class SettingsView {
     this.render();
     this.loadConsoleReviewSettings();
     this.loadPollingSettings();
+    this.loadPlugins();
+  }
+
+  async loadPlugins(): Promise<void> {
+    try {
+      const plugins = await window.electronAPI.pluginGetPlugins();
+      const container = this.container.querySelector('#pluginSettingsList');
+      if (!container) return;
+
+      if (plugins.length === 0) {
+        container.innerHTML = '<p class="text-muted">No plugins installed. Add plugins to ~/.taskdock/plugins/</p>';
+        return;
+      }
+
+      container.innerHTML = plugins.map((plugin: any) => `
+        <div class="plugin-settings-item" data-plugin-id="${plugin.id}">
+          <div class="plugin-settings-header">
+            <div class="plugin-settings-info">
+              <span class="plugin-settings-name">${escapeHtml(plugin.name)}</span>
+              <span class="plugin-settings-version">v${escapeHtml(plugin.version)}</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" class="plugin-toggle" data-plugin-id="${plugin.id}" ${plugin.enabled ? 'checked' : ''}>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          ${plugin.description ? `<p class="plugin-settings-desc">${escapeHtml(plugin.description)}</p>` : ''}
+          ${plugin.manifest?.config ? this.renderPluginConfigFields(plugin) : ''}
+        </div>
+      `).join('');
+
+      // Attach toggle handlers
+      container.querySelectorAll('.plugin-toggle').forEach(toggle => {
+        toggle.addEventListener('change', async (e) => {
+          const el = e.target as HTMLInputElement;
+          const pluginId = el.dataset.pluginId!;
+          await window.electronAPI.pluginSetEnabled(pluginId, el.checked);
+        });
+      });
+
+      // Attach config save handlers
+      container.querySelectorAll('.plugin-config-save').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const el = e.currentTarget as HTMLElement;
+          const pluginId = el.dataset.pluginId!;
+          const item = container.querySelector(`.plugin-settings-item[data-plugin-id="${pluginId}"]`);
+          if (!item) return;
+
+          const config: Record<string, any> = {};
+          item.querySelectorAll('.plugin-config-input').forEach(input => {
+            const inp = input as HTMLInputElement;
+            const key = inp.dataset.configKey!;
+            const type = inp.dataset.configType!;
+            if (type === 'boolean') {
+              config[key] = inp.checked;
+            } else if (type === 'number') {
+              config[key] = Number(inp.value);
+            } else {
+              config[key] = inp.value;
+            }
+          });
+
+          try {
+            await window.electronAPI.pluginSaveConfig(pluginId, config);
+            Toast.success(`Plugin "${pluginId}" configuration saved`);
+          } catch (err: any) {
+            Toast.error(err.message || 'Failed to save plugin config');
+          }
+        });
+      });
+    } catch (err) {
+      console.error('Failed to load plugins:', err);
+    }
+  }
+
+  private renderPluginConfigFields(plugin: any): string {
+    const fields = Object.entries(plugin.manifest.config || {});
+    if (fields.length === 0) return '';
+
+    return `
+      <div class="plugin-config-fields">
+        ${fields.map(([key, field]: [string, any]) => {
+          const value = plugin.config?.[key] ?? field.default ?? '';
+          if (field.type === 'boolean') {
+            return `
+              <div class="form-group plugin-config-group">
+                <label>
+                  <input type="checkbox" class="plugin-config-input" data-config-key="${key}" data-config-type="boolean" ${value ? 'checked' : ''}>
+                  ${escapeHtml(field.label)}
+                </label>
+              </div>
+            `;
+          }
+          return `
+            <div class="form-group plugin-config-group">
+              <label>${escapeHtml(field.label)}${field.required ? ' *' : ''}</label>
+              <input type="${field.secret ? 'password' : field.type === 'number' ? 'number' : 'text'}"
+                class="plugin-config-input" data-config-key="${key}" data-config-type="${field.type}"
+                value="${escapeHtml(String(value))}"
+                placeholder="${escapeHtml(field.label)}">
+            </div>
+          `;
+        }).join('')}
+        <button class="btn btn-secondary plugin-config-save" data-plugin-id="${plugin.id}">Save Plugin Config</button>
+      </div>
+    `;
   }
 
   onSave(callback: (settings: ReviewSettings) => Promise<void>) {
@@ -307,6 +413,14 @@ export class SettingsView {
               <span class="form-hint">How often to check for updates (10-300 seconds)</span>
             </div>
 
+          </div>
+
+          <div class="settings-section" id="pluginSettingsSection">
+            <h2 class="settings-section-title">Plugins</h2>
+            <p class="settings-section-description">Manage installed plugins. Plugins are loaded from ~/.taskdock/plugins/</p>
+            <div id="pluginSettingsList" class="plugin-settings-list">
+              <p class="text-muted">Loading plugins...</p>
+            </div>
           </div>
         </div>
       </div>
