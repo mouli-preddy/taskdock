@@ -1,0 +1,12 @@
+{
+  "id": "hello-world",
+  "name": "Hello World",
+  "version": "1.0.0",
+  "description": "A simple test plugin that demonstrates the plugin system",
+  "config": {
+    "greeting": { "type": "string", "label": "Greeting Message", "default": "Hello from TaskDock!" }
+  },
+  "triggers": [
+    { "type": "manual", "id": "greet", "workflow": "workflows/greet.ts", "label": "Say Hello" }
+  ]
+}

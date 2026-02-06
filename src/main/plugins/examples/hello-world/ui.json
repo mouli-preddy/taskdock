@@ -1,0 +1,44 @@
+{
+  "tab": {
+    "id": "hello",
+    "label": "Hello",
+    "icon": "smile"
+  },
+  "layout": {
+    "type": "split-panel",
+    "sizes": [50, 50],
+    "children": [
+      {
+        "type": "card",
+        "id": "greeting-card",
+        "label": "Greeting",
+        "content": "Click the button to run the greeting workflow",
+        "renderAs": "text"
+      },
+      {
+        "type": "detail-panel",
+        "id": "greeting-detail",
+        "sections": [
+          {
+            "type": "header",
+            "title": "Hello World Plugin",
+            "subtitle": "A simple demonstration of the plugin system"
+          },
+          {
+            "type": "button-group",
+            "buttons": [
+              { "label": "Say Hello", "icon": "sparkles", "action": "greet" }
+            ]
+          },
+          {
+            "type": "card",
+            "id": "response-card",
+            "label": "Response",
+            "content": "No greeting yet. Click 'Say Hello' to start.",
+            "renderAs": "text"
+          }
+        ]
+      }
+    ]
+  }
+}
