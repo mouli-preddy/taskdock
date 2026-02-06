@@ -52,6 +52,8 @@ import { WorkItemDetailView } from './components/workitem-detail-view.js';
 import { ResizablePanels, setupResizablePanels } from './components/resizable-panels.js';
 import { icons, iconHtml, getIcon, MessageSquare, Bot, BookOpen, Globe, Columns, FileText, ChevronLeft, ChevronRight, ChevronDown, X, File, FileCode, ArrowRight, Link, CheckCircle, Check, Clock, XCircle, Circle, Home, LayoutGrid, Settings, ChevronsLeft, Sparkles, Eye, EyeOff, RefreshCw, Terminal } from './utils/icons.js';
 import { PRPollingService, type PollResult, type PollingState } from './services/pr-polling-service.js';
+import { PluginTabRenderer } from './components/plugin-tab-renderer.js';
+import type { LoadedPlugin, PluginToastEvent, PluginUIUpdateEvent } from '../shared/plugin-types.js';
 
 // Tab type definitions
 interface ReviewTab {
@@ -160,6 +162,9 @@ class PRReviewApp {
   // ResizablePanels instances per tab (tabId -> ResizablePanels)
   private resizablePanels: Map<string, ResizablePanels> = new Map();
 
+  // Plugin renderers
+  private pluginRenderers: Map<string, PluginTabRenderer> = new Map();
+
   // PR lists
   private myPRs: PullRequest[] = [];
   private createdPRs: PullRequest[] = [];
@@ -200,6 +205,7 @@ class PRReviewApp {
     this.initAIListeners();
     this.initTerminalListeners();
     this.initTheme();
+    this.initPlugins();
 
     // Check if first launch
     this.checkFirstLaunch();
@@ -265,6 +271,68 @@ class PRReviewApp {
     // Set initial state
     this.updateTabBar();
     this.showHomeTab();
+  }
+
+  private async initPlugins() {
+    try {
+      const plugins: LoadedPlugin[] = await window.electronAPI.pluginGetPlugins();
+
+      for (const plugin of plugins) {
+        if (!plugin.enabled || !plugin.ui) continue;
+
+        // Add sidebar section
+        this.sectionSidebar.addSection({
+          id: `plugin-${plugin.id}`,
+          icon: `<span class="plugin-icon-text">${plugin.ui.tab.icon === 'alert-triangle' ? '\u26A0' : plugin.ui.tab.icon === 'activity' ? '\uD83D\uDCCA' : '\uD83D\uDD0C'}</span>`,
+          label: plugin.ui.tab.label,
+        });
+
+        // Create container
+        const container = document.createElement('div');
+        container.className = 'section-content hidden';
+        container.id = `pluginSection-${plugin.id}`;
+        container.innerHTML = '<div class="tab-panel active plugin-tab-content"></div>';
+        document.getElementById('pluginSectionContents')?.appendChild(container);
+
+        // Create renderer
+        const renderer = new PluginTabRenderer(
+          container.querySelector('.plugin-tab-content')!,
+          plugin
+        );
+        renderer.onTrigger((triggerId, input) => {
+          window.electronAPI.pluginExecuteTrigger(plugin.id, triggerId, input);
+        });
+        renderer.render();
+        this.pluginRenderers.set(plugin.id, renderer);
+      }
+
+      // Subscribe to plugin events
+      window.electronAPI.onPluginUIUpdate((event: PluginUIUpdateEvent) => {
+        const renderer = this.pluginRenderers.get(event.pluginId);
+        if (renderer) renderer.updateComponent(event.componentId, event.data);
+      });
+
+      window.electronAPI.onPluginUIToast((event: PluginToastEvent) => {
+        switch (event.level) {
+          case 'success': Toast.success(event.message); break;
+          case 'error': Toast.error(event.message); break;
+          case 'warning': Toast.warning(event.message); break;
+          default: Toast.info(event.message);
+        }
+      });
+
+      window.electronAPI.onPluginsReloaded(() => {
+        // Remove existing plugin sections and re-init
+        for (const [pluginId] of this.pluginRenderers) {
+          this.sectionSidebar.removeSection(`plugin-${pluginId}`);
+          document.getElementById(`pluginSection-${pluginId}`)?.remove();
+        }
+        this.pluginRenderers.clear();
+        this.initPlugins();
+      });
+    } catch (err) {
+      console.error('Failed to initialize plugins:', err);
+    }
   }
 
   private initEventListeners() {
@@ -914,6 +982,18 @@ class PRReviewApp {
     document.getElementById('workItemsSectionContent')?.classList.toggle('hidden', section !== 'workItems');
     document.getElementById('aboutSectionContent')?.classList.toggle('hidden', section !== 'about');
 
+    // Hide/show plugin sections
+    const pluginContents = document.getElementById('pluginSectionContents');
+    if (pluginContents) {
+      for (const child of Array.from(pluginContents.children)) {
+        (child as HTMLElement).classList.add('hidden');
+      }
+      const pluginSection = document.getElementById(`pluginSection-${section.replace('plugin-', '')}`);
+      if (pluginSection) {
+        pluginSection.classList.remove('hidden');
+      }
+    }
+
     // Refresh terminals list when switching to terminals
     if (section === 'terminals') {
       this.terminalsView.refresh();
@@ -943,7 +1023,20 @@ class PRReviewApp {
     } else if (this.activeSection === 'about') {
       // About section has no tabs - hide the tab bar
       this.reviewTabBar.setTabs([]);
+    } else if (this.activeSection === 'settings') {
+      const tabs: Tab[] = this.settingsTabs.map(t => ({
+        id: t.id,
+        label: t.label,
+        closeable: t.closeable,
+        icon: getIcon(Settings, 14),
+      }));
+      this.reviewTabBar.setTabs(tabs);
+      this.reviewTabBar.setActive(this.activeSettingsTabId);
+    } else if (this.activeSection.startsWith('plugin-')) {
+      // Plugin sections have no tab bar
+      this.reviewTabBar.setTabs([]);
     } else {
+      // Default: show settings tabs for other sections (workItems, terminals)
       const tabs: Tab[] = this.settingsTabs.map(t => ({
         id: t.id,
         label: t.label,

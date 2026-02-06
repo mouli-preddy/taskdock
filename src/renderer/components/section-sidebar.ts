@@ -1,6 +1,6 @@
 import { getIcon, GitPullRequest, LayoutGrid, Terminal, Settings, Info } from '../utils/icons.js';
 
-export type SectionId = 'review' | 'workItems' | 'terminals' | 'settings' | 'about';
+export type SectionId = 'review' | 'workItems' | 'terminals' | 'settings' | 'about' | string;
 
 export interface SectionDef {
   id: SectionId;
@@ -41,6 +41,7 @@ export class SectionSidebar {
   private activeSection: SectionId = 'review';
   private expanded = false;
   private selectCallback: ((section: SectionId) => void) | null = null;
+  private dynamicSections: SectionDef[] = [];
 
   constructor() {
     this.container = document.getElementById('sectionSidebar')!;
@@ -61,10 +62,23 @@ export class SectionSidebar {
     return this.activeSection;
   }
 
+  addSection(section: SectionDef) {
+    this.dynamicSections.push(section);
+    this.render();
+    this.attachEventListeners();
+  }
+
+  removeSection(sectionId: string) {
+    this.dynamicSections = this.dynamicSections.filter(s => s.id !== sectionId);
+    this.render();
+    this.attachEventListeners();
+  }
+
   private render() {
+    const allSections = [...SECTIONS, ...this.dynamicSections];
     this.container.innerHTML = `
       <div class="section-sidebar-items">
-        ${SECTIONS.map(s => `
+        ${allSections.map(s => `
           <button class="section-sidebar-item ${s.id === this.activeSection ? 'active' : ''}" data-section="${s.id}" title="${s.label}">
             <span class="section-icon">${s.icon}</span>
             <span class="section-label">${s.label}</span>
