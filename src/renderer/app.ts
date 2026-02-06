@@ -165,6 +165,17 @@ class PRReviewApp {
   // Plugin renderers
   private pluginRenderers: Map<string, PluginTabRenderer> = new Map();
 
+  // Plugin hook buttons for built-in tabs
+  private pluginHookButtons: Array<{
+    pluginId: string;
+    tab: string;
+    location: string;
+    label: string;
+    icon: string;
+    trigger: string;
+    position: string;
+  }> = [];
+
   // PR lists
   private myPRs: PullRequest[] = [];
   private createdPRs: PullRequest[] = [];
@@ -306,6 +317,9 @@ class PRReviewApp {
         this.pluginRenderers.set(plugin.id, renderer);
       }
 
+      // Collect hooks from all enabled plugins and render them
+      this.renderPluginHooks(plugins.filter(p => p.enabled));
+
       // Subscribe to plugin events
       window.electronAPI.onPluginUIUpdate((event: PluginUIUpdateEvent) => {
         const renderer = this.pluginRenderers.get(event.pluginId);
@@ -321,6 +335,11 @@ class PRReviewApp {
         }
       });
 
+      window.electronAPI.onPluginUIInject((event: any) => {
+        // Handle dynamic injection of components into core tabs
+        console.log('Plugin UI inject:', event);
+      });
+
       window.electronAPI.onPluginsReloaded(() => {
         // Remove existing plugin sections and re-init
         for (const [pluginId] of this.pluginRenderers) {
@@ -328,10 +347,35 @@ class PRReviewApp {
           document.getElementById(`pluginSection-${pluginId}`)?.remove();
         }
         this.pluginRenderers.clear();
+        this.pluginHookButtons = [];
         this.initPlugins();
       });
     } catch (err) {
       console.error('Failed to initialize plugins:', err);
+    }
+  }
+
+  private renderPluginHooks(plugins: LoadedPlugin[]): void {
+    // Collect all hooks from enabled plugins
+    for (const plugin of plugins) {
+      if (!plugin.manifest.hooks) continue;
+
+      // PR Review toolbar hooks
+      const prReviewHooks = plugin.manifest.hooks['pr-review'];
+      if (prReviewHooks?.toolbar) {
+        for (const hook of prReviewHooks.toolbar) {
+          // Store hook info so we can render it when PR tabs are created
+          this.pluginHookButtons.push({
+            pluginId: plugin.id,
+            tab: 'pr-review',
+            location: 'toolbar',
+            label: hook.label,
+            icon: hook.icon,
+            trigger: hook.trigger,
+            position: hook.position || 'right',
+          });
+        }
+      }
     }
   }
 
