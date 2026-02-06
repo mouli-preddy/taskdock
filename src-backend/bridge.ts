@@ -26,6 +26,7 @@ import { getFixTrackerService } from '../src/main/ai/fix-tracker-service.js';
 import { getCommentAnalysisService } from '../src/main/ai/comment-analysis-service.js';
 import { initializeLogger, getLogger, disposeLogger } from '../src/main/services/logger-service.js';
 import { getWorktreeService, WorktreeService } from '../src/main/git/worktree-service.js';
+import { getPluginEngine, disposePluginEngine } from '../src/main/plugins/plugin-engine.js';
 import { buildReviewPrompt } from '../src/main/terminal/review-prompt.js';
 import type { ConsoleReviewSettings } from '../src/shared/terminal-types.js';
 import { DEFAULT_CONSOLE_REVIEW_SETTINGS } from '../src/shared/terminal-types.js';
@@ -151,6 +152,10 @@ const walkthroughService = getWalkthroughService();
 const reviewContextService = getReviewContextService();
 const applyChangesService = getApplyChangesService();
 
+// Initialize plugin engine
+const pluginEngine = getPluginEngine();
+pluginEngine.initialize();
+
 // Set up event forwarding
 aiService.onProgress((event) => broadcast('ai:progress', event));
 aiService.onComment((event) => broadcast('ai:comment', event));
@@ -177,6 +182,16 @@ applyChangesService.onProgress((event) => broadcast('apply-changes:progress', ev
 
 const commentAnalysisService = getCommentAnalysisService();
 commentAnalysisService.onProgress((event) => broadcast('comment-analysis:progress', event));
+
+// Plugin engine events
+pluginEngine.on('ui:update', (event) => broadcast('plugin:ui-update', event));
+pluginEngine.on('ui:inject', (event) => broadcast('plugin:ui-inject', event));
+pluginEngine.on('ui:toast', (event) => broadcast('plugin:ui-toast', event));
+pluginEngine.on('plugin:log', (event) => broadcast('plugin:log', event));
+pluginEngine.on('execution:complete', (event) => broadcast('plugin:execution-complete', event));
+pluginEngine.on('plugin:reloaded', (event) => broadcast('plugin:reloaded', event));
+pluginEngine.on('plugins:reloaded', () => broadcast('plugin:plugins-reloaded', {}));
+pluginEngine.on('plugin:state-changed', (event) => broadcast('plugin:state-changed', event));
 
 // Warm up provider cache asynchronously at startup
 // This runs in the background so dialogs open instantly
@@ -731,6 +746,22 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       return commentAnalysisService.reanalyzeComment(thread, context, provider, fileContents, showTerminal ?? false);
     }
 
+    // Plugin Engine API
+    case 'plugin:get-plugins':
+      return pluginEngine.getPlugins();
+    case 'plugin:get-plugin':
+      return pluginEngine.getPlugin(params[0]);
+    case 'plugin:execute-trigger':
+      return pluginEngine.executeTrigger(params[0], params[1], params[2]);
+    case 'plugin:set-enabled':
+      pluginEngine.setPluginEnabled(params[0], params[1]);
+      return;
+    case 'plugin:save-config':
+      pluginEngine.savePluginConfig(params[0], params[1]);
+      return;
+    case 'plugin:get-logs':
+      return pluginEngine.getExecutionLogs(params[0]);
+
     default:
       throw new Error(`Unknown method: ${method}`);
   }
@@ -792,6 +823,7 @@ process.on('SIGINT', async () => {
   await disposeAIReviewService();
   await disposeWalkthroughService();
   disposeApplyChangesService();
+  disposePluginEngine();
   disposeLogger();
   wss.close();
   process.exit(0);
@@ -804,6 +836,7 @@ process.on('SIGTERM', async () => {
   await disposeAIReviewService();
   await disposeWalkthroughService();
   disposeApplyChangesService();
+  disposePluginEngine();
   disposeLogger();
   wss.close();
   process.exit(0);
