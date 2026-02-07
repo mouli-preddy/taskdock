@@ -12,6 +12,8 @@ import type {
   PluginUIUpdateEvent,
   PluginUIInjectEvent,
   PluginToastEvent,
+  PluginNavigateEvent,
+  HookTrigger,
 } from '../../shared/plugin-types.js';
 
 export class PluginEngine extends EventEmitter {
@@ -19,6 +21,7 @@ export class PluginEngine extends EventEmitter {
   private runner: PluginScriptRunner;
   private scheduler: PluginScheduler;
   private executionLogs: Map<string, PluginExecutionLog[]> = new Map();
+  private hookRegistry: Map<string, { pluginId: string; triggerId: string; workflow: string }[]> = new Map();
   private fileWatcher: fs.FSWatcher | null = null;
 
   constructor() {
@@ -39,10 +42,24 @@ export class PluginEngine extends EventEmitter {
       onLog: (pluginId, level, message) => {
         this.emit('plugin:log', { pluginId, level, message });
       },
+      onNavigate: (pluginId, section) => {
+        this.emit('ui:navigate', { pluginId, section } as PluginNavigateEvent);
+      },
+      onAIClaude: async (pluginId, prompt, opts) => {
+        return this.callClaude(prompt, opts);
+      },
+      onAICopilot: async (pluginId, prompt, opts) => {
+        return this.callCopilot(prompt, opts);
+      },
+      onAILaunchTerminal: async (pluginId, opts) => {
+        return this.launchAITerminal(pluginId, opts);
+      },
     });
 
     this.scheduler = new PluginScheduler({
-      executeTrigger: (plugin, triggerId, input) => this.executeTrigger(plugin.id, triggerId, input),
+      executeTrigger: async (plugin, triggerId, input) => {
+        await this.executeTrigger(plugin.id, triggerId, input);
+      },
     });
   }
 
@@ -60,6 +77,9 @@ export class PluginEngine extends EventEmitter {
         this.scheduler.startPlugin(plugin);
       }
     }
+
+    // Build hook registry
+    this.buildHookRegistry();
 
     // Start file watcher for hot-reload
     this.startFileWatcher();
@@ -108,6 +128,7 @@ export class PluginEngine extends EventEmitter {
     } else {
       this.scheduler.stopPlugin(pluginId);
     }
+    this.buildHookRegistry();
     this.emit('plugin:state-changed', { pluginId, enabled });
   }
 
@@ -125,6 +146,35 @@ export class PluginEngine extends EventEmitter {
   /** Get execution logs for a plugin */
   getExecutionLogs(pluginId: string): PluginExecutionLog[] {
     return this.executionLogs.get(pluginId) || [];
+  }
+
+  /** Build the hook registry from all enabled plugins' hook triggers */
+  private buildHookRegistry(): void {
+    this.hookRegistry.clear();
+    const plugins = this.loader.getAllPlugins();
+    for (const plugin of plugins) {
+      if (!plugin.enabled) continue;
+      for (const trigger of plugin.manifest.triggers) {
+        if (trigger.type !== 'hook') continue;
+        const hookTrigger = trigger as HookTrigger;
+        const entries = this.hookRegistry.get(hookTrigger.event) || [];
+        entries.push({ pluginId: plugin.id, triggerId: trigger.id, workflow: trigger.workflow });
+        this.hookRegistry.set(hookTrigger.event, entries);
+      }
+    }
+  }
+
+  /** Fire an app event — runs matching hook workflows in the background (fire-and-forget) */
+  emitAppEvent(event: string, data: Record<string, any>): void {
+    const hooks = this.hookRegistry.get(event);
+    if (!hooks || hooks.length === 0) return;
+
+    const logger = getLogger();
+    for (const hook of hooks) {
+      this.executeTrigger(hook.pluginId, hook.triggerId, { event, ...data }).catch(err => {
+        logger.error('PluginEngine', `Hook ${hook.triggerId} (plugin ${hook.pluginId}) failed for event ${event}`, { error: err?.message });
+      });
+    }
   }
 
   /** Hot-reload: watch plugins directory for changes */
@@ -166,6 +216,7 @@ export class PluginEngine extends EventEmitter {
       if (reloaded?.enabled) {
         this.scheduler.startPlugin(reloaded);
       }
+      this.buildHookRegistry();
       this.emit('plugin:reloaded', { pluginId: existing.id });
       logger.info('PluginEngine', `Reloaded plugin: ${existing.id}`);
     } else {
@@ -175,9 +226,74 @@ export class PluginEngine extends EventEmitter {
       for (const p of allPlugins) {
         if (p.enabled) this.scheduler.startPlugin(p);
       }
+      this.buildHookRegistry();
       this.emit('plugins:reloaded', {});
       logger.info('PluginEngine', 'Reloaded all plugins (new plugin detected)');
     }
+  }
+
+  /** Call Claude SDK with a prompt and return the text response */
+  private async callClaude(prompt: string, opts: any): Promise<string> {
+    const logger = getLogger();
+    logger.info('PluginEngine', 'Plugin AI call: Claude SDK', { model: opts?.model || 'sonnet' });
+
+    const { query } = await import('@anthropic-ai/claude-agent-sdk');
+    const model = opts?.model || 'sonnet';
+    const response = query({ prompt, options: { model, maxTurns: 1 } });
+    let result = '';
+    for await (const message of response) {
+      if (message.type === 'result' && (message as any).result) {
+        result = (message as any).result;
+      }
+    }
+    return result;
+  }
+
+  /** Call Copilot SDK with a prompt and return the text response */
+  private async callCopilot(prompt: string, opts: any): Promise<string> {
+    const logger = getLogger();
+    logger.info('PluginEngine', 'Plugin AI call: Copilot SDK', { model: opts?.model || 'gpt-4o' });
+
+    const { CopilotClient } = await import('@github/copilot-sdk');
+    if (!this._copilotClient || this._copilotClient.getState() === 'error' || this._copilotClient.getState() === 'disconnected') {
+      const client = new CopilotClient();
+      await client.start();
+      this._copilotClient = client;
+    }
+    const model = opts?.model || 'gpt-4o';
+    const session = await this._copilotClient.createSession({ model });
+    try {
+      const response = await session.sendAndWait({ prompt }, 120000);
+      if (!response) return '';
+      // Extract text content from the assistant message
+      const content = response.data?.content;
+      if (typeof content === 'string') return content;
+      if (Array.isArray(content)) {
+        return content
+          .filter((b: any) => b.type === 'text')
+          .map((b: any) => b.text)
+          .join('');
+      }
+      return String(content || '');
+    } finally {
+      await session.destroy();
+    }
+  }
+
+  private _copilotClient: any = null;
+
+  /** Launch an interactive AI terminal session via the bridge */
+  private async launchAITerminal(pluginId: string, opts: { ai: 'copilot' | 'claude'; prompt: string; show?: boolean }): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+      this.emit('ai:launch-terminal', {
+        pluginId,
+        ...opts,
+        callback: (sessionId: string, error?: string) => {
+          if (error) reject(new Error(error));
+          else resolve(sessionId);
+        },
+      });
+    });
   }
 
   dispose(): void {
@@ -188,6 +304,10 @@ export class PluginEngine extends EventEmitter {
     }
     if (this._reloadTimeout) {
       clearTimeout(this._reloadTimeout);
+    }
+    if (this._copilotClient) {
+      this._copilotClient.stop().catch(() => {});
+      this._copilotClient = null;
     }
   }
 }

@@ -2,11 +2,29 @@
   "id": "hello-world",
   "name": "Hello World",
   "version": "1.0.0",
-  "description": "A simple test plugin that demonstrates the plugin system",
+  "description": "A showcase plugin that demonstrates all available UI components",
   "config": {
     "greeting": { "type": "string", "label": "Greeting Message", "default": "Hello from TaskDock!" }
   },
   "triggers": [
-    { "type": "manual", "id": "greet", "workflow": "workflows/greet.ts", "label": "Say Hello" }
+    { "type": "manual", "id": "greet", "workflow": "workflows/greet.ts", "label": "Say Hello" },
+    { "type": "manual", "id": "reset", "workflow": "workflows/reset.ts", "label": "Reset" },
+    { "type": "manual", "id": "save-settings", "workflow": "workflows/save-settings.ts", "label": "Save Settings" },
+    { "type": "manual", "id": "ask-claude-sdk", "workflow": "workflows/ask-claude-sdk.ts", "label": "Ask Claude (SDK)", "timeout": 120 },
+    { "type": "manual", "id": "ask-copilot-sdk", "workflow": "workflows/ask-copilot-sdk.ts", "label": "Ask Copilot (SDK)", "timeout": 120 },
+    { "type": "manual", "id": "launch-claude-terminal", "workflow": "workflows/launch-claude-terminal.ts", "label": "Claude Terminal" },
+    { "type": "manual", "id": "launch-copilot-terminal", "workflow": "workflows/launch-copilot-terminal.ts", "label": "Copilot Terminal" },
+    { "type": "hook", "id": "on-pr-opened", "event": "pr:opened", "workflow": "workflows/on-event.ts" },
+    { "type": "hook", "id": "on-pr-comment-created", "event": "pr:comment-created", "workflow": "workflows/on-event.ts" },
+    { "type": "hook", "id": "on-pr-comment-replied", "event": "pr:comment-replied", "workflow": "workflows/on-event.ts" },
+    { "type": "hook", "id": "on-pr-thread-status-changed", "event": "pr:thread-status-changed", "workflow": "workflows/on-event.ts" },
+    { "type": "hook", "id": "on-pr-vote-submitted", "event": "pr:vote-submitted", "workflow": "workflows/on-event.ts" },
+    { "type": "hook", "id": "on-workitem-opened", "event": "workitem:opened", "workflow": "workflows/on-event.ts" },
+    { "type": "hook", "id": "on-workitem-updated", "event": "workitem:updated", "workflow": "workflows/on-event.ts" },
+    { "type": "hook", "id": "on-workitem-comment-added", "event": "workitem:comment-added", "workflow": "workflows/on-event.ts" },
+    { "type": "hook", "id": "on-terminal-created", "event": "terminal:created", "workflow": "workflows/on-event.ts" },
+    { "type": "hook", "id": "on-terminal-exited", "event": "terminal:exited", "workflow": "workflows/on-event.ts" },
+    { "type": "hook", "id": "on-review-started", "event": "review:started", "workflow": "workflows/on-event.ts" },
+    { "type": "hook", "id": "on-review-completed", "event": "review:completed", "workflow": "workflows/on-event.ts" }
   ]
 }

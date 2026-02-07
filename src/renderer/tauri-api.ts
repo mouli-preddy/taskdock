@@ -563,6 +563,7 @@ export const tauriAPI = {
   onPluginReloaded: (callback: (event: any) => void) => subscribe('plugin:reloaded', callback),
   onPluginsReloaded: (callback: () => void) => subscribe('plugin:plugins-reloaded', callback),
   onPluginStateChanged: (callback: (event: any) => void) => subscribe('plugin:state-changed', callback),
+  onPluginNavigate: (callback: (event: any) => void) => subscribe('plugin:ui-navigate', callback),
 };
 
 // Initialize connection when module loads

@@ -107,6 +107,10 @@ import User from 'lucide-static/icons/user.svg?raw';
 import Users from 'lucide-static/icons/users.svg?raw';
 import UserCircle from 'lucide-static/icons/user-circle.svg?raw';
 
+// Plugin-used icons
+import Smile from 'lucide-static/icons/smile.svg?raw';
+import Activity from 'lucide-static/icons/activity.svg?raw';
+
 // Misc
 import Link from 'lucide-static/icons/link.svg?raw';
 import Paperclip from 'lucide-static/icons/paperclip.svg?raw';
@@ -243,7 +247,70 @@ export {
   Target,
   Crosshair,
   Cloud,
+  Smile,
+  Activity,
 };
+
+/**
+ * Lookup map: kebab-case Lucide icon name → SVG string
+ * Used by the plugin system to resolve icon names from manifest/ui.json
+ */
+const iconByName: Record<string, string> = {
+  'menu': Menu, 'x': X,
+  'chevron-down': ChevronDown, 'chevron-right': ChevronRight,
+  'chevron-left': ChevronLeft, 'chevron-up': ChevronUp,
+  'chevrons-left': ChevronsLeft, 'chevrons-right': ChevronsRight,
+  'arrow-left': ArrowLeft, 'arrow-right': ArrowRight,
+  'arrow-up': ArrowUp, 'arrow-down': ArrowDown,
+  'external-link': ExternalLink, 'globe': Globe,
+  'more-vertical': MoreVertical, 'more-horizontal': MoreHorizontal,
+  'grip-vertical': GripVertical,
+  'plus': Plus, 'minus': Minus, 'check': Check, 'copy': Copy,
+  'trash-2': Trash2, 'edit': Edit, 'save': Save,
+  'refresh-cw': RefreshCw, 'rotate-ccw': RotateCcw,
+  'search': Search, 'filter': Filter, 'settings': Settings, 'home': Home,
+  'panel-left-close': PanelLeftClose, 'panel-right-close': PanelRightClose,
+  'circle': Circle, 'circle-plus': CirclePlus, 'circle-minus': CircleMinus,
+  'file-pen': FilePen,
+  'file': File, 'file-text': FileText, 'file-code': FileCode, 'file-plus': FilePlus,
+  'folder': Folder, 'folder-open': FolderOpen, 'folder-tree': FolderTree,
+  'message-square': MessageSquare, 'message-circle': MessageCircle,
+  'messages-square': MessagesSquare, 'send': Send,
+  'bot': Bot, 'sparkles': Sparkles, 'wand-2': Wand2, 'brain-circuit': BrainCircuit,
+  'code': Code, 'code-2': Code2, 'terminal': Terminal,
+  'git-branch': GitBranch, 'git-commit': GitCommit,
+  'git-merge': GitMerge, 'git-pull-request': GitPullRequest,
+  'play': Play, 'pause': Pause, 'square': Square, 'skip-forward': SkipForward,
+  'layout-grid': LayoutGrid, 'list': List,
+  'split-square-horizontal': SplitSquareHorizontal,
+  'columns': Columns, 'panel-left': PanelLeft, 'panel-right': PanelRight,
+  'maximize-2': Maximize2, 'minimize-2': Minimize2,
+  'alert-circle': AlertCircle, 'alert-triangle': AlertTriangle,
+  'info': Info, 'check-circle': CheckCircle, 'x-circle': XCircle,
+  'clock': Clock, 'loader': Loader, 'loader-2': Loader2,
+  'book-open': BookOpen, 'book-text': BookText,
+  'file-question': FileQuestion, 'clipboard': Clipboard, 'clipboard-check': ClipboardCheck,
+  'user': User, 'users': Users, 'user-circle': UserCircle,
+  'link': Link, 'paperclip': Paperclip, 'image': Image,
+  'star': Star, 'heart': Heart,
+  'thumbs-up': ThumbsUp, 'thumbs-down': ThumbsDown,
+  'flag': Flag, 'tag': Tag, 'hash': Hash, 'at-sign': AtSign,
+  'eye': Eye, 'eye-off': EyeOff, 'lock': Lock, 'unlock': Unlock,
+  'download': Download, 'upload': Upload, 'share': Share,
+  'zap': Zap, 'lightbulb': Lightbulb, 'target': Target,
+  'crosshair': Crosshair, 'cloud': Cloud,
+  'smile': Smile, 'activity': Activity,
+};
+
+/**
+ * Get icon SVG HTML by Lucide icon name (kebab-case).
+ * Returns empty string if the icon name is not found.
+ */
+export function getIconByName(name: string, size = 16): string {
+  const svg = iconByName[name];
+  if (!svg) return '';
+  return transformSvg(svg, { size });
+}
 
 export interface IconOptions {
   size?: number;

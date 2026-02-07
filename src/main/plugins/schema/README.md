@@ -406,16 +406,47 @@ if (result.exitCode === 0) {
 
 #### ctx.ai
 
-Call AI providers. Returns the response as a string.
+Call AI providers or launch interactive terminals. SDK calls return the response as a string.
+
+**Claude SDK** -- Send a prompt to Claude and get a text response.
 
 ```ts
 const analysis = await ctx.ai.claude(
   `Analyze this error and suggest a fix:\n${errorMessage}`
 );
 
+// With model option:
+const detailed = await ctx.ai.claude('Explain this code', { model: 'opus' });
+// Available models: 'sonnet' (default), 'opus', 'haiku'
+```
+
+**Copilot SDK** -- Send a prompt to GitHub Copilot and get a text response.
+
+```ts
 const review = await ctx.ai.copilot(
   `Review this code diff:\n${diff}`
 );
+
+// With model option:
+const result = await ctx.ai.copilot('Explain this', { model: 'gpt-5' });
+// Available models: 'gpt-4o' (default), 'gpt-4', 'gpt-5', 'claude-3.5-sonnet'
+```
+
+**Launch Terminal** -- Spawn an interactive AI terminal session (with optional UI navigation).
+
+```ts
+// Launch Claude terminal and switch to the terminals tab
+const sessionId = await ctx.ai.launchTerminal({
+  ai: 'claude',
+  prompt: 'Review this PR and suggest improvements.',
+  show: true,   // switch UI to the terminals tab (default: false)
+});
+
+// Launch Copilot terminal in the background (no tab switch)
+const bgSession = await ctx.ai.launchTerminal({
+  ai: 'copilot',
+  prompt: 'Analyze the codebase for security issues.',
+});
 ```
 
 #### ctx.ui
@@ -437,6 +468,13 @@ await ctx.ui.inject('pr-review', 'bottom-panel', {
   content: buildSummary,
   renderAs: 'markdown'
 });
+
+// Navigate the app to a section
+await ctx.ui.navigate('terminals');    // Switch to terminals tab
+await ctx.ui.navigate('review');       // Switch to PR review tab
+await ctx.ui.navigate('workitems');    // Switch to work items tab
+await ctx.ui.navigate('settings');     // Switch to settings tab
+await ctx.ui.navigate('plugin-my-id'); // Switch to another plugin's tab
 ```
 
 #### ctx.store

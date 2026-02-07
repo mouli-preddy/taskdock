@@ -375,6 +375,25 @@ export interface ElectronAPI {
     showTerminal?: boolean
   ) => Promise<any>;
   onCommentAnalysisProgress: (callback: (event: { prId: number; status: string }) => void) => () => void;
+
+  // Plugin API
+  pluginGetPlugins: () => Promise<any[]>;
+  pluginGetPlugin: (pluginId: string) => Promise<any>;
+  pluginExecuteTrigger: (pluginId: string, triggerId: string, input?: any) => Promise<any>;
+  pluginSetEnabled: (pluginId: string, enabled: boolean) => Promise<void>;
+  pluginSaveConfig: (pluginId: string, config: Record<string, any>) => Promise<void>;
+  pluginGetLogs: (pluginId: string) => Promise<any[]>;
+
+  // Plugin Event listeners
+  onPluginUIUpdate: (callback: (event: any) => void) => () => void;
+  onPluginUIInject: (callback: (event: any) => void) => () => void;
+  onPluginUIToast: (callback: (event: any) => void) => () => void;
+  onPluginLog: (callback: (event: any) => void) => () => void;
+  onPluginExecutionComplete: (callback: (event: any) => void) => () => void;
+  onPluginReloaded: (callback: (event: any) => void) => () => void;
+  onPluginsReloaded: (callback: (event: any) => void) => () => void;
+  onPluginStateChanged: (callback: (event: any) => void) => () => void;
+  onPluginNavigate: (callback: (event: { pluginId: string; section: string }) => void) => () => void;
 }
 
 declare global {

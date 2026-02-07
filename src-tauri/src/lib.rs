@@ -1,3 +1,4 @@
+use std::net::TcpStream;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -9,10 +10,17 @@ use std::os::windows::process::CommandExt;
 
 mod commands;
 
+const BACKEND_PORT: u16 = 5198;
+
 // Store the backend process handle
 static BACKEND_PROCESS: Mutex<Option<Child>> = Mutex::new(None);
 // Flag to stop the monitor thread on shutdown
 static SHOULD_MONITOR: AtomicBool = AtomicBool::new(true);
+
+/// Check if the backend is already listening on its port
+fn is_backend_running() -> bool {
+    TcpStream::connect(("127.0.0.1", BACKEND_PORT)).is_ok()
+}
 
 /// Check if the backend process is still running, restart if it died
 fn check_and_restart_backend() {
@@ -40,6 +48,11 @@ fn check_and_restart_backend() {
     };
 
     if needs_restart {
+        if is_backend_running() {
+            log::info!("Backend already running on port {} (external process), skipping spawn", BACKEND_PORT);
+            *guard = None; // Clear stale handle so we don't keep polling a dead child
+            return;
+        }
         log::info!("Restarting backend process...");
         match spawn_backend() {
             Ok(child) => {
@@ -84,7 +97,12 @@ fn spawn_backend() -> Result<Child, std::io::Error> {
         
         log::info!("Starting backend from project root: {:?}", project_root);
         
-        Command::new("npx")
+        #[cfg(target_os = "windows")]
+        let npx = "npx.cmd";
+        #[cfg(not(target_os = "windows"))]
+        let npx = "npx";
+
+        Command::new(npx)
             .args(["tsx", "src-backend/bridge.ts"])
             .current_dir(project_root)
             .stdout(Stdio::null())
@@ -132,15 +150,19 @@ pub fn run() {
             commands::file_io::read_review_output,
         ])
         .setup(|app| {
-            // Start the Node.js backend
-            match spawn_backend() {
-                Ok(child) => {
-                    *BACKEND_PROCESS.lock().unwrap() = Some(child);
-                    log::info!("Backend process started with PID: {:?}",
-                        BACKEND_PROCESS.lock().unwrap().as_ref().map(|c| c.id()));
-                }
-                Err(e) => {
-                    log::error!("Failed to start backend: {}", e);
+            // Start the Node.js backend (skip if already running, e.g. via `npm run dev`)
+            if is_backend_running() {
+                log::info!("Backend already running on port {}, skipping spawn", BACKEND_PORT);
+            } else {
+                match spawn_backend() {
+                    Ok(child) => {
+                        *BACKEND_PROCESS.lock().unwrap() = Some(child);
+                        log::info!("Backend process started with PID: {:?}",
+                            BACKEND_PROCESS.lock().unwrap().as_ref().map(|c| c.id()));
+                    }
+                    Err(e) => {
+                        log::error!("Failed to start backend: {}", e);
+                    }
                 }
             }
 

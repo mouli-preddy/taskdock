@@ -20,7 +20,29 @@ export interface PluginConfigField {
   secret?: boolean;
 }
 
-export type PluginTrigger = ManualTrigger | PollingTrigger | ScheduledTrigger;
+export type AppEventName =
+  | 'pr:opened'
+  | 'pr:comment-created'
+  | 'pr:comment-replied'
+  | 'pr:thread-status-changed'
+  | 'pr:vote-submitted'
+  | 'workitem:opened'
+  | 'workitem:updated'
+  | 'workitem:comment-added'
+  | 'terminal:created'
+  | 'terminal:exited'
+  | 'review:started'
+  | 'review:completed';
+
+export interface HookTrigger {
+  type: 'hook';
+  id: string;
+  workflow: string;
+  event: AppEventName;
+  timeout?: number;
+}
+
+export type PluginTrigger = ManualTrigger | PollingTrigger | ScheduledTrigger | HookTrigger;
 
 export interface ManualTrigger {
   type: 'manual';
@@ -239,4 +261,9 @@ export interface PluginToastEvent {
   pluginId: string;
   message: string;
   level: 'success' | 'error' | 'warning' | 'info';
+}
+
+export interface PluginNavigateEvent {
+  pluginId: string;
+  section: string;
 }

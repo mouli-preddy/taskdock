@@ -157,7 +157,12 @@ const pluginEngine = getPluginEngine();
 pluginEngine.initialize();
 
 // Set up event forwarding
-aiService.onProgress((event) => broadcast('ai:progress', event));
+aiService.onProgress((event) => {
+  broadcast('ai:progress', event);
+  if (event.status === 'complete') {
+    pluginEngine.emitAppEvent('review:completed', { sessionId: event.sessionId });
+  }
+});
 aiService.onComment((event) => broadcast('ai:comment', event));
 aiService.onWalkthrough((event) => broadcast('ai:walkthrough', event));
 aiService.onError((event) => broadcast('ai:error', event));
@@ -166,9 +171,15 @@ walkthroughService.onProgress((event) => broadcast('walkthrough:progress', event
 walkthroughService.onComplete((event) => broadcast('walkthrough:complete', event));
 walkthroughService.onError((event) => broadcast('walkthrough:error', event));
 
-terminalManager.on('session-created', (event) => broadcast('terminal:session-created', event));
+terminalManager.on('session-created', (event) => {
+  broadcast('terminal:session-created', event);
+  pluginEngine.emitAppEvent('terminal:created', { sessionId: event?.sessionId ?? event?.id });
+});
 terminalManager.on('data', (event) => broadcast('terminal:data', event));
-terminalManager.on('exit', (event) => broadcast('terminal:exit', event));
+terminalManager.on('exit', (event) => {
+  broadcast('terminal:exit', event);
+  pluginEngine.emitAppEvent('terminal:exited', { sessionId: event?.sessionId ?? event?.id, exitCode: event?.exitCode });
+});
 terminalManager.on('status-change', (event) => broadcast('terminal:status-change', event));
 terminalManager.on('review-complete', (event) => broadcast('terminal:review-complete', event));
 
@@ -192,6 +203,28 @@ pluginEngine.on('execution:complete', (event) => broadcast('plugin:execution-com
 pluginEngine.on('plugin:reloaded', (event) => broadcast('plugin:reloaded', event));
 pluginEngine.on('plugins:reloaded', () => broadcast('plugin:plugins-reloaded', {}));
 pluginEngine.on('plugin:state-changed', (event) => broadcast('plugin:state-changed', event));
+pluginEngine.on('ui:navigate', (event) => broadcast('plugin:ui-navigate', event));
+
+// Handle plugin AI terminal launch requests
+pluginEngine.on('ai:launch-terminal', (event) => {
+  const { pluginId, ai, prompt, show, callback } = event;
+  try {
+    const contextPath = path.join(os.homedir(), '.taskdock', 'plugins', '_runtime', `terminal-${Date.now()}`);
+    fs.mkdirSync(contextPath, { recursive: true });
+    const sessionId = chatTerminalService.createSession({
+      ai,
+      workingDir: process.cwd(),
+      contextPath,
+      initialPrompt: prompt,
+    });
+    if (show) {
+      broadcast('plugin:ui-navigate', { pluginId, section: 'terminals' });
+    }
+    callback(sessionId);
+  } catch (err: any) {
+    callback('', err.message);
+  }
+});
 
 // Warm up provider cache asynchronously at startup
 // This runs in the background so dialogs open instantly
@@ -208,8 +241,11 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
     // ADO API
     case 'ado:get-token':
       return adoClient.getToken();
-    case 'ado:load-pr':
-      return adoClient.getPullRequest(params[0], params[1], params[2]);
+    case 'ado:load-pr': {
+      const result = await adoClient.getPullRequest(params[0], params[1], params[2]);
+      pluginEngine.emitAppEvent('pr:opened', { pr: result });
+      return result;
+    }
     case 'ado:get-iterations':
       return adoClient.getIterations(params[0], params[1], params[2], params[3]);
     case 'ado:get-changes':
@@ -223,14 +259,26 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       return adoClient.getFileContent(params[0], params[1], params[2], params[3]);
     case 'ado:get-file-from-branch':
       return adoClient.getFileFromBranch(params[0], params[1], params[2], params[3], params[4]);
-    case 'ado:create-comment':
-      return adoClient.createFileComment(params[0], params[1], params[2], params[3], params[4], params[5], params[6], params[7]);
-    case 'ado:reply-to-thread':
-      return adoClient.replyToThread(params[0], params[1], params[2], params[3], params[4], params[5]);
-    case 'ado:update-thread-status':
-      return adoClient.updateThreadStatus(params[0], params[1], params[2], params[3], params[4], params[5]);
-    case 'ado:submit-vote':
-      return adoClient.submitVote(params[0], params[1], params[2], params[3], params[4]);
+    case 'ado:create-comment': {
+      const result = await adoClient.createFileComment(params[0], params[1], params[2], params[3], params[4], params[5], params[6], params[7]);
+      pluginEngine.emitAppEvent('pr:comment-created', { pr: { org: params[0], project: params[1], prId: params[2] }, threadId: result?.id, filePath: params[4], comment: result });
+      return result;
+    }
+    case 'ado:reply-to-thread': {
+      const result = await adoClient.replyToThread(params[0], params[1], params[2], params[3], params[4], params[5]);
+      pluginEngine.emitAppEvent('pr:comment-replied', { pr: { org: params[0], project: params[1], prId: params[3] }, threadId: params[4], comment: result });
+      return result;
+    }
+    case 'ado:update-thread-status': {
+      const result = await adoClient.updateThreadStatus(params[0], params[1], params[2], params[3], params[4], params[5]);
+      pluginEngine.emitAppEvent('pr:thread-status-changed', { pr: { org: params[0], project: params[1], prId: params[3] }, threadId: params[4], status: params[5] });
+      return result;
+    }
+    case 'ado:submit-vote': {
+      const result = await adoClient.submitVote(params[0], params[1], params[2], params[3], params[4]);
+      pluginEngine.emitAppEvent('pr:vote-submitted', { pr: { org: params[0], project: params[1], prId: params[3] }, vote: params[4] });
+      return result;
+    }
     case 'ado:get-my-prs':
       return adoClient.getPullRequestsForReviewer(params[0], params[1]);
     case 'ado:get-created-prs':
@@ -245,8 +293,11 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       return adoClient.runQueryById(params[0], params[1], params[2]);
     case 'wi:get-items':
       return adoClient.getWorkItems(params[0], params[1], params[2]);
-    case 'wi:get-item':
-      return adoClient.getWorkItem(params[0], params[1], params[2]);
+    case 'wi:get-item': {
+      const result = await adoClient.getWorkItem(params[0], params[1], params[2]);
+      pluginEngine.emitAppEvent('workitem:opened', { workItem: result });
+      return result;
+    }
     case 'wi:get-my-items':
       return adoClient.getMyWorkItems(params[0], params[1]);
     case 'wi:get-created-by-me':
@@ -284,12 +335,18 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       saveStoreData(storeData);
       return;
     }
-    case 'wi:update':
-      return adoClient.updateWorkItem(params[0], params[1], params[2], params[3]);
+    case 'wi:update': {
+      const result = await adoClient.updateWorkItem(params[0], params[1], params[2], params[3]);
+      pluginEngine.emitAppEvent('workitem:updated', { workItem: { org: params[0], project: params[1], id: params[2] }, changes: params[3] });
+      return result;
+    }
     case 'wi:get-comments':
       return adoClient.getWorkItemComments(params[0], params[1], params[2]);
-    case 'wi:add-comment':
-      return adoClient.addWorkItemComment(params[0], params[1], params[2], params[3]);
+    case 'wi:add-comment': {
+      const result = await adoClient.addWorkItemComment(params[0], params[1], params[2], params[3]);
+      pluginEngine.emitAppEvent('workitem:comment-added', { workItem: { org: params[0], project: params[1], id: params[2] }, comment: result });
+      return result;
+    }
     case 'wi:get-team-members':
       return adoClient.getTeamMembers(params[0], params[1]);
     case 'wi:get-type-states':
@@ -346,6 +403,7 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
         params[2], params[3], params[4], params[5], settings, contentsMap as any, prContextKey
       );
       sessionContextMap.set(sessionId, { organization: params[0], project: params[1], prId: params[2].prId });
+      pluginEngine.emitAppEvent('review:started', { sessionId });
       return sessionId;
     }
     case 'ai:cancel-review':

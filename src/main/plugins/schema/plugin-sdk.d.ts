@@ -35,8 +35,17 @@ export interface PluginContext {
 
   /** AI provider calls */
   ai: {
-    claude(prompt: string): Promise<string>;
-    copilot(prompt: string): Promise<string>;
+    /** Send a prompt to Claude SDK and get a text response */
+    claude(prompt: string, opts?: { model?: 'sonnet' | 'opus' | 'haiku' }): Promise<string>;
+    /** Send a prompt to GitHub Copilot SDK and get a text response */
+    copilot(prompt: string, opts?: { model?: 'gpt-4o' | 'gpt-4' | 'gpt-5' | 'claude-3.5-sonnet' }): Promise<string>;
+    /** Launch an interactive AI terminal session. Returns the session ID. */
+    launchTerminal(opts: {
+      ai: 'copilot' | 'claude';
+      prompt: string;
+      /** Switch the UI to the terminal tab (default: false) */
+      show?: boolean;
+    }): Promise<string>;
   };
 
   /** UI manipulation: update components, show toasts, inject into core tabs */
@@ -44,6 +53,8 @@ export interface PluginContext {
     update(componentId: string, data: any): Promise<void>;
     toast(message: string, level?: 'success' | 'error' | 'warning' | 'info'): Promise<void>;
     inject(tab: string, location: string, component: any): Promise<void>;
+    /** Navigate the app to a section: 'review', 'terminals', 'workitems', 'settings', or 'plugin-<id>' */
+    navigate(section: string): Promise<void>;
   };
 
   /** Persistent key-value storage scoped to this plugin */

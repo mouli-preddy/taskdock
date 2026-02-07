@@ -1,6 +1,7 @@
 // src/renderer/components/plugin-tab-renderer.ts
 import { Toast } from './toast.js';
-import { getIcon } from '../utils/icons.js';
+import { getIconByName } from '../utils/icons.js';
+import { renderMarkdownSync } from '../utils/markdown-renderer.js';
 import type {
   PluginUI,
   PluginComponent,
@@ -122,8 +123,10 @@ export class PluginTabRenderer {
         if (col.component === 'status-badge' && col.colorMap) {
           const badge = document.createElement('span');
           badge.className = 'plugin-status-badge';
+          const badgeColor = col.colorMap[String(value)] || 'var(--text-secondary)';
           badge.textContent = String(value ?? '');
-          badge.style.backgroundColor = col.colorMap[String(value)] || 'var(--text-secondary)';
+          badge.style.color = badgeColor;
+          badge.style.backgroundColor = `color-mix(in srgb, ${badgeColor} 15%, transparent)`;
           td.appendChild(badge);
         } else {
           td.textContent = String(value ?? '');
@@ -144,9 +147,21 @@ export class PluginTabRenderer {
 
     const data = def.id ? this.componentData.get(def.id) : null;
 
+    // Wrap non-header/non-tabs sections in a scrollable body
+    const body = document.createElement('div');
+    body.className = 'plugin-detail-body';
+
     for (const section of def.sections || []) {
       const sectionEl = this.renderComponent(this.resolveTemplates(section, data));
-      panel.appendChild(sectionEl);
+      if (section.type === 'header' || section.type === 'tabs') {
+        panel.appendChild(sectionEl);
+      } else {
+        body.appendChild(sectionEl);
+      }
+    }
+
+    if (body.children.length > 0) {
+      panel.appendChild(body);
     }
     return panel;
   }
@@ -156,21 +171,27 @@ export class PluginTabRenderer {
     card.className = 'plugin-card';
     if (def.id) card.dataset.pluginComponentId = def.id;
 
-    if (def.label) {
-      const label = document.createElement('div');
-      label.className = 'plugin-card-label';
-      label.textContent = def.label;
-      card.appendChild(label);
+    // Merge dynamic data from componentData if available
+    const data = def.id ? this.componentData.get(def.id) : null;
+    const label = data?.label ?? def.label;
+    const content = data?.content ?? def.content;
+    const renderAs = data?.renderAs ?? def.renderAs;
+
+    if (label) {
+      const labelEl = document.createElement('div');
+      labelEl.className = 'plugin-card-label';
+      labelEl.textContent = label;
+      card.appendChild(labelEl);
     }
 
-    const content = document.createElement('div');
-    content.className = 'plugin-card-content';
-    if (def.renderAs === 'markdown') {
-      content.innerHTML = this.escapeHtml(def.content || '');
+    const contentEl = document.createElement('div');
+    contentEl.className = 'plugin-card-content';
+    if (renderAs === 'markdown') {
+      contentEl.innerHTML = this.escapeHtml(content || '');
     } else {
-      content.textContent = def.content || '';
+      contentEl.textContent = content || '';
     }
-    card.appendChild(content);
+    card.appendChild(contentEl);
     return card;
   }
 
@@ -180,22 +201,18 @@ export class PluginTabRenderer {
     if (def.id) split.dataset.pluginComponentId = def.id;
 
     const direction = def.direction || 'horizontal';
-    split.style.display = 'flex';
-    split.style.flexDirection = direction === 'vertical' ? 'column' : 'row';
-    split.style.height = '100%';
+    if (direction === 'vertical') split.style.flexDirection = 'column';
 
     const [leftSize, rightSize] = def.sizes || [50, 50];
 
     const left = document.createElement('div');
     left.className = 'plugin-split-left';
-    left.style.flex = `0 0 ${leftSize}%`;
-    left.style.overflow = 'auto';
+    left.style.flex = `${leftSize} 0 0`;
     if (def.children[0]) left.appendChild(this.renderComponent(def.children[0]));
 
     const right = document.createElement('div');
     right.className = 'plugin-split-right';
-    right.style.flex = `0 0 ${rightSize}%`;
-    right.style.overflow = 'auto';
+    right.style.flex = `${rightSize} 0 0`;
     if (def.children[1]) right.appendChild(this.renderComponent(def.children[1]));
 
     split.appendChild(left);
@@ -211,7 +228,8 @@ export class PluginTabRenderer {
     for (const btn of def.buttons || []) {
       const button = document.createElement('button');
       button.className = `plugin-btn ${btn.variant ? `plugin-btn-${btn.variant}` : ''}`;
-      button.innerHTML = `${btn.icon ? `<span class="plugin-btn-icon">${this.escapeHtml(btn.icon)}</span>` : ''}${this.escapeHtml(btn.label)}`;
+      const iconSvg = btn.icon ? getIconByName(btn.icon, 16) : '';
+      button.innerHTML = `${iconSvg ? `<span class="plugin-btn-icon">${iconSvg}</span>` : ''}${this.escapeHtml(btn.label)}`;
       button.addEventListener('click', () => {
         this.triggerCallback?.(btn.action);
       });
@@ -224,9 +242,16 @@ export class PluginTabRenderer {
     const badge = document.createElement('span');
     badge.className = 'plugin-status-badge';
     if (def.id) badge.dataset.pluginComponentId = def.id;
-    badge.textContent = def.value || '';
-    if (def.colorMap?.[def.value]) {
-      badge.style.backgroundColor = def.colorMap[def.value];
+
+    const data = def.id ? this.componentData.get(def.id) : null;
+    const value = data?.value ?? def.value ?? '';
+    const colorMap = data?.colorMap ?? def.colorMap;
+
+    badge.textContent = value;
+    if (colorMap?.[value]) {
+      const color = colorMap[value];
+      badge.style.color = color;
+      badge.style.backgroundColor = `color-mix(in srgb, ${color} 15%, transparent)`;
     }
     return badge;
   }
@@ -338,7 +363,11 @@ export class PluginTabRenderer {
     const md = document.createElement('div');
     md.className = 'plugin-markdown';
     if (def.id) md.dataset.pluginComponentId = def.id;
-    md.textContent = def.content || '';
+
+    const data = def.id ? this.componentData.get(def.id) : null;
+    const content = data?.content ?? def.content ?? '';
+
+    md.innerHTML = renderMarkdownSync(content);
     return md;
   }
 
@@ -346,7 +375,9 @@ export class PluginTabRenderer {
     const empty = document.createElement('div');
     empty.className = 'plugin-empty-state';
     if (def.id) empty.dataset.pluginComponentId = def.id;
+    const iconSvg = def.icon ? getIconByName(def.icon, 32) : '';
     empty.innerHTML = `
+      ${iconSvg ? `<div class="plugin-empty-icon">${iconSvg}</div>` : ''}
       <div class="plugin-empty-title">${this.escapeHtml(def.title)}</div>
       <div class="plugin-empty-desc">${this.escapeHtml(def.description || '')}</div>
       ${def.action ? `<button class="plugin-btn plugin-empty-action">${this.escapeHtml(def.action.label)}</button>` : ''}`;
@@ -362,9 +393,14 @@ export class PluginTabRenderer {
     const header = document.createElement('div');
     header.className = 'plugin-header';
     if (def.id) header.dataset.pluginComponentId = def.id;
+
+    const data = def.id ? this.componentData.get(def.id) : null;
+    const title = data?.title ?? def.title ?? '';
+    const subtitle = data?.subtitle ?? def.subtitle;
+
     header.innerHTML = `
-      <h2 class="plugin-header-title">${this.escapeHtml(def.title || '')}</h2>
-      ${def.subtitle ? `<div class="plugin-header-subtitle">${this.escapeHtml(def.subtitle)}</div>` : ''}`;
+      <h2 class="plugin-header-title">${this.escapeHtml(title)}</h2>
+      ${subtitle ? `<div class="plugin-header-subtitle">${this.escapeHtml(subtitle)}</div>` : ''}`;
     return header;
   }
 

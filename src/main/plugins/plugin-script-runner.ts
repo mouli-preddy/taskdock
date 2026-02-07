@@ -13,6 +13,10 @@ export interface ScriptRunnerCallbacks {
   onUIInject: (pluginId: string, tab: string, location: string, component: any) => void;
   onToast: (pluginId: string, message: string, level: string) => void;
   onLog: (pluginId: string, level: string, message: string) => void;
+  onNavigate: (pluginId: string, section: string) => void;
+  onAIClaude: (pluginId: string, prompt: string, opts: any) => Promise<string>;
+  onAICopilot: (pluginId: string, prompt: string, opts: any) => Promise<string>;
+  onAILaunchTerminal: (pluginId: string, opts: { ai: 'copilot' | 'claude'; prompt: string; show?: boolean }) => Promise<string>;
 }
 
 export class PluginScriptRunner {
@@ -86,12 +90,17 @@ export class PluginScriptRunner {
 
         let stdout = '';
         let stderr = '';
+        let stdoutBuffer = ''; // Buffer for incomplete lines
 
         proc.stdout?.on('data', (data) => {
           const text = data.toString();
           stdout += text;
-          // Parse structured messages from the script
-          for (const line of text.split('\n')) {
+          // Buffer lines — data events don't guarantee line-aligned chunks
+          stdoutBuffer += text;
+          const lines = stdoutBuffer.split('\n');
+          // Keep the last (possibly incomplete) line in the buffer
+          stdoutBuffer = lines.pop() || '';
+          for (const line of lines) {
             this.handleScriptMessage(plugin.id, line.trim(), log);
           }
         });
@@ -101,6 +110,10 @@ export class PluginScriptRunner {
         });
 
         proc.on('close', (code) => {
+          // Flush any remaining buffered stdout
+          if (stdoutBuffer.trim()) {
+            this.handleScriptMessage(plugin.id, stdoutBuffer.trim(), log);
+          }
           if (code === 0) resolve();
           else reject(new Error(stderr || `Process exited with code ${code}`));
         });
@@ -164,12 +177,48 @@ export class PluginScriptRunner {
         case 'ui:toast':
           this.callbacks.onToast(pluginId, msg.message, msg.level);
           break;
+        case 'ui:navigate':
+          this.callbacks.onNavigate(pluginId, msg.section);
+          break;
         case 'log':
           log.logs.push({ level: msg.level, message: msg.message, timestamp: new Date().toISOString() });
           this.callbacks.onLog(pluginId, msg.level, msg.message);
           break;
+        case 'host:request': {
+          const { reqFile, resFile } = msg;
+          this.handleHostRequest(pluginId, reqFile, resFile).catch(err => {
+            try {
+              fs.writeFileSync(resFile, JSON.stringify({ error: err.message }));
+            } catch { /* ignore */ }
+          });
+          break;
+        }
       }
     } catch { /* not a plugin message, ignore */ }
+  }
+
+  private async handleHostRequest(pluginId: string, reqFile: string, resFile: string): Promise<void> {
+    const logger = getLogger();
+    const req = JSON.parse(fs.readFileSync(reqFile, 'utf-8'));
+    let result: any;
+
+    logger.info('PluginScriptRunner', `Host request: ${req.type}`, { pluginId });
+
+    switch (req.type) {
+      case 'ai:claude':
+        result = await this.callbacks.onAIClaude(pluginId, req.prompt, req.opts || {});
+        break;
+      case 'ai:copilot':
+        result = await this.callbacks.onAICopilot(pluginId, req.prompt, req.opts || {});
+        break;
+      case 'ai:terminal':
+        result = await this.callbacks.onAILaunchTerminal(pluginId, req.opts);
+        break;
+      default:
+        throw new Error(`Unknown host request type: ${req.type}`);
+    }
+
+    fs.writeFileSync(resFile, JSON.stringify({ result }));
   }
 
   private processAction(pluginId: string, action: any): void {
@@ -199,6 +248,7 @@ export class PluginScriptRunner {
     const wrapperCode = `
 import * as fs from 'fs';
 import * as path from 'path';
+import { pathToFileURL } from 'url';
 import { execSync, exec } from 'child_process';
 
 const contextFile = process.argv[2];
@@ -209,6 +259,30 @@ const actions: any[] = [];
 
 function sendMessage(msg: any) {
   console.log('__PLUGIN_MSG__:' + JSON.stringify(msg));
+}
+
+// Request/response protocol for async host calls (AI, terminals, etc.)
+async function requestFromHost(type: string, payload: any): Promise<any> {
+  const reqId = 'r' + Date.now() + Math.random().toString(36).slice(2, 6);
+  const runtimeDir = path.dirname(contextFile);
+  const reqFile = path.join(runtimeDir, 'req-' + reqId + '.json');
+  const resFile = path.join(runtimeDir, 'res-' + reqId + '.json');
+  fs.writeFileSync(reqFile, JSON.stringify({ type, ...payload }));
+  sendMessage({ type: 'host:request', reqId, reqFile, resFile });
+  // Poll for response (100ms interval, up to 120s)
+  for (let i = 0; i < 1200; i++) {
+    await new Promise(r => setTimeout(r, 100));
+    if (fs.existsSync(resFile)) {
+      const raw = fs.readFileSync(resFile, 'utf-8');
+      const res = JSON.parse(raw);
+      try { fs.unlinkSync(reqFile); } catch {}
+      try { fs.unlinkSync(resFile); } catch {}
+      if (res.error) throw new Error(res.error);
+      return res.result;
+    }
+  }
+  try { fs.unlinkSync(reqFile); } catch {}
+  throw new Error('Host request timed out after 120s');
 }
 
 // Build the store (file-backed per-plugin)
@@ -261,29 +335,29 @@ const ctx = {
   },
 
   ai: {
-    async claude(prompt: string) {
-      sendMessage({ type: 'log', level: 'info', message: 'AI claude call - delegating to host (not yet implemented)' });
-      // TODO: Implement via IPC back to host process
-      return '[AI response placeholder - ctx.ai.claude not yet connected]';
+    async claude(prompt: string, opts?: any) {
+      return requestFromHost('ai:claude', { prompt, opts });
     },
-    async copilot(prompt: string) {
-      sendMessage({ type: 'log', level: 'info', message: 'AI copilot call - delegating to host (not yet implemented)' });
-      return '[AI response placeholder - ctx.ai.copilot not yet connected]';
+    async copilot(prompt: string, opts?: any) {
+      return requestFromHost('ai:copilot', { prompt, opts });
+    },
+    async launchTerminal(opts: any) {
+      return requestFromHost('ai:terminal', { opts });
     },
   },
 
   ui: {
     async update(componentId: string, data: any) {
       sendMessage({ type: 'ui:update', componentId, data });
-      actions.push({ type: 'ui:update', componentId, data });
     },
     async toast(message: string, level: string = 'info') {
       sendMessage({ type: 'ui:toast', message, level });
-      actions.push({ type: 'ui:toast', message, level });
     },
     async inject(tab: string, location: string, component: any) {
       sendMessage({ type: 'ui:inject', tab, location, component });
-      actions.push({ type: 'ui:inject', tab, location, component });
+    },
+    async navigate(section: string) {
+      sendMessage({ type: 'ui:navigate', section });
     },
   },
 
@@ -319,7 +393,7 @@ const ctx = {
 
 async function main() {
   try {
-    const mod = await import(ctxData.workflowPath);
+    const mod = await import(pathToFileURL(ctxData.workflowPath).href);
     const fn = mod.default || mod;
     await fn(ctx);
   } catch (err: any) {

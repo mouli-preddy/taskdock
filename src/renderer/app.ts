@@ -50,7 +50,7 @@ import { WorkItemsListView, WorkItemViewType } from './components/workitems-list
 import { WorkItemQueryBuilder } from './components/workitem-query-builder.js';
 import { WorkItemDetailView } from './components/workitem-detail-view.js';
 import { ResizablePanels, setupResizablePanels } from './components/resizable-panels.js';
-import { icons, iconHtml, getIcon, MessageSquare, Bot, BookOpen, Globe, Columns, FileText, ChevronLeft, ChevronRight, ChevronDown, X, File, FileCode, ArrowRight, Link, CheckCircle, Check, Clock, XCircle, Circle, Home, LayoutGrid, Settings, ChevronsLeft, Sparkles, Eye, EyeOff, RefreshCw, Terminal } from './utils/icons.js';
+import { icons, iconHtml, getIcon, getIconByName, MessageSquare, Bot, BookOpen, Globe, Columns, FileText, ChevronLeft, ChevronRight, ChevronDown, X, File, FileCode, ArrowRight, Link, CheckCircle, Check, Clock, XCircle, Circle, Home, LayoutGrid, Settings, ChevronsLeft, Sparkles, Eye, EyeOff, RefreshCw, Terminal } from './utils/icons.js';
 import { PRPollingService, type PollResult, type PollingState } from './services/pr-polling-service.js';
 import { PluginTabRenderer } from './components/plugin-tab-renderer.js';
 import type { LoadedPlugin, PluginToastEvent, PluginUIUpdateEvent } from '../shared/plugin-types.js';
@@ -251,8 +251,8 @@ class PRReviewApp {
     // Initialize terminals view
     this.terminalsView = new TerminalsView('terminalsView');
     this.aboutView = new AboutView('aboutTabPanel');
-    this.terminalsView.onClose(async (sessionId) => {
-      await this.closeTerminalSession(sessionId);
+    this.terminalsView.onClose(async (sessionId, isChat) => {
+      await this.closeTerminalSession(sessionId, isChat);
     });
 
     // Initialize work items views
@@ -294,7 +294,7 @@ class PRReviewApp {
         // Add sidebar section
         this.sectionSidebar.addSection({
           id: `plugin-${plugin.id}`,
-          icon: `<span class="plugin-icon-text">${plugin.ui.tab.icon === 'alert-triangle' ? '\u26A0' : plugin.ui.tab.icon === 'activity' ? '\uD83D\uDCCA' : '\uD83D\uDD0C'}</span>`,
+          icon: getIconByName(plugin.ui.tab.icon, 20) || `<span class="plugin-icon-text">\uD83D\uDD0C</span>`,
           label: plugin.ui.tab.label,
         });
 
@@ -338,6 +338,10 @@ class PRReviewApp {
       window.electronAPI.onPluginUIInject((event: any) => {
         // Handle dynamic injection of components into core tabs
         console.log('Plugin UI inject:', event);
+      });
+
+      window.electronAPI.onPluginNavigate((event: { pluginId: string; section: string }) => {
+        this.switchSection(event.section as SectionId);
       });
 
       window.electronAPI.onPluginsReloaded(() => {
@@ -811,11 +815,39 @@ class PRReviewApp {
       await this.handleTerminalReviewComplete(event);
     });
 
-    // Chat terminal data listener - filter by session ID
+    // Chat terminal events (for plugin-launched AI terminals)
+    window.electronAPI.onChatTerminalSessionCreated((event) => {
+      console.log('[Renderer] Received chat-terminal:session-created:', event.session?.id);
+      // Add to terminals view so it's visible in the Terminals tab
+      this.terminalsView.addSession({
+        id: event.session.id,
+        label: `AI Chat (${event.session.ai})`,
+        status: event.session.status || 'running',
+        prId: 0,
+        organization: '',
+        project: '',
+        workingDir: event.session.workingDir || '',
+        contextPath: event.session.contextPath || '',
+        createdAt: event.session.createdAt || new Date().toISOString(),
+      }, true /* isChat */);
+    });
+
+    // Chat terminal data listener
     window.electronAPI.onChatTerminalData((event) => {
+      // Forward to copilot chat panel if it owns this session
       if (event.sessionId === this.copilotChatPanel.getSessionId()) {
         this.copilotChatPanel.writeToTerminal(event.data);
       }
+      // Also forward to terminals view (for plugin-launched chat terminals)
+      this.terminalsView.writeToTerminal(event.sessionId, event.data);
+    });
+
+    window.electronAPI.onChatTerminalExit((event) => {
+      this.terminalsView.updateSession(event.sessionId, { status: 'completed' });
+    });
+
+    window.electronAPI.onChatTerminalStatusChange((event) => {
+      this.terminalsView.updateSession(event.sessionId, { status: event.status as any });
     });
   }
 
@@ -4192,8 +4224,15 @@ After this, respond with a simple text response to greet the user and ask them w
     }
   }
 
-  private async closeTerminalSession(sessionId: string) {
-    // Get the session to find context path for cleanup
+  private async closeTerminalSession(sessionId: string, isChat = false) {
+    if (isChat) {
+      // Chat terminal (plugin-launched AI terminal) — simpler cleanup
+      await window.electronAPI.chatTerminalRemove(sessionId);
+      this.terminalsView.removeSession(sessionId);
+      return;
+    }
+
+    // Regular terminal — get session for cleanup info
     const session = await window.electronAPI.terminalGetSession(sessionId);
 
     // Remove the terminal from backend (kills process)
