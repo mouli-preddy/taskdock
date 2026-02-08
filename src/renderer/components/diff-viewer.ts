@@ -28,6 +28,7 @@ interface DiffLine {
 export class DiffViewer {
   private container: HTMLElement;
   private lines: DiffLine[] = [];
+  private pairedLines: { old?: DiffLine; new?: DiffLine }[] = [];
   private currentFile: FileChange | null = null;
   private commentCallback?: (filePath: string, startLine: number, endLine: number, content: string) => void;
   private commentBadgeClickCallback?: (threadIds: number[]) => void;
@@ -351,6 +352,7 @@ export class DiffViewer {
     const newContainer = this.container.querySelector('#diffPaneNew .diff-lines')!;
 
     const paired = this.pairLinesForSplit();
+    this.pairedLines = paired;
 
     for (const pair of paired) {
       oldContainer.appendChild(this.createSplitLineElement(pair.old, 'old'));
@@ -397,6 +399,7 @@ export class DiffViewer {
       </div>
     `;
 
+    this.pairedLines = [];
     const container = this.container.querySelector('.diff-unified .diff-lines')!;
 
     for (const line of this.lines) {
@@ -1142,50 +1145,126 @@ export class DiffViewer {
 
     if (!minimap || !minimapContent || !viewport) return;
 
-    // Build minimap markers
-    const totalLines = this.lines.length;
-    if (totalLines === 0) {
-      minimap.style.display = 'none';
-      return;
-    }
+    const isSplitView = this.pairedLines.length > 0;
 
-    // Create markers for changes and comments (consolidate consecutive changes)
+    // Build minimap markers
     let markersHtml = '';
     let currentGroup: { type: 'add' | 'del'; startIndex: number; endIndex: number } | null = null;
 
-    const flushGroup = () => {
-      if (currentGroup) {
-        const startPos = (currentGroup.startIndex / totalLines) * 100;
-        const endPos = ((currentGroup.endIndex + 1) / totalLines) * 100;
-        const height = Math.max(endPos - startPos, 0.5); // Min height for visibility
-        markersHtml += `<div class="minimap-marker ${currentGroup.type}" style="top: ${startPos}%; height: ${height}%" data-index="${currentGroup.startIndex}"></div>`;
-        currentGroup = null;
+    if (isSplitView) {
+      // Split view: use paired lines for correct visual positioning
+      const totalPairs = this.pairedLines.length;
+      if (totalPairs === 0) {
+        minimap.style.display = 'none';
+        return;
       }
-    };
 
-    this.lines.forEach((line, index) => {
-      // Handle change groups
-      if (line.type === 'add' || line.type === 'del') {
-        if (currentGroup && currentGroup.type === line.type) {
-          currentGroup.endIndex = index;
+      const flushGroup = () => {
+        if (currentGroup) {
+          const startPos = (currentGroup.startIndex / totalPairs) * 100;
+          const endPos = ((currentGroup.endIndex + 1) / totalPairs) * 100;
+          const height = Math.max(endPos - startPos, 0.5);
+          markersHtml += `<div class="minimap-marker ${currentGroup.type}" style="top: ${startPos}%; height: ${height}%" data-visual-index="${currentGroup.startIndex}"></div>`;
+          currentGroup = null;
+        }
+      };
+
+      this.pairedLines.forEach((pair, pairIndex) => {
+        // Determine change type from both sides
+        const oldType = pair.old?.type;
+        const newType = pair.new?.type;
+        let changeType: 'add' | 'del' | null = null;
+
+        if (oldType === 'del' && newType === 'add') {
+          changeType = 'add'; // modification — show as add
+        } else if (newType === 'add') {
+          changeType = 'add';
+        } else if (oldType === 'del') {
+          changeType = 'del';
+        }
+
+        if (changeType) {
+          if (currentGroup && currentGroup.type === changeType) {
+            currentGroup.endIndex = pairIndex;
+          } else {
+            flushGroup();
+            currentGroup = { type: changeType, startIndex: pairIndex, endIndex: pairIndex };
+          }
         } else {
           flushGroup();
-          currentGroup = { type: line.type, startIndex: index, endIndex: index };
         }
-      } else {
-        flushGroup();
+
+        // Comments from both sides
+        const threads = [
+          ...(pair.old?.threads || []),
+          ...(pair.new?.threads || []),
+        ];
+        // Deduplicate threads that appear on both sides (context lines share the same object)
+        const uniqueThreads = pair.old === pair.new ? (pair.old?.threads || []) : threads;
+        if (uniqueThreads.length > 0) {
+          const position = (pairIndex / totalPairs) * 100;
+          markersHtml += `<div class="minimap-marker comment" style="top: ${position}%" data-visual-index="${pairIndex}" title="${uniqueThreads.length} comment(s)"></div>`;
+        }
+      });
+
+      flushGroup();
+    } else {
+      // Unified view: use this.lines
+      const totalLines = this.lines.length;
+      if (totalLines === 0) {
+        minimap.style.display = 'none';
+        return;
       }
 
-      // Comments are always shown individually
-      if (line.threads && line.threads.length > 0) {
-        const position = (index / totalLines) * 100;
-        markersHtml += `<div class="minimap-marker comment" style="top: ${position}%" data-index="${index}" title="${line.threads.length} comment(s)"></div>`;
-      }
-    });
+      const flushGroup = () => {
+        if (currentGroup) {
+          const startPos = (currentGroup.startIndex / totalLines) * 100;
+          const endPos = ((currentGroup.endIndex + 1) / totalLines) * 100;
+          const height = Math.max(endPos - startPos, 0.5);
+          markersHtml += `<div class="minimap-marker ${currentGroup.type}" style="top: ${startPos}%; height: ${height}%" data-visual-index="${currentGroup.startIndex}"></div>`;
+          currentGroup = null;
+        }
+      };
 
-    flushGroup(); // Don't forget the last group
+      this.lines.forEach((line, index) => {
+        if (line.type === 'add' || line.type === 'del') {
+          if (currentGroup && currentGroup.type === line.type) {
+            currentGroup.endIndex = index;
+          } else {
+            flushGroup();
+            currentGroup = { type: line.type, startIndex: index, endIndex: index };
+          }
+        } else {
+          flushGroup();
+        }
+
+        if (line.threads && line.threads.length > 0) {
+          const position = (index / totalLines) * 100;
+          markersHtml += `<div class="minimap-marker comment" style="top: ${position}%" data-visual-index="${index}" title="${line.threads.length} comment(s)"></div>`;
+        }
+      });
+
+      flushGroup();
+    }
 
     minimapContent.innerHTML = markersHtml;
+
+    // Align minimap-content to the scroll pane. In split view the pane header
+    // sits above the scroll area, making the minimap taller than the scroll pane.
+    // Offset minimap-content so marker/viewport percentages map to the scroll area.
+    const minimapRect = minimap.getBoundingClientRect();
+    const paneRect = scrollPane.getBoundingClientRect();
+    const topOffsetPx = paneRect.top - minimapRect.top;
+    minimapContent.style.top = `${topOffsetPx}px`;
+    minimapContent.style.bottom = '0px';
+
+    // Move viewport inside minimap-content so its CSS percentages are relative
+    // to the aligned area (scroll pane height, not full minimap height).
+    minimapContent.appendChild(viewport);
+
+    const LINE_HEIGHT = 22;
+    const totalVisualLines = isSplitView ? this.pairedLines.length : this.lines.length;
+    const expectedHeight = totalVisualLines * LINE_HEIGHT;
 
     // Update viewport indicator on scroll
     const updateViewport = () => {
@@ -1199,11 +1278,11 @@ export class DiffViewer {
       }
 
       viewport.style.display = 'block';
-      const viewportHeight = (clientHeight / scrollHeight) * 100;
-      const viewportTop = (scrollTop / scrollHeight) * 100;
 
-      viewport.style.height = `${Math.max(viewportHeight, 10)}%`;
-      viewport.style.top = `${viewportTop}%`;
+      const displayedHeight = Math.max((clientHeight / expectedHeight) * 100, 2);
+      const topPct = (scrollTop / expectedHeight) * 100;
+      viewport.style.height = `${displayedHeight}%`;
+      viewport.style.top = `${Math.min(topPct, 100 - displayedHeight)}%`;
     };
 
     let rafPending = false;
@@ -1220,37 +1299,35 @@ export class DiffViewer {
     // Initial viewport update
     setTimeout(updateViewport, 50);
 
-    // Click to navigate
-    minimap.addEventListener('click', (e) => {
-      const rect = minimap.getBoundingClientRect();
-      const clickY = e.clientY - rect.top;
-      const percentage = clickY / rect.height;
-
+    // Scroll so that a given line-space position is centered in the viewport.
+    // Pure math — no DOM queries, O(1) for any file size.
+    const scrollToLinePosition = (linePct: number) => {
+      const targetInExpected = linePct * expectedHeight;
       const scrollHeight = scrollPane.scrollHeight;
       const clientHeight = scrollPane.clientHeight;
-      const targetScroll = percentage * (scrollHeight - clientHeight);
-
+      // Map from line-space to scroll-space
+      const targetScroll = (targetInExpected / expectedHeight) * scrollHeight - clientHeight / 2;
+      const maxScroll = scrollHeight - clientHeight;
       scrollPane.scrollTo({
-        top: targetScroll,
+        top: Math.max(0, Math.min(targetScroll, maxScroll)),
         behavior: 'smooth'
       });
+    };
+
+    // Click on background to navigate — center viewport on clicked position
+    minimap.addEventListener('click', (e) => {
+      const rect = minimapContent.getBoundingClientRect();
+      const clickY = e.clientY - rect.top;
+      const percentage = Math.max(0, Math.min(clickY / rect.height, 1));
+      scrollToLinePosition(percentage);
     });
 
-    // Click on marker to scroll to that position
+    // Click on marker to scroll directly to that change
     minimapContent.querySelectorAll('.minimap-marker').forEach(marker => {
       marker.addEventListener('click', (e) => {
         e.stopPropagation();
-        const index = parseInt((marker as HTMLElement).dataset.index || '0');
-        const percentage = index / totalLines;
-
-        const scrollHeight = scrollPane.scrollHeight;
-        const clientHeight = scrollPane.clientHeight;
-        const targetScroll = percentage * (scrollHeight - clientHeight);
-
-        scrollPane.scrollTo({
-          top: targetScroll,
-          behavior: 'smooth'
-        });
+        const visualIndex = parseInt((marker as HTMLElement).dataset.visualIndex || '0');
+        scrollToLinePosition(visualIndex / totalVisualLines);
       });
     });
 
@@ -1276,11 +1353,10 @@ export class DiffViewer {
     this.minimapDragMoveHandler = (e: MouseEvent) => {
       if (!isDragging) return;
 
-      const rect = minimap.getBoundingClientRect();
+      const rect = minimapContent.getBoundingClientRect();
       const deltaY = e.clientY - dragStartY;
-      const scrollHeight = scrollPane.scrollHeight;
 
-      const scrollDelta = (deltaY / rect.height) * scrollHeight;
+      const scrollDelta = (deltaY / rect.height) * expectedHeight;
       scrollPane.scrollTop = dragStartScroll + scrollDelta;
     };
 
