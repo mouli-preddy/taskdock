@@ -257,6 +257,7 @@ class PRReviewApp {
     // Initialize PR home view
     this.prHomeView = new PRHomeView('homeTabPanel');
     this.prHomeView.onOpenPR((pr) => this.openPRTab(pr));
+    this.prHomeView.onOpenPRByUrl((org, project, prId) => this.openPRByUrl(org, project, prId));
     this.prHomeView.onRefresh(() => this.loadPRLists());
 
     // Initialize terminals view
@@ -2014,6 +2015,56 @@ class PRReviewApp {
     }
   }
 
+  private async openPRByUrl(org: string, project: string, prId: number) {
+    const tabId = `pr-${org}-${project}-${prId}`;
+    const existingTab = this.reviewTabs.find(t => t.id === tabId);
+
+    if (existingTab) {
+      this.switchReviewTab(tabId);
+    } else {
+      const tab: ReviewTab = {
+        id: tabId,
+        type: 'pr',
+        label: `PR #${prId}`,
+        closeable: true,
+      };
+      this.reviewTabs.push(tab);
+
+      const state: PRTabState = {
+        org,
+        project,
+        repoId: '',
+        repoName: '',
+        prId,
+        pullRequest: null,
+        iterations: [],
+        selectedIteration: null,
+        fileChanges: [],
+        selectedFile: null,
+        threads: [],
+        diffViewMode: this.preferredDiffViewMode,
+        prContextKey: null,
+        contextPath: null,
+        aiSessionId: null,
+        aiReviewInProgress: false,
+        hasSavedReview: false,
+        hasSavedWalkthrough: false,
+        savedReviewInfo: null,
+        savedWalkthroughInfo: null,
+        pollingState: null,
+        hasNewVersion: false,
+        copilotChatPanelOpen: false,
+        copilotChatAI: 'copilot',
+      };
+      this.prTabStates.set(tabId, state);
+
+      this.updateTabBar();
+      this.switchReviewTab(tabId);
+
+      await this.loadPullRequest(state, tabId);
+    }
+  }
+
   private async loadPullRequest(state: PRTabState, tabId: string) {
     this.showLoading('Loading pull request...');
 
@@ -2024,6 +2075,18 @@ class PRReviewApp {
         state.project,
         state.prId
       );
+
+      // Populate repoId/repoName from response if not set (e.g. opened by URL)
+      if (!state.repoId && state.pullRequest) {
+        state.repoId = state.pullRequest.repository.id;
+        state.repoName = state.pullRequest.repository.name;
+        // Update tab label
+        const tab = this.reviewTabs.find(t => t.id === tabId);
+        if (tab) {
+          tab.label = `${state.repoName}/#${state.prId}`;
+          this.updateTabBar();
+        }
+      }
 
       // Set PR ID for file tree review tracking
       this.fileTree.setPrId(`${state.org}-${state.project}-${state.prId}`);
