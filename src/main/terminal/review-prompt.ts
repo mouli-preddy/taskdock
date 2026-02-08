@@ -84,6 +84,7 @@ Write a JSON file with this structure:
 {
   "summary": "Brief overview of what this PR accomplishes",
   "architectureDiagram": "Optional mermaid diagram showing component relationships",
+  "estimatedReadTime": <estimated minutes to read through this walkthrough, as an integer>,
   "steps": [
     {
       "order": 1,
@@ -266,6 +267,7 @@ Write a JSON file with this structure:
 {
   "summary": "Markdown overview of what this PR accomplishes",
   "architectureDiagram": "Optional mermaid diagram showing component relationships",
+  "estimatedReadTime": <estimated minutes to read through this walkthrough, as an integer>,
   "steps": [
     {
       "order": 1,
