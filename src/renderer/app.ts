@@ -51,6 +51,7 @@ import { WorkItemQueryBuilder } from './components/workitem-query-builder.js';
 import { WorkItemDetailView } from './components/workitem-detail-view.js';
 import { ResizablePanels, setupResizablePanels } from './components/resizable-panels.js';
 import { icons, iconHtml, getIcon, getIconByName, MessageSquare, Bot, BookOpen, Globe, Columns, FileText, ChevronLeft, ChevronRight, ChevronDown, X, File, FileCode, ArrowRight, Link, CheckCircle, Check, Clock, XCircle, Circle, Home, LayoutGrid, Settings, ChevronsLeft, Sparkles, Eye, EyeOff, RefreshCw, Terminal } from './utils/icons.js';
+import { renderMarkdownSync } from './utils/markdown-renderer.js';
 import { PRPollingService, type PollResult, type PollingState } from './services/pr-polling-service.js';
 import { PluginTabRenderer } from './components/plugin-tab-renderer.js';
 import type { LoadedPlugin, PluginToastEvent, PluginUIUpdateEvent } from '../shared/plugin-types.js';
@@ -1355,6 +1356,15 @@ class PRReviewApp {
           <div class="reviewers-row" id="reviewersRow-${tabId}"></div>
         </div>
 
+        <!-- PR Description -->
+        <div class="pr-description-section hidden" id="prDescription-${tabId}">
+          <div class="pr-description-header">
+            ${iconHtml(ChevronRight, { size: 14, class: 'pr-description-chevron' })}
+            <span>Description</span>
+          </div>
+          <div class="pr-description-content" id="prDescriptionContent-${tabId}"></div>
+        </div>
+
         <!-- Toolbar -->
         <div class="toolbar">
           <div class="toolbar-left">
@@ -1544,6 +1554,13 @@ class PRReviewApp {
     // Create AbortController for this tab's listeners
     const controller = new AbortController();
     this.tabEventListeners.set(tabId, controller);
+
+    // Description toggle
+    const descSection = document.getElementById(`prDescription-${tabId}`);
+    const descHeader = descSection?.querySelector('.pr-description-header');
+    descHeader?.addEventListener('click', () => {
+      descSection!.classList.toggle('expanded');
+    }, { signal: controller.signal });
 
     // Vote dropdown
     const voteBtn = document.getElementById(`voteBtn-${tabId}`);
@@ -2377,6 +2394,17 @@ class PRReviewApp {
         </div>
       `;
     }).join('');
+
+    // Description
+    const descSection = document.getElementById(`prDescription-${tabId}`);
+    if (descSection) {
+      if (pr.description && pr.description.trim()) {
+        descSection.classList.remove('hidden');
+        document.getElementById(`prDescriptionContent-${tabId}`)!.innerHTML = renderMarkdownSync(pr.description);
+      } else {
+        descSection.classList.add('hidden');
+      }
+    }
   }
 
   private getVoteClass(vote: number): string {
