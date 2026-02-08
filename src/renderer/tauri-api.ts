@@ -459,9 +459,8 @@ export const tauriAPI = {
     files: any[],
     threads: any[],
     lastCommitId: string,
-    targetBranch: string,
     repoId: string
-  ) => invoke('context:ensure-pr-context', prContext, files, threads, lastCommitId, targetBranch, repoId),
+  ) => invoke('context:ensure-pr-context', prContext, files, threads, lastCommitId, repoId),
   getCachedFileContent: (
     prContextKey: string,
     filePath: string,

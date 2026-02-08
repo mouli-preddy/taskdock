@@ -2424,7 +2424,6 @@ class PRReviewApp {
         fileMetadata,
         state.threads,
         lastCommitId,
-        targetBranch,
         state.repoId
       );
 
@@ -2487,7 +2486,7 @@ class PRReviewApp {
       console.error('[App] Failed to create PR context:', error);
       // Fallback: Fetch files in renderer if backend fails
       console.log('[App] Falling back to renderer-side file fetching...');
-      await this.processChangesWithFallback(state, changes, targetBranch);
+      await this.processChangesWithFallback(state, changes);
     }
   }
 
@@ -2495,7 +2494,7 @@ class PRReviewApp {
    * Fallback method for when backend file fetching fails.
    * Fetches files in the renderer (original behavior).
    */
-  private async processChangesWithFallback(state: PRTabState, changes: IterationChange[], targetBranch: string) {
+  private async processChangesWithFallback(state: PRTabState, changes: IterationChange[]) {
     const processedChanges = (await Promise.all(
       changes.map(async (change): Promise<FileChange | null> => {
         // For deleted files, item.path may be null - use originalPath as fallback
@@ -2524,16 +2523,19 @@ class PRReviewApp {
         }
 
         if (['edit', 'delete', 'rename'].includes(change.changeType)) {
-          try {
-            originalContent = await window.electronAPI.getFileFromBranch(
-              state.org,
-              state.project,
-              state.repoId,
-              change.originalPath || filePath,
-              targetBranch
-            ) || null;
-          } catch (e) {
-            console.warn('Failed to load original content:', e);
+          if (change.item?.originalObjectId) {
+            try {
+              originalContent = await window.electronAPI.getFileContent(
+                state.org,
+                state.project,
+                state.repoId,
+                change.item.originalObjectId
+              ) || null;
+            } catch (e) {
+              console.warn('Failed to load original content:', e);
+            }
+          } else {
+            console.warn('No originalObjectId for', filePath, '- skipping original');
           }
         }
 

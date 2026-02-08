@@ -345,7 +345,6 @@ export interface ElectronAPI {
     files: any[],
     threads: any[],
     lastCommitId: string,
-    targetBranch: string,
     repoId: string
   ) => Promise<any>;
   getCachedFileContent: (

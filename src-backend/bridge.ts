@@ -648,20 +648,17 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
     // PR Context (backend-side file fetching - no large payload over IPC)
     case 'context:ensure-pr-context': {
       const settings = loadStoreData().consoleReview;
-      // params: [prContext, files, threads, lastCommitId, targetBranch, repoId]
+      // params: [prContext, files, threads, lastCommitId, repoId]
       const prContext = params[0];
       const files = params[1];
       const threads = params[2];
       const lastCommitId = params[3];
-      const targetBranch = params[4];
-      const repoId = params[5];
+      const repoId = params[4];
 
-      // Create fetcher that uses ADO client
+      // Create fetcher that uses ADO client (blob API only)
       const fetcher = {
         getFileContent: (objectId: string) =>
           adoClient.getFileContent(prContext.org, prContext.project, repoId, objectId),
-        getFileFromBranch: (filePath: string, branch: string) =>
-          adoClient.getFileFromBranch(prContext.org, prContext.project, repoId, filePath, branch),
       };
 
       const result = await reviewContextService.ensurePRContextWithFetch(
@@ -670,7 +667,6 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
         threads,
         { linkedRepositories: settings?.linkedRepositories || [], whenRepoFound: 'tempOnly' },
         lastCommitId,
-        targetBranch,
         repoId,
         fetcher
       );
