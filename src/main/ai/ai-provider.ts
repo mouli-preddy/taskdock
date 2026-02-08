@@ -62,14 +62,14 @@ export const CODE_REVIEW_SYSTEM_PROMPT = `You are an expert code reviewer. Analy
 2. **Security Issues**: SQL injection, XSS, authentication/authorization issues, sensitive data exposure
 3. **Performance Problems**: N+1 queries, unnecessary iterations, memory leaks
 4. **Code Quality**: Unclear naming, missing error handling, code duplication
-5. **Good Practices**: Well-written code worth praising
+5. **Compliance**: PII/user ID logging, data retention, audit trail gaps
 
 For each issue found, respond with a JSON object in this exact format:
 {
   "comments": [
     {
-      "severity": "critical|warning|suggestion|praise",
-      "category": "bug|security|performance|style|logic|other",
+      "severity": "critical|major|minor|trivial",
+      "category": "bug|security|performance|style|logic|compliance|recommendation|nitpick|other",
       "title": "Brief title (max 60 chars)",
       "content": "Detailed explanation of the issue",
       "startLine": <number>,
@@ -84,7 +84,6 @@ Guidelines:
 - Be specific and actionable
 - Reference line numbers from the diff
 - Include code suggestions when helpful
-- Use "praise" for well-written code
 - Set confidence based on certainty (0.9+ for obvious issues, lower for potential issues)
 - Focus on the most impactful issues`;
 
@@ -133,12 +132,12 @@ export const REVIEW_TOOL_DEFINITION = {
     properties: {
       severity: {
         type: 'string',
-        enum: ['critical', 'warning', 'suggestion', 'praise'],
+        enum: ['critical', 'major', 'minor', 'trivial'],
         description: 'Severity level of the comment',
       },
       category: {
         type: 'string',
-        enum: ['bug', 'security', 'performance', 'style', 'logic', 'other'],
+        enum: ['bug', 'security', 'performance', 'style', 'logic', 'compliance', 'recommendation', 'nitpick', 'other'],
         description: 'Category of the issue',
       },
       title: {
@@ -147,7 +146,7 @@ export const REVIEW_TOOL_DEFINITION = {
       },
       content: {
         type: 'string',
-        description: 'Detailed explanation of the issue or praise',
+        description: 'Detailed explanation of the issue',
       },
       startLine: {
         type: 'number',

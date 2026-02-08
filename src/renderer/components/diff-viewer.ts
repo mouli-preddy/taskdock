@@ -792,12 +792,12 @@ export class DiffViewer {
     // Create new AI comment badge with robot icon
     const severityColors: Record<string, string> = {
       critical: '#d13438',
-      warning: '#ffaa44',
-      suggestion: '#0078d4',
-      praise: '#107c10'
+      major: '#ffaa44',
+      minor: '#0078d4',
+      trivial: '#888888'
     };
 
-    const color = severityColors[comment.severity] || severityColors.suggestion;
+    const color = severityColors[comment.severity] || severityColors.minor;
 
     badge = document.createElement('span');
     badge.className = `ai-comment-badge severity-${comment.severity}`;

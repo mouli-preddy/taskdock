@@ -898,7 +898,7 @@ class PRReviewApp {
           filePath: c.filePath,
           startLine: c.startLine,
           endLine: c.endLine,
-          severity: c.severity || 'suggestion',
+          severity: c.severity || 'minor',
           category: c.category || 'other',
           title: c.title || 'Review Comment',
           content: c.content || '',
@@ -4178,11 +4178,11 @@ After this, respond with a simple text response to greet the user and ask them w
   }
 
   private formatAICommentForADO(comment: AIReviewComment): string {
-    const severityEmoji = {
+    const severityEmoji: Record<string, string> = {
       critical: '🔴',
-      warning: '🟡',
-      suggestion: '🔵',
-      praise: '🟢',
+      major: '🟡',
+      minor: '🔵',
+      trivial: '⚪',
     };
 
     let content = `${severityEmoji[comment.severity]} **[${comment.severity.toUpperCase()}]** ${comment.title}\n\n`;

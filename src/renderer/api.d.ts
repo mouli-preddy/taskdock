@@ -219,8 +219,8 @@ export interface ElectronAPI {
         filePath: string;
         startLine: number;
         endLine: number;
-        severity: 'critical' | 'warning' | 'suggestion' | 'praise';
-        category: 'security' | 'bug' | 'performance' | 'style' | 'logic' | 'testing';
+        severity: 'critical' | 'major' | 'minor' | 'trivial';
+        category: 'security' | 'bug' | 'performance' | 'style' | 'logic' | 'compliance' | 'recommendation' | 'nitpick' | 'other';
         title: string;
         content: string;
         suggestedFix?: string;

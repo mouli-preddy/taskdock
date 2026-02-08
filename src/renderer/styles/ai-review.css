@@ -29,22 +29,22 @@
   color: #d13438;
 }
 
-.ai-comment-badge.warning {
+.ai-comment-badge.major {
   background: #ffaa4420;
   border-color: #ffaa44;
   color: #c88700;
 }
 
-.ai-comment-badge.suggestion {
+.ai-comment-badge.minor {
   background: #0078d420;
   border-color: #0078d4;
   color: #0078d4;
 }
 
-.ai-comment-badge.praise {
-  background: #107c1020;
-  border-color: #107c10;
-  color: #107c10;
+.ai-comment-badge.trivial {
+  background: #88888820;
+  border-color: #888888;
+  color: #888888;
 }
 
 .ai-comment-badge svg {
@@ -292,9 +292,9 @@
 }
 
 .ai-stat.critical .ai-stat-count { color: #d13438; }
-.ai-stat.warning .ai-stat-count { color: #ffaa44; }
-.ai-stat.suggestion .ai-stat-count { color: #0078d4; }
-.ai-stat.praise .ai-stat-count { color: #107c10; }
+.ai-stat.major .ai-stat-count { color: #ffaa44; }
+.ai-stat.minor .ai-stat-count { color: #0078d4; }
+.ai-stat.trivial .ai-stat-count { color: #888888; }
 
 /* Filters */
 .ai-comments-filters {
@@ -454,9 +454,9 @@
 }
 
 .ai-comment.critical { border-left: 3px solid #d13438; }
-.ai-comment.warning { border-left: 3px solid #ffaa44; }
-.ai-comment.suggestion { border-left: 3px solid #0078d4; }
-.ai-comment.praise { border-left: 3px solid #107c10; }
+.ai-comment.major { border-left: 3px solid #ffaa44; }
+.ai-comment.minor { border-left: 3px solid #0078d4; }
+.ai-comment.trivial { border-left: 3px solid #888888; }
 
 .ai-comment-header {
   display: flex;

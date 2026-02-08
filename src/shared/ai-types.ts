@@ -11,8 +11,8 @@ export interface AIReviewComment {
   filePath: string;
   startLine: number;
   endLine: number;
-  severity: 'critical' | 'warning' | 'suggestion' | 'praise';
-  category: 'bug' | 'security' | 'performance' | 'style' | 'logic' | 'other';
+  severity: 'critical' | 'major' | 'minor' | 'trivial';
+  category: 'bug' | 'security' | 'performance' | 'style' | 'logic' | 'compliance' | 'recommendation' | 'nitpick' | 'other';
   title: string;
   content: string;
   suggestedFix?: string;
@@ -389,23 +389,23 @@ export const SEVERITY_CONFIG = {
     icon: 'alert-circle',
     label: 'Critical',
   },
-  warning: {
+  major: {
     color: '#ffaa44',
     bgColor: '#ffaa4420',
     icon: 'alert-triangle',
-    label: 'Warning',
+    label: 'Major',
   },
-  suggestion: {
+  minor: {
     color: '#0078d4',
     bgColor: '#0078d420',
     icon: 'lightbulb',
-    label: 'Suggestion',
+    label: 'Minor',
   },
-  praise: {
-    color: '#107c10',
-    bgColor: '#107c1020',
-    icon: 'check-circle',
-    label: 'Good',
+  trivial: {
+    color: '#888888',
+    bgColor: '#88888820',
+    icon: 'info',
+    label: 'Trivial',
   },
 } as const;
 
@@ -416,6 +416,9 @@ export const CATEGORY_LABELS: Record<AIReviewComment['category'], string> = {
   performance: 'Performance',
   style: 'Style',
   logic: 'Logic',
+  compliance: 'Compliance',
+  recommendation: 'Recommendation',
+  nitpick: 'Nitpick',
   other: 'Other',
 };
 

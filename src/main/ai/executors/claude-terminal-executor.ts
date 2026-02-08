@@ -316,7 +316,7 @@ export class ClaudeTerminalExecutor extends BaseReviewExecutor {
           filePath: c.filePath || '',
           startLine: c.startLine || 1,
           endLine: c.endLine || c.startLine || 1,
-          severity: c.severity || 'suggestion',
+          severity: c.severity || 'minor',
           category: c.category || 'other',
           title: c.title || 'Review Comment',
           content: c.content || '',
