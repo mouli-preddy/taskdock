@@ -322,8 +322,12 @@ export interface ElectronAPI {
   applyChangesRetry: (prId: number, itemId: string) => Promise<void>;
   applyChangesSkip: (prId: number, itemId: string) => Promise<void>;
   applyChangesClearCompleted: (prId: number) => Promise<void>;
-  applyChangesCanApply: (prId: number) => Promise<{ canApply: boolean }>;
+  applyChangesCanApply: (prId: number) => Promise<{ canApply: boolean; reason?: string }>;
   onApplyChangesProgress: (callback: (event: any) => void) => () => void;
+
+  // Fix Tracker API
+  fixTrackerLoad: (prId: number, org: string, project: string) => Promise<any>;
+  fixTrackerMarkFixed: (prId: number, org: string, project: string, fix: any) => Promise<void>;
 
   // Polling settings
   getPollingSettings: () => Promise<{

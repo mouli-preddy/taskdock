@@ -186,6 +186,9 @@ class PRReviewApp {
   // Cached enableWorkIQ setting
   private enableWorkIQ: boolean = true;
 
+  // Preferred diff view mode (loaded from saved settings)
+  private preferredDiffViewMode: 'split' | 'unified' = 'split';
+
   // Polling service
   private pollingService: PRPollingService;
 
@@ -1377,10 +1380,10 @@ class PRReviewApp {
               </button>
             </div>
             <div class="view-toggle">
-              <button class="view-btn active" data-view="split" title="Split view">
+              <button class="view-btn${this.preferredDiffViewMode === 'split' ? ' active' : ''}" data-view="split" title="Split view">
                 ${iconHtml(Columns, { size: 18 })}
               </button>
-              <button class="view-btn" data-view="unified" title="Unified view">
+              <button class="view-btn${this.preferredDiffViewMode === 'unified' ? ' active' : ''}" data-view="unified" title="Unified view">
                 ${iconHtml(FileText, { size: 18 })}
               </button>
               <button class="view-btn preview-btn hidden" data-view="preview" title="Preview markdown">
@@ -1718,6 +1721,11 @@ class PRReviewApp {
     // Restore comments (must be before setFileThreads since setThreads clears file-specific threads)
     this.commentsPanel.setThreads(state.threads);
 
+    // Sync view toggle buttons with current diff view mode
+    document.querySelectorAll(`#reviewScreen-${tabId} .view-btn`).forEach(btn => {
+      btn.classList.toggle('active', (btn as HTMLElement).dataset.view === state.diffViewMode);
+    });
+
     // Restore selected file
     if (state.selectedFile) {
       this.fileTree.setSelected(state.selectedFile);
@@ -1766,6 +1774,14 @@ class PRReviewApp {
   // First launch flow
   private async checkFirstLaunch() {
     const isConfigured = await window.electronAPI.isConfigured();
+
+    // Load saved diff view mode preference
+    try {
+      const settings = await window.electronAPI.getSettings() as Record<string, unknown> | null;
+      if (settings?.diffViewMode === 'split' || settings?.diffViewMode === 'unified') {
+        this.preferredDiffViewMode = settings.diffViewMode;
+      }
+    } catch { /* use default */ }
 
     // Load generated file patterns from console review settings
     await this.loadGeneratedFilePatterns();
@@ -1966,7 +1982,7 @@ class PRReviewApp {
         fileChanges: [],
         selectedFile: null,
         threads: [],
-        diffViewMode: 'unified',
+        diffViewMode: this.preferredDiffViewMode,
         prContextKey: null,
         contextPath: null,
         aiSessionId: null,
@@ -2363,7 +2379,7 @@ class PRReviewApp {
     // Phase 1: Build file metadata (no content fetching - backend will fetch)
     const fileMetadata = changes.map(change => {
       // For deleted files, item.path may be null - use originalPath as fallback
-      const filePath = change.item?.path || change.originalPath;
+      const filePath = change.item?.path || change.originalPath || '';
       const fileThreads = state.threads.filter(t =>
         t.threadContext?.filePath === filePath
       );
@@ -2376,7 +2392,7 @@ class PRReviewApp {
         originalPath: change.originalPath,
         threads: fileThreads,
       };
-    });
+    }).filter(f => f.path);
 
     // Phase 2: Let backend fetch files and write to disk via ensurePRContext
     try {
@@ -2469,10 +2485,12 @@ class PRReviewApp {
    * Fetches files in the renderer (original behavior).
    */
   private async processChangesWithFallback(state: PRTabState, changes: IterationChange[], targetBranch: string) {
-    const processedChanges = await Promise.all(
-      changes.map(async (change): Promise<FileChange> => {
+    const processedChanges = (await Promise.all(
+      changes.map(async (change): Promise<FileChange | null> => {
         // For deleted files, item.path may be null - use originalPath as fallback
         const filePath = change.item?.path || change.originalPath;
+        if (!filePath) return null;
+
         const fileThreads = state.threads.filter(t =>
           t.threadContext?.filePath === filePath
         );
@@ -2518,7 +2536,7 @@ class PRReviewApp {
           threads: fileThreads,
         };
       })
-    );
+    )).filter((f): f is FileChange => f !== null);
 
     // Keep content in memory (no disk storage in fallback mode)
     state.fileChanges = processedChanges;
@@ -2617,6 +2635,13 @@ class PRReviewApp {
 
     // Don't persist 'preview' to settings - it's contextual
     if (mode !== 'preview') {
+      this.preferredDiffViewMode = mode;
+      // Apply to all other open PR tabs so switching tabs uses the same mode
+      for (const [tabId, tabState] of this.prTabStates) {
+        if (tabId !== this.activeReviewTabId) {
+          tabState.diffViewMode = mode;
+        }
+      }
       window.electronAPI.saveSettings({ diffViewMode: mode });
     }
   }
