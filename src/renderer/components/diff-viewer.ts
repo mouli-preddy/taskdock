@@ -854,6 +854,16 @@ export class DiffViewer {
   private buildChangeGroupsCache() {
     this.changeGroupsCache = [];
     this.currentChangeGroupIndex = -1;
+
+    // In split view, lines are in two separate panes — we must iterate
+    // by row index to collect changes in correct visual (line-number) order.
+    const splitView = this.container.querySelector('.diff-split');
+    if (splitView) {
+      this.buildSplitChangeGroupsCache();
+      return;
+    }
+
+    // Unified view: single pane, DOM order matches line order
     const allLines = this.container.querySelectorAll('.diff-line');
     let currentGroup: HTMLElement[] = [];
 
@@ -861,6 +871,32 @@ export class DiffViewer {
       const isChange = line.classList.contains('add') || line.classList.contains('del');
       if (isChange) {
         currentGroup.push(line as HTMLElement);
+      } else if (currentGroup.length > 0) {
+        this.changeGroupsCache.push(currentGroup);
+        currentGroup = [];
+      }
+    }
+    if (currentGroup.length > 0) {
+      this.changeGroupsCache.push(currentGroup);
+    }
+  }
+
+  private buildSplitChangeGroupsCache() {
+    const oldLines = this.container.querySelectorAll('#diffPaneOld .diff-line');
+    const newLines = this.container.querySelectorAll('#diffPaneNew .diff-line');
+    const rowCount = Math.max(oldLines.length, newLines.length);
+
+    let currentGroup: HTMLElement[] = [];
+
+    for (let i = 0; i < rowCount; i++) {
+      const oldLine = oldLines[i] as HTMLElement | undefined;
+      const newLine = newLines[i] as HTMLElement | undefined;
+      const isOldChange = oldLine?.classList.contains('del') ?? false;
+      const isNewChange = newLine?.classList.contains('add') ?? false;
+
+      if (isOldChange || isNewChange) {
+        if (oldLine && isOldChange) currentGroup.push(oldLine);
+        if (newLine && isNewChange) currentGroup.push(newLine);
       } else if (currentGroup.length > 0) {
         this.changeGroupsCache.push(currentGroup);
         currentGroup = [];

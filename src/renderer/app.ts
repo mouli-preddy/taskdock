@@ -3090,8 +3090,8 @@ class PRReviewApp {
     const state = this.getCurrentPRState();
     if (!state?.selectedFile || state.fileChanges.length === 0) return;
 
-    // Use visible files to skip generated files when hidden
-    const visibleFiles = this.fileTree.getVisibleFiles();
+    // Use ordered visible files so navigation matches file explorer order
+    const visibleFiles = this.fileTree.getOrderedVisibleFiles();
     if (visibleFiles.length === 0) return;
 
     const currentIndex = visibleFiles.findIndex(f => f.path === state.selectedFile);
@@ -3109,8 +3109,8 @@ class PRReviewApp {
     const navigated = this.diffViewer.navigateChanges(direction);
 
     if (!navigated && state.selectedFile) {
-      // Use visible files to skip generated files when hidden
-      const visibleFiles = this.fileTree.getVisibleFiles();
+      // Use ordered visible files so cross-file navigation matches file explorer order
+      const visibleFiles = this.fileTree.getOrderedVisibleFiles();
       const currentIndex = visibleFiles.findIndex(f => f.path === state.selectedFile);
       const newIndex = currentIndex + direction;
 
