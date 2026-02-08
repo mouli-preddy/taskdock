@@ -4,6 +4,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
+use tauri::Manager;
+use tauri_plugin_deep_link::DeepLinkExt;
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
@@ -132,7 +134,20 @@ fn spawn_backend() -> Result<Child, std::io::Error> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    use commands::deep_link::InitialDeepLink;
+
+    let initial_url = std::env::args()
+        .find(|arg| arg.starts_with("taskdock://"));
+
     tauri::Builder::default()
+        .manage(InitialDeepLink(Mutex::new(initial_url)))
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
@@ -148,8 +163,16 @@ pub fn run() {
             commands::storage::get_polling_settings,
             commands::storage::set_polling_settings,
             commands::file_io::read_review_output,
+            commands::deep_link::get_initial_deep_link,
         ])
         .setup(|app| {
+            // Register deep-link schemes for development
+            // (production installer handles this automatically)
+            #[cfg(debug_assertions)]
+            if let Err(e) = app.deep_link().register_all() {
+                log::error!("Failed to register deep-link schemes: {}", e);
+            }
+
             // Start the Node.js backend (skip if already running, e.g. via `npm run dev`)
             if is_backend_running() {
                 log::info!("Backend already running on port {}, skipping spawn", BACKEND_PORT);

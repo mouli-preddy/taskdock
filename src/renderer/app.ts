@@ -55,6 +55,7 @@ import { renderMarkdownSync } from './utils/markdown-renderer.js';
 import { PRPollingService, type PollResult, type PollingState } from './services/pr-polling-service.js';
 import { PluginTabRenderer } from './components/plugin-tab-renderer.js';
 import type { LoadedPlugin, PluginToastEvent, PluginUIUpdateEvent } from '../shared/plugin-types.js';
+import { initDeepLinkHandler } from './deep-link-handler.js';
 
 // Tab type definitions
 interface ReviewTab {
@@ -232,6 +233,10 @@ class PRReviewApp {
 
     // Check if first launch
     this.checkFirstLaunch();
+
+    initDeepLinkHandler(this).catch(e => {
+      console.error('[deep-link] Failed to initialize:', e);
+    });
   }
 
   private initElements() {
@@ -1055,7 +1060,7 @@ class PRReviewApp {
   }
 
   // Section switching
-  private switchSection(section: SectionId) {
+  public switchSection(section: SectionId) {
     this.activeSection = section;
     this.sectionSidebar.setActive(section);
 
@@ -2032,7 +2037,7 @@ class PRReviewApp {
     }
   }
 
-  private async openPRByUrl(org: string, project: string, prId: number) {
+  public async openPRByUrl(org: string, project: string, prId: number) {
     const tabId = `pr-${org}-${project}-${prId}`;
     const existingTab = this.reviewTabs.find(t => t.id === tabId);
 

@@ -10,6 +10,7 @@
     "shell:allow-open",
     "dialog:allow-open",
     "dialog:allow-save",
-    "process:default"
+    "process:default",
+    "deep-link:default"
   ]
 }
