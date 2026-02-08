@@ -90,6 +90,7 @@ interface PRTabState {
   selectedIteration: number | null;
   fileChanges: FileChange[];
   selectedFile: string | null;
+  /** All threads from the API (includes deleted/system). Use filterVisibleThreads() for display counts. */
   threads: CommentThread[];
   diffViewMode: 'split' | 'unified' | 'preview';
   // Context path for disk-based storage
@@ -113,6 +114,13 @@ interface PRTabState {
   // Chat Panel state
   copilotChatPanelOpen: boolean;
   copilotChatAI: 'copilot' | 'claude';
+}
+
+/** Filter out deleted threads and threads with only system/deleted comments */
+function filterVisibleThreads(threads: CommentThread[]): CommentThread[] {
+  return threads.filter(t =>
+    !t.isDeleted && t.comments.some(c => c.commentType !== 'system' && !c.isDeleted)
+  );
 }
 
 class PRReviewApp {
@@ -2158,15 +2166,18 @@ class PRReviewApp {
         this.commentsPanel.setThreads(state.threads);
         this.updateCommentCountForState(state, tabId);
 
-        // Update file threads and re-render diff viewer if a file is selected
+        // Update all files' thread counts
+        for (const file of state.fileChanges) {
+          file.threads = filterVisibleThreads(
+            state.threads.filter(t => t.threadContext?.filePath === file.path)
+          );
+        }
+        this.fileTree.setFiles(state.fileChanges);
+
+        // Re-render diff viewer if a file is selected
         if (state.selectedFile) {
           const file = state.fileChanges.find(f => f.path === state.selectedFile);
           if (file) {
-            // Update file's threads from the new threads list
-            file.threads = state.threads.filter(
-              t => t.threadContext?.filePath === state.selectedFile
-            );
-            // Re-render to update comment badges
             this.diffViewer.render(file, state.diffViewMode);
             this.commentsPanel.setFileThreads(file.threads);
           }
@@ -2380,8 +2391,8 @@ class PRReviewApp {
     const fileMetadata = changes.map(change => {
       // For deleted files, item.path may be null - use originalPath as fallback
       const filePath = change.item?.path || change.originalPath || '';
-      const fileThreads = state.threads.filter(t =>
-        t.threadContext?.filePath === filePath
+      const fileThreads = filterVisibleThreads(
+        state.threads.filter(t => t.threadContext?.filePath === filePath)
       );
 
       return {
@@ -2491,8 +2502,8 @@ class PRReviewApp {
         const filePath = change.item?.path || change.originalPath;
         if (!filePath) return null;
 
-        const fileThreads = state.threads.filter(t =>
-          t.threadContext?.filePath === filePath
+        const fileThreads = filterVisibleThreads(
+          state.threads.filter(t => t.threadContext?.filePath === filePath)
         );
 
         let originalContent: string | null = null;
@@ -2713,11 +2724,14 @@ class PRReviewApp {
       this.commentsPanel.addThread(thread);
       this.updateCommentCountForState(state, this.activeReviewTabId);
 
-      // Update file threads
+      // Update file threads (rebuild from master list to stay consistent with filterVisibleThreads)
       const file = state.fileChanges.find(f => f.path === filePath);
       if (file) {
-        file.threads.push(thread);
+        file.threads = filterVisibleThreads(
+          state.threads.filter(t => t.threadContext?.filePath === filePath)
+        );
         this.diffViewer.addCommentMarker(thread);
+        this.fileTree.setFiles(state.fileChanges);
       }
 
       Toast.success('Comment added');
@@ -2976,9 +2990,7 @@ class PRReviewApp {
   }
 
   private updateCommentCountForState(state: PRTabState, tabId: string) {
-    const userThreads = state.threads.filter(t =>
-      t.comments.some(c => c.commentType !== 'system')
-    );
+    const userThreads = filterVisibleThreads(state.threads);
     const el = document.getElementById(`commentCount-${tabId}`);
     if (el) el.textContent = userThreads.length.toString();
   }
