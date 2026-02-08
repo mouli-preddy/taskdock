@@ -56,6 +56,7 @@ import { PRPollingService, type PollResult, type PollingState } from './services
 import { PluginTabRenderer } from './components/plugin-tab-renderer.js';
 import type { LoadedPlugin, PluginToastEvent, PluginUIUpdateEvent } from '../shared/plugin-types.js';
 import { initDeepLinkHandler } from './deep-link-handler.js';
+import { notificationService } from './services/notification-service.js';
 
 // Tab type definitions
 interface ReviewTab {
@@ -231,6 +232,9 @@ class PRReviewApp {
     this.initTheme();
     this.initPlugins();
 
+    // Load notification settings
+    notificationService.loadSettings();
+
     // Check if first launch
     this.checkFirstLaunch();
 
@@ -259,6 +263,9 @@ class PRReviewApp {
     this.settingsView.onTest(async (settings) => this.testConnection(settings));
     this.settingsView.onConsoleSettingsSaved((settings) => this.onConsoleSettingsChanged(settings));
     this.settingsView.onPollingSettingsSaved((settings) => this.onPollingSettingsChanged(settings));
+    this.settingsView.onNotificationSettingsSaved((settings) => {
+      notificationService.updateSettings(settings);
+    });
 
     // Initialize PR home view
     this.prHomeView = new PRHomeView('homeTabPanel');
@@ -1017,6 +1024,13 @@ class PRReviewApp {
     if (settings.showNotification) {
       const commentCount = aiComments.length;
       Toast.success(`Deep review completed: ${commentCount} comment${commentCount !== 1 ? 's' : ''} found`);
+      if (state) {
+        notificationService.notify(
+          'aiReviewComplete',
+          'PR Review Complete',
+          `${commentCount} comment${commentCount !== 1 ? 's' : ''} found on PR #${state.prId}`
+        );
+      }
     }
 
     // Auto-close terminal if enabled
@@ -2235,6 +2249,11 @@ class PRReviewApp {
     if (result.hasNewVersion) {
       state.hasNewVersion = true;
       this.showNewVersionBanner(tabId);
+      notificationService.notify(
+        'newIterations',
+        'New Commits',
+        `New push detected on PR #${state.prId}`
+      );
     }
 
     // Handle comment changes (silent update)
@@ -2276,6 +2295,11 @@ class PRReviewApp {
       }
 
       console.log(`[App] Comments updated for tab ${tabId}: ${result.updatedThreads.length} threads`);
+      notificationService.notify(
+        'newComments',
+        'New Comments',
+        `Comments updated on PR #${state.prId}`
+      );
     }
   }
 
@@ -2914,6 +2938,11 @@ class PRReviewApp {
       );
       this.commentsPanel.setAnalyses(allAnalyses?.analyses || []);
       Toast.success('Analysis complete');
+      notificationService.notify(
+        'aiAnalysisComplete',
+        'Comment Analysis Complete',
+        `${threads.length} comment${threads.length !== 1 ? 's' : ''} analyzed on PR #${state.prId}`
+      );
 
       // Auto-fix if enabled - apply fixes for all 'fix' recommendations
       if (this.commentsPanel.isAutoFixEnabled()) {

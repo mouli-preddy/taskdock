@@ -339,6 +339,22 @@ export interface ElectronAPI {
     intervalSeconds: number;
   }) => Promise<void>;
 
+  // Notification settings
+  getNotificationSettings: () => Promise<{
+    enabled: boolean;
+    aiReviewComplete: boolean;
+    aiAnalysisComplete: boolean;
+    newComments: boolean;
+    newIterations: boolean;
+  }>;
+  setNotificationSettings: (settings: {
+    enabled: boolean;
+    aiReviewComplete: boolean;
+    aiAnalysisComplete: boolean;
+    newComments: boolean;
+    newIterations: boolean;
+  }) => Promise<void>;
+
   // PR file cache API
   ensurePRContext: (
     prContext: any,

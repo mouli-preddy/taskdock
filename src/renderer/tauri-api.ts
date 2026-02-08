@@ -487,6 +487,16 @@ export const tauriAPI = {
     return invoke('set_polling_settings', { settings });
   },
 
+  // Notification settings
+  getNotificationSettings: async () => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke('get_notification_settings');
+  },
+  setNotificationSettings: async (settings: any) => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke('set_notification_settings', { settings });
+  },
+
   // Apply Changes API
   applyChangesInitialize: (prId: number, contextDir: string, worktreePath: string, prTitle: string, prMetadata: any, hasLinkedRepo: boolean) =>
     invoke('apply-changes:initialize', prId, contextDir, worktreePath, prTitle, prMetadata, hasLinkedRepo),

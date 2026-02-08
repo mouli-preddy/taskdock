@@ -152,6 +152,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             commands::storage::load_config,
             commands::storage::save_config,
@@ -162,6 +163,8 @@ pub fn run() {
             commands::storage::set_console_review_settings,
             commands::storage::get_polling_settings,
             commands::storage::set_polling_settings,
+            commands::storage::get_notification_settings,
+            commands::storage::set_notification_settings,
             commands::file_io::read_review_output,
             commands::deep_link::get_initial_deep_link,
         ])
