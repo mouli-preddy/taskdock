@@ -395,6 +395,36 @@ export interface ElectronAPI {
   ) => Promise<any>;
   onCommentAnalysisProgress: (callback: (event: { prId: number; status: string }) => void) => () => void;
 
+  // CFV API
+  cfvSetToken: (token: string) => Promise<void>;
+  cfvGetTokenStatus: () => Promise<{ valid: boolean; hasToken: boolean }>;
+  cfvFetchCall: (callId: string) => Promise<{ callId: string; outputDir: string; rawFiles: string[]; stats: { callflowMessages: number; diagnosticFiles: number } }>;
+  cfvListCachedCalls: () => Promise<Array<{ callId: string; fetchedAt: string; outputDir: string; messageCount: number; diagnosticFiles: number }>>;
+  cfvGetCallFlowData: (callId: string) => Promise<any>;
+  cfvGetCallDetails: (callId: string) => Promise<any>;
+  cfvGetRawFile: (callId: string, filename: string) => Promise<string | null>;
+  cfvDeleteCall: (callId: string) => Promise<void>;
+  cfvAcquireToken: (options?: { forceVisible?: boolean; timeout?: number }) => Promise<void>;
+  cfvCancelTokenAcquisition: () => Promise<void>;
+  cfvCheckPlaywright: () => Promise<{ available: boolean; reason?: string }>;
+  onCfvProgress: (callback: (event: any) => void) => () => void;
+  onCfvTokenProgress: (callback: (event: { status: string; message: string; headless?: boolean; tokenLength?: number; error?: string }) => void) => () => void;
+  onCfvTokenResult: (callback: (event: { success: boolean; tokenLength?: number; error?: string }) => void) => () => void;
+
+  // CFV Chat API
+  cfvChatCreate: (callId: string) => Promise<string>;
+  cfvChatSend: (sessionId: string, message: string) => Promise<void>;
+  cfvChatGetHistory: (sessionId: string) => Promise<import('../shared/cfv-types.js').CfvChatMessage[]>;
+  cfvChatDestroy: (sessionId: string) => Promise<void>;
+  onCfvChatEvent: (callback: (event: import('../shared/cfv-types.js').CfvChatEvent) => void) => () => void;
+
+  // CFV Filter API
+  cfvSaveCallFilters: (callId: string, state: import('../shared/cfv-filter-types.js').CallFilterState) => Promise<void>;
+  cfvLoadCallFilters: (callId: string) => Promise<import('../shared/cfv-filter-types.js').CallFilterState | null>;
+  cfvListFilterPresets: () => Promise<import('../shared/cfv-filter-types.js').FilterPreset[]>;
+  cfvSaveFilterPreset: (preset: import('../shared/cfv-filter-types.js').FilterPreset) => Promise<void>;
+  cfvDeleteFilterPreset: (presetId: string) => Promise<void>;
+
   // Plugin API
   pluginGetPlugins: () => Promise<any[]>;
   pluginGetPlugin: (pluginId: string) => Promise<any>;

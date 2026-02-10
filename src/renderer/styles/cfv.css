@@ -1,0 +1,2078 @@
+/* ==========================================================================
+   CFV (Call Flow Visualizer) Styles
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Home View
+   -------------------------------------------------------------------------- */
+.cfv-home-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.cfv-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.cfv-header h1 {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.cfv-subtitle {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-left: var(--space-2);
+}
+
+.cfv-token-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+
+.cfv-token-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.cfv-token-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+
+.cfv-token-dot.valid {
+  background: var(--success);
+}
+
+.cfv-token-dot.invalid {
+  background: var(--error);
+}
+
+.cfv-token-input {
+  flex: 1;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+}
+
+.cfv-token-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.cfv-manual-token-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.cfv-token-acquisition {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.cfv-token-acquisition.error {
+  color: var(--error);
+}
+
+.cfv-token-acquisition.done {
+  color: var(--success);
+}
+
+.cfv-token-acquisition .loading-spinner.small {
+  width: 14px;
+  height: 14px;
+  border-width: 2px;
+}
+
+.cfv-token-acquisition-msg {
+  flex: 1;
+}
+
+.cfv-search-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.cfv-search-bar input {
+  flex: 1;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+}
+
+.cfv-search-bar input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.cfv-progress-bar {
+  height: 3px;
+  background: var(--bg-tertiary);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.cfv-progress-bar .cfv-progress-fill {
+  height: 100%;
+  background: var(--accent-blue);
+  transition: width 0.3s ease;
+  width: 0%;
+}
+
+.cfv-progress-label {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  padding: var(--space-1) var(--space-4);
+  flex-shrink: 0;
+}
+
+.cfv-calls-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2) var(--space-4);
+}
+
+.cfv-call-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-2);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.cfv-call-card:hover {
+  background: var(--bg-tertiary);
+}
+
+.cfv-call-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.cfv-call-id {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-link);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cfv-call-meta {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.cfv-call-actions {
+  display: flex;
+  gap: var(--space-1);
+  flex-shrink: 0;
+  margin-left: var(--space-2);
+}
+
+.cfv-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  color: var(--text-tertiary);
+  gap: var(--space-2);
+  height: 200px;
+}
+
+.cfv-empty p {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.cfv-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  gap: var(--space-2);
+  height: 200px;
+}
+
+.cfv-loading p {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+/* --------------------------------------------------------------------------
+   Call View (orchestrator)
+   -------------------------------------------------------------------------- */
+.cfv-call-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.cfv-call-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+
+.cfv-call-toolbar-id {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-right: var(--space-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.cfv-subtab-group {
+  display: flex;
+  gap: 1px;
+  background: var(--border-color);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.cfv-subtab-btn {
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.cfv-subtab-btn:hover {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.cfv-subtab-btn.active {
+  background: var(--accent-blue);
+  color: #fff;
+}
+
+.cfv-subtab-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cfv-call-toolbar .spacer {
+  flex: 1;
+}
+
+.cfv-call-content {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.cfv-subpanel {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  display: none;
+}
+
+.cfv-subpanel.active {
+  display: flex;
+  flex-direction: column;
+}
+
+/* --------------------------------------------------------------------------
+   Call Flow Sequence Diagram
+   -------------------------------------------------------------------------- */
+.cfv-sequence {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Header: flex row with nested grid for service columns */
+.cfv-sequence-header {
+  display: flex;
+  align-items: flex-end;
+  border-bottom: 2px solid var(--border-color);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.cfv-hdr-num {
+  width: 36px;
+  flex-shrink: 0;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 3px 0;
+}
+
+.cfv-hdr-time {
+  width: 85px;
+  flex-shrink: 0;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 3px 2px;
+}
+
+.cfv-hdr-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  position: relative;
+}
+
+.cfv-hdr-latency {
+  width: 50px;
+  flex-shrink: 0;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: right;
+  padding: 3px 4px;
+}
+
+.cfv-hdr-desc {
+  flex: 1;
+  min-width: 0;
+}
+
+.cfv-col-header {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 3px 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: relative;
+}
+
+.cfv-col-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 0;
+  height: 4px;
+  border-left: 1px dotted var(--border-color);
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.cfv-sequence-body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Row: flex with nested grid for service columns */
+.cfv-seq-row {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  min-height: 20px;
+}
+
+.cfv-seq-row:hover {
+  background: var(--bg-tertiary);
+}
+
+.cfv-seq-row.failure {
+  background: rgba(248, 81, 73, 0.08);
+}
+
+.cfv-seq-row.failure:hover {
+  background: rgba(248, 81, 73, 0.15);
+}
+
+.cfv-seq-row.failure .cfv-seq-desc {
+  color: var(--error);
+}
+
+.cfv-seq-num {
+  width: 36px;
+  flex-shrink: 0;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+.cfv-seq-time {
+  width: 85px;
+  flex-shrink: 0;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 2px;
+}
+
+.cfv-seq-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  position: relative;
+  min-height: 20px;
+  align-items: center;
+}
+
+.cfv-grid-cell {
+  position: relative;
+  height: 100%;
+}
+
+.cfv-grid-cell::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 0;
+  border-left: 1px dotted var(--border-color);
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.cfv-seq-latency {
+  width: 50px;
+  flex-shrink: 0;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-tertiary);
+  text-align: right;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
+.cfv-seq-desc {
+  flex: 1;
+  min-width: 0;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 4px;
+}
+
+/* Arrow overlay — positioned within .cfv-seq-grid */
+.cfv-arrow-container {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.cfv-arrow {
+  position: absolute;
+  height: 2px;
+  top: -1px;
+  display: flex;
+  align-items: center;
+}
+
+.cfv-arrow-line {
+  flex: 1;
+  height: 1.5px;
+  background: var(--accent-blue);
+}
+
+.cfv-arrow.failure .cfv-arrow-line {
+  background: var(--error);
+}
+
+.cfv-arrow-head {
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  flex-shrink: 0;
+}
+
+.cfv-arrow.arrow-right .cfv-arrow-head {
+  border-left: 6px solid var(--accent-blue);
+}
+
+.cfv-arrow.arrow-left .cfv-arrow-head {
+  border-right: 6px solid var(--accent-blue);
+}
+
+.cfv-arrow.failure.arrow-right .cfv-arrow-head {
+  border-left-color: var(--error);
+}
+
+.cfv-arrow.failure.arrow-left .cfv-arrow-head {
+  border-right-color: var(--error);
+}
+
+/* Self-message (loopback) arrow */
+.cfv-arrow-self {
+  position: absolute;
+  top: -2px;
+  display: flex;
+  align-items: center;
+  margin-left: -8px;
+}
+
+.cfv-arrow-self-loop {
+  width: 16px;
+  height: 10px;
+  border: 1.5px solid var(--accent-blue);
+  border-left: none;
+  border-radius: 0 5px 5px 0;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.cfv-arrow-self-loop::after {
+  content: '';
+  position: absolute;
+  bottom: -3px;
+  left: -1px;
+  width: 0;
+  height: 0;
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  border-top: 4px solid var(--accent-blue);
+}
+
+.cfv-arrow-self.failure .cfv-arrow-self-loop {
+  border-color: var(--error);
+}
+
+.cfv-arrow-self.failure .cfv-arrow-self-loop::after {
+  border-top-color: var(--error);
+}
+
+/* Pagination */
+.cfv-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+
+.cfv-pagination span {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+/* Message Detail Modal */
+.cfv-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cfv-modal {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  width: 80%;
+  max-width: 900px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.cfv-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.cfv-modal-header h3 {
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.cfv-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3);
+}
+
+.cfv-modal-section {
+  margin-bottom: var(--space-3);
+}
+
+.cfv-modal-section h4 {
+  margin: 0 0 var(--space-1) 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cfv-modal-pre {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.cfv-modal-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.cfv-modal-field {
+  font-size: var(--text-sm);
+}
+
+.cfv-modal-field-label {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.cfv-modal-field-value {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+/* --------------------------------------------------------------------------
+   Drill Down Panel
+   -------------------------------------------------------------------------- */
+.cfv-drilldown {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.cfv-drilldown-filters {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.cfv-filter-btn {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.cfv-filter-btn.active {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+  background: rgba(31, 111, 235, 0.1);
+}
+
+.cfv-filter-btn:hover {
+  background: var(--bg-tertiary);
+}
+
+.cfv-drilldown-search {
+  flex: 1;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.cfv-drilldown-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2) var(--space-3);
+}
+
+.cfv-leg-row {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-2);
+  overflow: hidden;
+}
+
+.cfv-leg-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.cfv-leg-header:hover {
+  background: var(--bg-tertiary);
+}
+
+.cfv-leg-expand {
+  color: var(--text-tertiary);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.cfv-leg-row.expanded .cfv-leg-expand {
+  transform: rotate(90deg);
+}
+
+.cfv-leg-type {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.cfv-leg-id {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cfv-leg-outcome {
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+}
+
+.cfv-leg-outcome.success {
+  color: var(--success);
+}
+
+.cfv-leg-outcome.failure {
+  color: var(--error);
+}
+
+.cfv-leg-details {
+  display: none;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+}
+
+.cfv-leg-row.expanded .cfv-leg-details {
+  display: block;
+}
+
+.cfv-leg-detail-grid {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.cfv-leg-detail-label {
+  color: var(--text-tertiary);
+}
+
+.cfv-leg-detail-value {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  word-break: break-all;
+}
+
+/* --------------------------------------------------------------------------
+   Raw Events Panel
+   -------------------------------------------------------------------------- */
+.cfv-raw-events {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.cfv-raw-events-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.cfv-raw-events-select {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.cfv-raw-events-count {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.cfv-raw-events-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2) var(--space-3);
+}
+
+.cfv-json-tree {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.cfv-json-key {
+  color: var(--text-link);
+}
+
+.cfv-json-string {
+  color: var(--success);
+}
+
+.cfv-json-number {
+  color: var(--warning);
+}
+
+.cfv-json-bool {
+  color: #d2a8ff;
+}
+
+.cfv-json-null {
+  color: var(--text-tertiary);
+}
+
+.cfv-json-entry {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-2);
+  overflow: hidden;
+}
+
+.cfv-json-entry-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  background: var(--bg-secondary);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.cfv-json-entry-header:hover {
+  background: var(--bg-tertiary);
+}
+
+.cfv-json-entry-body {
+  display: none;
+  padding: var(--space-2);
+  background: var(--bg-primary);
+}
+
+.cfv-json-entry.expanded .cfv-json-entry-body {
+  display: block;
+}
+
+/* --------------------------------------------------------------------------
+   QoE Panel
+   -------------------------------------------------------------------------- */
+.cfv-qoe {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.cfv-qoe-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.cfv-qoe-filter input {
+  flex: 1;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.cfv-qoe-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3);
+}
+
+/* Network Path Diagram */
+.cfv-network-path {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+}
+
+.cfv-network-node {
+  padding: var(--space-2) var(--space-3);
+  border: 2px solid var(--accent-blue);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: center;
+  min-width: 80px;
+}
+
+.cfv-network-link {
+  width: 40px;
+  height: 2px;
+  background: var(--border-color);
+  position: relative;
+}
+
+.cfv-network-link::after {
+  content: '';
+  position: absolute;
+  right: -4px;
+  top: -3px;
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 6px solid var(--border-color);
+}
+
+/* QoE Metrics Table */
+.cfv-qoe-section {
+  margin-bottom: var(--space-3);
+}
+
+.cfv-qoe-section h3 {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: capitalize;
+  margin: 0 0 var(--space-1) 0;
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.cfv-qoe-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cfv-qoe-table td {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.cfv-qoe-table td:first-child {
+  color: var(--text-secondary);
+  width: 50%;
+}
+
+.cfv-qoe-table td:last-child {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+
+/* --------------------------------------------------------------------------
+   Shared: Tab Bar (inline tabs for cfv section)
+   -------------------------------------------------------------------------- */
+.cfv-tab-bar {
+  display: flex;
+  align-items: center;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  padding: 0 var(--space-2);
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+
+.cfv-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  transition: all var(--transition-fast);
+}
+
+.cfv-tab-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.cfv-tab-btn.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent-blue);
+}
+
+.cfv-tab-close {
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: 2px;
+  cursor: pointer;
+  color: var(--text-tertiary);
+  margin-left: var(--space-1);
+}
+
+.cfv-tab-close:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+/* --------------------------------------------------------------------------
+   Chat Panel
+   -------------------------------------------------------------------------- */
+.cfv-call-view.chat-open {
+  flex-direction: row;
+}
+
+.cfv-call-view.chat-open .cfv-call-main {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.cfv-chat-container {
+  display: none;
+}
+
+.cfv-call-view.chat-open .cfv-chat-container {
+  display: flex;
+  width: 380px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border-color);
+}
+
+.cfv-chat-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: var(--bg-primary);
+}
+
+.cfv-chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+
+.cfv-chat-header-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.cfv-chat-close-btn {
+  padding: 2px 6px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-base);
+  line-height: 1;
+}
+
+.cfv-chat-close-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.cfv-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.cfv-chat-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  flex: 1;
+}
+
+.cfv-chat-welcome-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.cfv-chat-welcome-subtitle {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.cfv-chat-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.cfv-chat-suggestion {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: all var(--transition-fast);
+}
+
+.cfv-chat-suggestion:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--accent-blue);
+}
+
+.cfv-chat-msg {
+  max-width: 90%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.cfv-chat-msg.user {
+  align-self: flex-end;
+  background: var(--accent-blue);
+  color: #fff;
+  border-bottom-right-radius: 2px;
+}
+
+.cfv-chat-msg.assistant {
+  align-self: flex-start;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  border-bottom-left-radius: 2px;
+}
+
+.cfv-chat-msg.assistant.streaming::after {
+  content: '\25AE';
+  animation: cfv-blink 0.8s step-end infinite;
+  color: var(--accent-blue);
+  margin-left: 2px;
+}
+
+@keyframes cfv-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.cfv-chat-msg.error {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+/* Markdown in chat messages */
+.cfv-chat-msg.assistant p {
+  margin: 0 0 var(--space-1) 0;
+}
+
+.cfv-chat-msg.assistant p:last-child {
+  margin-bottom: 0;
+}
+
+.cfv-chat-msg.assistant code {
+  background: var(--bg-tertiary);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.cfv-chat-msg.assistant pre {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+  margin: var(--space-1) 0;
+  overflow-x: auto;
+}
+
+.cfv-chat-msg.assistant pre code {
+  background: none;
+  padding: 0;
+  font-size: var(--text-xs);
+}
+
+.cfv-chat-msg.assistant ul,
+.cfv-chat-msg.assistant ol {
+  margin: var(--space-1) 0;
+  padding-left: var(--space-4);
+}
+
+.cfv-chat-msg.assistant strong {
+  font-weight: 600;
+}
+
+.cfv-chat-tool-status {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  padding: var(--space-1) var(--space-3);
+  font-style: italic;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.cfv-chat-tool-status .loading-spinner {
+  width: 10px;
+  height: 10px;
+  border-width: 1.5px;
+}
+
+.cfv-chat-input-area {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+
+.cfv-chat-input {
+  flex: 1;
+  min-height: 36px;
+  max-height: 120px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-family: inherit;
+  resize: none;
+  line-height: 1.5;
+}
+
+.cfv-chat-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.cfv-chat-input:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+}
+
+.cfv-chat-send-btn {
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--accent-blue);
+  color: #fff;
+  cursor: pointer;
+  font-size: var(--text-sm);
+  height: 36px;
+  min-width: 56px;
+  flex-shrink: 0;
+}
+
+.cfv-chat-send-btn:hover {
+  opacity: 0.9;
+}
+
+.cfv-chat-send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* --------------------------------------------------------------------------
+   Utility: No Data
+   -------------------------------------------------------------------------- */
+.cfv-no-data {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  gap: var(--space-2);
+}
+
+/* --------------------------------------------------------------------------
+   Filter Toolbar
+   -------------------------------------------------------------------------- */
+.cfv-filter-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-1) var(--space-3);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+  min-height: 32px;
+  gap: var(--space-2);
+}
+
+.cfv-filter-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.cfv-filter-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.cfv-filter-add-btn {
+  padding: 2px var(--space-2);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+}
+
+.cfv-filter-add-btn:hover {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+.cfv-filter-chips {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+
+.cfv-filter-no-filters {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+/* --------------------------------------------------------------------------
+   Filter Chips
+   -------------------------------------------------------------------------- */
+.cfv-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-primary);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  cursor: default;
+  transition: all var(--transition-fast);
+}
+
+.cfv-filter-chip:hover {
+  border-color: var(--text-tertiary);
+}
+
+.cfv-filter-chip.disabled {
+  opacity: 0.5;
+}
+
+.cfv-filter-chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.cfv-filter-chip-text {
+  color: var(--text-primary);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.cfv-filter-chip-text:hover {
+  text-decoration: underline;
+}
+
+.cfv-filter-chip-mode {
+  font-size: 10px;
+  line-height: 1;
+}
+
+.cfv-filter-chip-toggle {
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.cfv-filter-chip-remove {
+  border: none;
+  background: none;
+  color: var(--text-tertiary);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+}
+
+.cfv-filter-chip-remove:hover {
+  color: var(--error);
+}
+
+/* --------------------------------------------------------------------------
+   Show Matched Only Toggle
+   -------------------------------------------------------------------------- */
+.cfv-filter-matched-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.cfv-filter-matched-toggle input {
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  cursor: pointer;
+}
+
+/* --------------------------------------------------------------------------
+   Presets Button & Dropdown
+   -------------------------------------------------------------------------- */
+.cfv-filter-presets-wrapper {
+  position: relative;
+}
+
+.cfv-filter-presets-btn {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.cfv-filter-presets-btn:hover {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+.cfv-filter-presets-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  width: 260px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  z-index: 20;
+  overflow: hidden;
+}
+
+.cfv-filter-preset-empty {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+.cfv-filter-preset-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--border-color);
+  transition: background var(--transition-fast);
+}
+
+.cfv-filter-preset-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.cfv-filter-preset-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.cfv-filter-preset-name {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cfv-filter-preset-count {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.cfv-filter-preset-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.cfv-filter-preset-apply {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--accent-blue);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--accent-blue);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.cfv-filter-preset-apply:hover {
+  background: var(--accent-blue);
+  color: #fff;
+}
+
+.cfv-filter-preset-delete {
+  border: none;
+  background: none;
+  color: var(--text-tertiary);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.cfv-filter-preset-delete:hover {
+  color: var(--error);
+}
+
+.cfv-filter-preset-separator {
+  height: 1px;
+  background: var(--border-color);
+}
+
+.cfv-filter-preset-save-btn {
+  display: block;
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  background: none;
+  color: var(--accent-blue);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  text-align: left;
+}
+
+.cfv-filter-preset-save-btn:hover {
+  background: var(--bg-tertiary);
+}
+
+.cfv-filter-preset-save-btn:disabled {
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+}
+
+.cfv-filter-preset-save-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: var(--space-1) var(--space-2);
+}
+
+.cfv-filter-preset-name-input {
+  flex: 1;
+  padding: 2px var(--space-1);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.cfv-filter-preset-save-confirm {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--accent-blue);
+  border-radius: var(--radius-sm);
+  background: var(--accent-blue);
+  color: #fff;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.cfv-filter-preset-save-cancel {
+  border: none;
+  background: none;
+  color: var(--text-tertiary);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+/* --------------------------------------------------------------------------
+   Filter Builder Dropdown
+   -------------------------------------------------------------------------- */
+.cfv-filter-builder-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 15;
+}
+
+.cfv-filter-builder-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 14;
+}
+
+.cfv-filter-builder {
+  position: absolute;
+  top: 100%;
+  left: var(--space-3);
+  right: var(--space-3);
+  max-height: 400px;
+  overflow-y: auto;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  z-index: 15;
+}
+
+.cfv-filter-builder-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-color);
+  flex-wrap: wrap;
+}
+
+.cfv-filter-builder-name {
+  flex: 1;
+  min-width: 120px;
+  padding: 2px var(--space-1);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.cfv-filter-builder-name::placeholder {
+  color: var(--text-tertiary);
+}
+
+.cfv-filter-color-picker {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.cfv-filter-color-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color var(--transition-fast);
+}
+
+.cfv-filter-color-dot:hover {
+  border-color: var(--text-tertiary);
+}
+
+.cfv-filter-color-dot.selected {
+  border-color: var(--text-primary);
+}
+
+.cfv-filter-mode-toggle {
+  display: flex;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.cfv-filter-mode-btn {
+  padding: 2px var(--space-2);
+  border: none;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.cfv-filter-mode-btn.active {
+  background: var(--accent-blue);
+  color: #fff;
+}
+
+.cfv-filter-builder-body {
+  padding: var(--space-2) var(--space-3);
+}
+
+.cfv-filter-builder-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--border-color);
+}
+
+/* --------------------------------------------------------------------------
+   Filter Groups (recursive nesting)
+   -------------------------------------------------------------------------- */
+.cfv-filter-group {
+  border-left: 3px solid var(--accent-blue);
+  padding-left: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.cfv-filter-group.or-group {
+  border-left-color: var(--warning);
+}
+
+.cfv-filter-group.negated {
+  border-left-style: dashed;
+}
+
+.cfv-filter-group-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-bottom: var(--space-1);
+  font-size: var(--text-xs);
+}
+
+.cfv-filter-group-op {
+  padding: 1px 6px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cfv-filter-group-op:hover {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.cfv-filter-group-negate {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.cfv-filter-group-negate input {
+  width: 12px;
+  height: 12px;
+  margin: 0;
+}
+
+.cfv-filter-group-add-btn,
+.cfv-filter-group-add-group-btn {
+  padding: 1px 6px;
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.cfv-filter-group-add-btn:hover,
+.cfv-filter-group-add-group-btn:hover {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+.cfv-filter-group-remove-btn {
+  border: none;
+  background: none;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0 4px;
+  margin-left: auto;
+}
+
+.cfv-filter-group-remove-btn:hover {
+  color: var(--error);
+}
+
+/* --------------------------------------------------------------------------
+   Filter Condition Rows
+   -------------------------------------------------------------------------- */
+.cfv-filter-condition-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.cfv-filter-condition-row select,
+.cfv-filter-condition-row input[type="text"],
+.cfv-filter-condition-row input[type="number"] {
+  padding: 2px var(--space-1);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+}
+
+.cfv-filter-condition-type {
+  width: 110px;
+  flex-shrink: 0;
+}
+
+.cfv-filter-condition-field {
+  width: 90px;
+  flex-shrink: 0;
+}
+
+.cfv-filter-condition-op {
+  width: 50px;
+  flex-shrink: 0;
+}
+
+.cfv-filter-condition-value {
+  flex: 1;
+  min-width: 80px;
+}
+
+.cfv-filter-condition-value.invalid {
+  border-color: var(--error);
+}
+
+.cfv-filter-condition-remove {
+  border: none;
+  background: none;
+  color: var(--text-tertiary);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+
+.cfv-filter-condition-remove:hover {
+  color: var(--error);
+}
+
+/* --------------------------------------------------------------------------
+   Mark Highlights on Sequence Rows
+   -------------------------------------------------------------------------- */
+.cfv-seq-row.marked {
+  position: relative;
+}
+
+.cfv-mark-borders {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  flex-shrink: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.cfv-mark-border {
+  width: 3px;
+  height: 100%;
+}
+
+/* Filter active indicator in pagination */
+.cfv-pagination-filter-info {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+/* No results message when filter hides everything */
+.cfv-filter-no-results {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  gap: var(--space-2);
+  flex: 1;
+}
+
+.cfv-filter-no-results button {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.cfv-filter-no-results button:hover {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+/* --------------------------------------------------------------------------
+   Modal Filter Match Dots
+   -------------------------------------------------------------------------- */
+.cfv-modal-filter-dots {
+  display: flex;
+  gap: 4px;
+  margin-right: var(--space-2);
+  flex-shrink: 0;
+}
+
+.cfv-modal-filter-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}

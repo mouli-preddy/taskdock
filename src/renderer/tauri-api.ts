@@ -551,6 +551,36 @@ export const tauriAPI = {
   onCommentAnalysisProgress: (callback: (event: { prId: number; status: string }) => void) =>
     subscribe('comment-analysis:progress', callback),
 
+  // CFV API
+  cfvSetToken: (token: string) => invoke('cfv:set-token', token),
+  cfvGetTokenStatus: () => invoke('cfv:get-token-status'),
+  cfvFetchCall: (callId: string) => invoke('cfv:fetch-call', callId),
+  cfvListCachedCalls: () => invoke('cfv:list-cached-calls'),
+  cfvGetCallFlowData: (callId: string) => invoke('cfv:get-callflow-data', callId),
+  cfvGetCallDetails: (callId: string) => invoke('cfv:get-call-details', callId),
+  cfvGetRawFile: (callId: string, filename: string) => invoke('cfv:get-raw-file', callId, filename),
+  cfvDeleteCall: (callId: string) => invoke('cfv:delete-call', callId),
+  cfvAcquireToken: (options?: { forceVisible?: boolean; timeout?: number }) => invoke('cfv:acquire-token', options),
+  cfvCancelTokenAcquisition: () => invoke('cfv:cancel-token-acquisition'),
+  cfvCheckPlaywright: () => invoke('cfv:check-playwright'),
+  onCfvProgress: (callback: (event: any) => void) => subscribe('cfv:progress', callback),
+  onCfvTokenProgress: (callback: (event: any) => void) => subscribe('cfv:token-progress', callback),
+  onCfvTokenResult: (callback: (event: any) => void) => subscribe('cfv:token-result', callback),
+
+  // CFV Chat API
+  cfvChatCreate: (callId: string) => invoke('cfv-chat:create', callId),
+  cfvChatSend: (sessionId: string, message: string) => invoke('cfv-chat:send', sessionId, message),
+  cfvChatGetHistory: (sessionId: string) => invoke('cfv-chat:get-history', sessionId),
+  cfvChatDestroy: (sessionId: string) => invoke('cfv-chat:destroy', sessionId),
+  onCfvChatEvent: (callback: (event: any) => void) => subscribe('cfv:chat-event', callback),
+
+  // CFV Filter API
+  cfvSaveCallFilters: (callId: string, state: any) => invoke('cfv-filter:save', callId, state),
+  cfvLoadCallFilters: (callId: string) => invoke('cfv-filter:load', callId),
+  cfvListFilterPresets: () => invoke('cfv-filter:list-presets'),
+  cfvSaveFilterPreset: (preset: any) => invoke('cfv-filter:save-preset', preset),
+  cfvDeleteFilterPreset: (presetId: string) => invoke('cfv-filter:delete-preset', presetId),
+
   // Plugin API
   pluginGetPlugins: () => invoke('plugin:get-plugins'),
   pluginGetPlugin: (pluginId: string) => invoke('plugin:get-plugin', pluginId),

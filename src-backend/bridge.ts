@@ -27,6 +27,7 @@ import { getCommentAnalysisService } from '../src/main/ai/comment-analysis-servi
 import { initializeLogger, getLogger, disposeLogger } from '../src/main/services/logger-service.js';
 import { getWorktreeService, WorktreeService } from '../src/main/git/worktree-service.js';
 import { getPluginEngine, disposePluginEngine } from '../src/main/plugins/plugin-engine.js';
+import { getCfvService, disposeCfvService, getCfvChatService, disposeCfvChatService, getCfvFilterService } from '../src/main/cfv/index.js';
 import { buildReviewPrompt } from '../src/main/terminal/review-prompt.js';
 import type { ConsoleReviewSettings } from '../src/shared/terminal-types.js';
 import { DEFAULT_CONSOLE_REVIEW_SETTINGS } from '../src/shared/terminal-types.js';
@@ -155,6 +156,16 @@ const applyChangesService = getApplyChangesService();
 // Initialize plugin engine
 const pluginEngine = getPluginEngine();
 pluginEngine.initialize();
+
+// Initialize CFV service
+const cfvService = getCfvService();
+cfvService.on('progress', (event) => broadcast('cfv:progress', event));
+cfvService.on('token-progress', (event) => broadcast('cfv:token-progress', event));
+cfvService.on('token-result', (event) => broadcast('cfv:token-result', event));
+
+// Initialize CFV Chat service
+const cfvChatService = getCfvChatService();
+cfvChatService.on('chat-event', (event) => broadcast('cfv:chat-event', event));
 
 // Set up event forwarding
 aiService.onProgress((event) => {
@@ -800,6 +811,61 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       return commentAnalysisService.reanalyzeComment(thread, context, provider, fileContents, showTerminal ?? false);
     }
 
+    // CFV API
+    case 'cfv:set-token':
+      return cfvService.setToken(params[0]);
+    case 'cfv:get-token-status':
+      return cfvService.getTokenStatus();
+    case 'cfv:fetch-call':
+      return cfvService.fetchCall(params[0]);
+    case 'cfv:list-cached-calls':
+      return cfvService.listCachedCalls();
+    case 'cfv:get-callflow-data':
+      return cfvService.getCallFlowData(params[0]);
+    case 'cfv:get-call-details':
+      return cfvService.getCallDetailsData(params[0]);
+    case 'cfv:get-raw-file':
+      return cfvService.getRawFile(params[0], params[1]);
+    case 'cfv:delete-call':
+      return cfvService.deleteCall(params[0]);
+    case 'cfv:acquire-token':
+      // Fire-and-forget: acquireToken runs async, results come via events
+      cfvService.acquireToken(params[0]).catch((err) => {
+        console.error('Token acquisition error:', err);
+      });
+      return;
+    case 'cfv:cancel-token-acquisition':
+      cfvService.cancelTokenAcquisition();
+      return;
+    case 'cfv:check-playwright':
+      return cfvService.checkPlaywrightAvailability();
+
+    // CFV Chat API
+    case 'cfv-chat:create': {
+      const callOutputDir = cfvService.getCallOutputDir(params[0]);
+      return cfvChatService.createSession(params[0], callOutputDir);
+    }
+    case 'cfv-chat:send':
+      await cfvChatService.send(params[0], params[1]);
+      return;
+    case 'cfv-chat:get-history':
+      return cfvChatService.getHistory(params[0]);
+    case 'cfv-chat:destroy':
+      await cfvChatService.destroySession(params[0]);
+      return;
+
+    // CFV Filter API
+    case 'cfv-filter:save':
+      return getCfvFilterService().saveCallFilters(params[0], params[1]);
+    case 'cfv-filter:load':
+      return getCfvFilterService().loadCallFilters(params[0]);
+    case 'cfv-filter:list-presets':
+      return getCfvFilterService().listFilterPresets();
+    case 'cfv-filter:save-preset':
+      return getCfvFilterService().saveFilterPreset(params[0]);
+    case 'cfv-filter:delete-preset':
+      return getCfvFilterService().deleteFilterPreset(params[0]);
+
     // Plugin Engine API
     case 'plugin:get-plugins':
       return pluginEngine.getPlugins();
@@ -878,6 +944,8 @@ process.on('SIGINT', async () => {
   await disposeWalkthroughService();
   disposeApplyChangesService();
   disposePluginEngine();
+  disposeCfvChatService();
+  disposeCfvService();
   disposeLogger();
   wss.close();
   process.exit(0);
@@ -891,6 +959,8 @@ process.on('SIGTERM', async () => {
   await disposeWalkthroughService();
   disposeApplyChangesService();
   disposePluginEngine();
+  disposeCfvChatService();
+  disposeCfvService();
   disposeLogger();
   wss.close();
   process.exit(0);
