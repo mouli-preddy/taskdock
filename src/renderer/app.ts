@@ -117,6 +117,14 @@ interface PRTabState {
   // Chat Panel state
   copilotChatPanelOpen: boolean;
   copilotChatAI: 'copilot' | 'claude';
+  // Walkthrough popout state (for save/restore when switching tabs)
+  walkthroughPopoutState?: {
+    walkthrough: any;
+    currentStep: number;
+    displayName?: string;
+    preset?: any;
+    customPrompt?: string;
+  } | null;
 }
 
 /** Filter out deleted threads and threads with only system/deleted comments */
@@ -1183,6 +1191,11 @@ class PRReviewApp {
     const tab = this.reviewTabs.find(t => t.id === tabId);
     if (!tab || !tab.closeable) return;
 
+    // Close walkthrough popout if it belongs to this tab
+    if (this.walkthroughUI.getTabId() === tabId) {
+      this.walkthroughUI.hide();
+    }
+
     // Remove tab
     const index = this.reviewTabs.findIndex(t => t.id === tabId);
     this.reviewTabs.splice(index, 1);
@@ -1721,6 +1734,12 @@ class PRReviewApp {
       state.aiPanelState = this.aiCommentsPanel.getState();
       // Save Apply Changes panel state for this PR tab
       state.applyChangesPanelState = this.applyChangesPanel.getState();
+      // Save walkthrough popout state if active
+      if (this.walkthroughUI.isInPopout()) {
+        state.walkthroughPopoutState = this.walkthroughUI.getPopoutState();
+      } else {
+        state.walkthroughPopoutState = null;
+      }
     }
   }
 
@@ -1787,6 +1806,12 @@ class PRReviewApp {
     this.updateCommentCountForState(state, tabId);
     this.updateFileCountForState(state, tabId);
     this.updateReviewProgress();
+
+    // Restore walkthrough popout if it was active
+    if (state.walkthroughPopoutState) {
+      this.walkthroughUI.restorePopout(state.walkthroughPopoutState, tabId).catch(console.error);
+      state.walkthroughPopoutState = null; // Clear after restoring
+    }
   }
 
   private getCurrentPRState(): PRTabState | null {
