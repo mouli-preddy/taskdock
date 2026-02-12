@@ -25,6 +25,7 @@ interface PopoutData {
   displayName?: string;
   preset?: WalkthroughPreset;
   customPrompt?: string;
+  theme?: string;
 }
 
 let walkthrough: CodeWalkthrough | null = null;
@@ -219,6 +220,11 @@ async function init(): Promise<void> {
     walkthrough = event.payload.walkthrough;
     currentStep = event.payload.currentStep;
     displayName = event.payload.displayName || 'Code Walkthrough';
+
+    // Apply theme from main window
+    if (event.payload.theme) {
+      document.documentElement.setAttribute('data-theme', event.payload.theme);
+    }
 
     // Update window title
     getCurrentWindow().setTitle(displayName).catch(console.error);

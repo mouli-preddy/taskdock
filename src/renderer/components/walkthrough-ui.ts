@@ -699,6 +699,7 @@ export class WalkthroughUI {
           displayName: this.displayName,
           preset: this.preset,
           customPrompt: this.customPrompt,
+          theme: document.documentElement.getAttribute('data-theme') || 'dark',
         });
         unlistenReady();
       });
