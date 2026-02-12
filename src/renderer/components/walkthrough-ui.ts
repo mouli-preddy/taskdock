@@ -16,6 +16,7 @@ import {
   Clock,
   ChevronLeft,
   ChevronRight,
+  ExternalLink,
 } from '../utils/icons.js';
 import { renderStepHtml, renderSummaryHtml, renderMarkdownInContainer } from './walkthrough-renderer.js';
 
@@ -48,6 +49,11 @@ export class WalkthroughUI {
 
   // Track which tab this walkthrough belongs to
   private tabId: string | null = null;
+
+  // Popout state
+  private isPopoutActive = false;
+  private popoutWindow: any = null; // WebviewWindow reference
+  private popoutUnlisteners: Array<() => void> = [];
 
   private navigateCallback?: (filePath: string, line: number) => void;
   private closeCallback?: () => void;
@@ -88,6 +94,11 @@ export class WalkthroughUI {
       this.overlay.remove();
       this.overlay = null;
     }
+    if (this.isPopoutActive) {
+      this.closePopoutWindow();
+      this.cleanupPopout();
+      this.isPopoutActive = false;
+    }
     this.tabId = null;
     this.removeKeyboardListeners();
     this.removeMouseListeners();
@@ -112,8 +123,20 @@ export class WalkthroughUI {
    * Hide the walkthrough if it doesn't belong to the specified tab
    */
   hideIfNotOnTab(currentTabId: string): void {
-    if (this.overlay && this.tabId && this.tabId !== currentTabId) {
-      this.hide();
+    if (this.tabId && this.tabId !== currentTabId) {
+      if (this.overlay) {
+        this.overlay.remove();
+        this.overlay = null;
+      }
+      if (this.isPopoutActive) {
+        this.closePopoutWindow();
+        this.cleanupPopout();
+        this.isPopoutActive = false;
+      }
+      this.tabId = null;
+      this.removeKeyboardListeners();
+      this.removeMouseListeners();
+      this.closeCallback?.();
     }
   }
 
@@ -293,6 +316,9 @@ export class WalkthroughUI {
             ` : ''}
           </div>
           <div class="walkthrough-header-actions">
+            <button class="btn btn-icon walkthrough-popout-btn" title="Open in separate window">
+              ${iconHtml(ExternalLink, { size: 16 })}
+            </button>
             <button class="btn btn-icon walkthrough-minimize-btn" title="Minimize">
               ${iconHtml(Minus, { size: 16 })}
             </button>
@@ -403,6 +429,11 @@ export class WalkthroughUI {
     this.overlay.querySelector('.walkthrough-minimize-btn')?.addEventListener('click', () => {
       this.isMinimized = true;
       this.render();
+    });
+
+    // Popout button
+    this.overlay.querySelector('.walkthrough-popout-btn')?.addEventListener('click', () => {
+      this.popout();
     });
 
     // Expand button
@@ -610,6 +641,180 @@ export class WalkthroughUI {
 
     this.updateSize();
     this.updatePosition();
+  }
+
+  /**
+   * Pop the walkthrough out into a separate Tauri window.
+   * Hides the in-app overlay and sends walkthrough data to the new window.
+   */
+  async popout(): Promise<void> {
+    if (this.isPopoutActive || !this.walkthrough) return;
+
+    try {
+      const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+      const { emit, listen } = await import('@tauri-apps/api/event');
+
+      // Create the popout window
+      const popoutLabel = `walkthrough-popout-${Date.now()}`;
+      const popoutWindow = new WebviewWindow(popoutLabel, {
+        url: 'walkthrough-popout.html',
+        title: this.displayName || 'Code Walkthrough',
+        width: 450,
+        height: 550,
+        minWidth: 350,
+        minHeight: 400,
+        resizable: true,
+        decorations: true,
+        center: true,
+      });
+
+      this.popoutWindow = popoutWindow;
+      this.isPopoutActive = true;
+
+      // Listen for the popout window to be ready, then send data
+      const unlistenCreated = await popoutWindow.once('tauri://created', async () => {
+        // Small delay to ensure the popout's JS has initialized its listeners
+        setTimeout(async () => {
+          await emit('walkthrough:popout-data', {
+            walkthrough: this.walkthrough,
+            currentStep: this.currentStep,
+            displayName: this.displayName,
+            preset: this.preset,
+            customPrompt: this.customPrompt,
+          });
+        }, 200);
+      });
+
+      // Listen for navigation events from the popout
+      const unlistenNavigate = await listen<{ filePath: string; line: number }>('walkthrough:navigate', (event) => {
+        if (this.navigateCallback) {
+          this.navigateCallback(event.payload.filePath, event.payload.line);
+        }
+      });
+
+      // Listen for pop-back events
+      const unlistenPopBack = await listen<{ currentStep: number }>('walkthrough:pop-back', (event) => {
+        this.handlePopBack(event.payload.currentStep);
+      });
+
+      // Listen for the popout window being closed by the user (OS close button)
+      const unlistenDestroyed = await popoutWindow.once('tauri://destroyed', () => {
+        this.cleanupPopout();
+        // If the walkthrough tab is still active, re-show the overlay
+        if (this.walkthrough && this.tabId) {
+          this.isPopoutActive = false;
+          this.createOverlay();
+          this.render();
+          this.attachKeyboardListeners();
+        }
+      });
+
+      // Store unlisteners for cleanup
+      this.popoutUnlisteners = [unlistenNavigate, unlistenPopBack];
+
+      // Hide the in-app overlay (but don't clear walkthrough data)
+      if (this.overlay) {
+        this.overlay.remove();
+        this.overlay = null;
+      }
+      this.removeKeyboardListeners();
+      this.removeMouseListeners();
+
+    } catch (error) {
+      console.error('Failed to create popout window:', error);
+      this.isPopoutActive = false;
+      this.popoutWindow = null;
+    }
+  }
+
+  /**
+   * Handle the user clicking "pop back in" from the popout window.
+   * Restores the in-app overlay and closes the popout.
+   */
+  private handlePopBack(currentStep: number): void {
+    this.currentStep = currentStep;
+    this.closePopoutWindow();
+    this.cleanupPopout();
+    this.isPopoutActive = false;
+
+    // Re-show the in-app overlay
+    if (this.walkthrough) {
+      this.createOverlay();
+      this.render();
+      this.attachKeyboardListeners();
+    }
+  }
+
+  /**
+   * Close the popout window (if open) and clean up listeners.
+   */
+  private async closePopoutWindow(): Promise<void> {
+    if (this.popoutWindow) {
+      try {
+        const { emit } = await import('@tauri-apps/api/event');
+        await emit('walkthrough:close-popout');
+      } catch {
+        // Window may already be closed
+      }
+      this.popoutWindow = null;
+    }
+  }
+
+  /**
+   * Clean up popout event listeners.
+   */
+  private cleanupPopout(): void {
+    for (const unlisten of this.popoutUnlisteners) {
+      unlisten();
+    }
+    this.popoutUnlisteners = [];
+    this.popoutWindow = null;
+  }
+
+  /**
+   * Whether the walkthrough is currently in a popout window
+   */
+  isInPopout(): boolean {
+    return this.isPopoutActive;
+  }
+
+  /**
+   * Get the current walkthrough state for saving/restoring across tab switches
+   */
+  getPopoutState(): {
+    walkthrough: CodeWalkthrough;
+    currentStep: number;
+    displayName?: string;
+    preset?: WalkthroughPreset;
+    customPrompt?: string;
+  } | null {
+    if (!this.walkthrough) return null;
+    return {
+      walkthrough: this.walkthrough,
+      currentStep: this.currentStep,
+      displayName: this.displayName,
+      preset: this.preset,
+      customPrompt: this.customPrompt,
+    };
+  }
+
+  /**
+   * Restore a popout window from saved state (used when switching back to a PR tab)
+   */
+  async restorePopout(state: {
+    walkthrough: CodeWalkthrough;
+    currentStep: number;
+    displayName?: string;
+    preset?: WalkthroughPreset;
+    customPrompt?: string;
+  }, tabId: string): Promise<void> {
+    this.walkthrough = state.walkthrough;
+    this.currentStep = state.currentStep;
+    this.displayName = state.displayName;
+    this.preset = state.preset;
+    this.customPrompt = state.customPrompt;
+    this.tabId = tabId;
+    await this.popout();
   }
 
   private keyboardHandler = (e: KeyboardEvent): void => {
