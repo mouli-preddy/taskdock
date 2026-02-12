@@ -771,16 +771,13 @@ export class WalkthroughUI {
 
   /**
    * Close the popout window (if open).
-   * Uses direct window.close() instead of async event emit so it works
-   * from synchronous callers like hide().
+   * Uses destroy() for immediate teardown without close-requested events.
    */
   private closePopoutWindow(): void {
     if (this.popoutWindow) {
-      try {
-        this.popoutWindow.close();
-      } catch {
+      this.popoutWindow.destroy().catch(() => {
         // Window may already be closed
-      }
+      });
       this.popoutWindow = null;
     }
   }
