@@ -770,13 +770,14 @@ export class WalkthroughUI {
   }
 
   /**
-   * Close the popout window (if open) and clean up listeners.
+   * Close the popout window (if open).
+   * Uses direct window.close() instead of async event emit so it works
+   * from synchronous callers like hide().
    */
-  private async closePopoutWindow(): Promise<void> {
+  private closePopoutWindow(): void {
     if (this.popoutWindow) {
       try {
-        const { emit } = await import('@tauri-apps/api/event');
-        await emit('walkthrough:close-popout');
+        this.popoutWindow.close();
       } catch {
         // Window may already be closed
       }
