@@ -222,6 +222,9 @@ async function init(): Promise<void> {
   await listen('walkthrough:close-popout', () => {
     getCurrentWindow().close().catch(console.error);
   });
+
+  // Signal to main window that we're ready to receive data
+  await emit('walkthrough:popout-ready', {});
 }
 
 init().catch(console.error);

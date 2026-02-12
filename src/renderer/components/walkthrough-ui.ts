@@ -691,18 +691,16 @@ export class WalkthroughUI {
         }
       });
 
-      // Listen for the popout window to be ready, then send data
-      const unlistenCreated = await popoutWindow.once('tauri://created', async () => {
-        // Small delay to ensure the popout's JS has initialized its listeners
-        setTimeout(async () => {
-          await emit('walkthrough:popout-data', {
-            walkthrough: this.walkthrough,
-            currentStep: this.currentStep,
-            displayName: this.displayName,
-            preset: this.preset,
-            customPrompt: this.customPrompt,
-          });
-        }, 200);
+      // Wait for the popout window's JS to initialize and signal ready
+      const unlistenReady = await listen('walkthrough:popout-ready', async () => {
+        await emit('walkthrough:popout-data', {
+          walkthrough: this.walkthrough,
+          currentStep: this.currentStep,
+          displayName: this.displayName,
+          preset: this.preset,
+          customPrompt: this.customPrompt,
+        });
+        unlistenReady();
       });
 
       // Listen for navigation events from the popout
@@ -730,7 +728,7 @@ export class WalkthroughUI {
       });
 
       // Store unlisteners for cleanup
-      this.popoutUnlisteners = [unlistenNavigate, unlistenPopBack, unlistenCreated, unlistenDestroyed];
+      this.popoutUnlisteners = [unlistenNavigate, unlistenPopBack, unlistenReady, unlistenDestroyed];
 
       // Hide the in-app overlay (but don't clear walkthrough data)
       if (this.overlay) {
