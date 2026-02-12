@@ -717,7 +717,7 @@ export class WalkthroughUI {
       });
 
       // Store unlisteners for cleanup
-      this.popoutUnlisteners = [unlistenNavigate, unlistenPopBack];
+      this.popoutUnlisteners = [unlistenNavigate, unlistenPopBack, unlistenCreated, unlistenDestroyed];
 
       // Hide the in-app overlay (but don't clear walkthrough data)
       if (this.overlay) {
@@ -731,6 +731,12 @@ export class WalkthroughUI {
       console.error('Failed to create popout window:', error);
       this.isPopoutActive = false;
       this.popoutWindow = null;
+      // Restore in-app overlay on error
+      if (this.walkthrough) {
+        this.createOverlay();
+        this.render();
+        this.attachKeyboardListeners();
+      }
     }
   }
 
