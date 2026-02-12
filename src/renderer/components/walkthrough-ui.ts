@@ -71,6 +71,13 @@ export class WalkthroughUI {
   }
 
   show(walkthrough: ExtendedWalkthrough, tabId?: string): void {
+    // Close any existing popout before showing new walkthrough
+    if (this.isPopoutActive) {
+      this.closePopoutWindow();
+      this.cleanupPopout();
+      this.isPopoutActive = false;
+    }
+
     initializeMermaid();
     this.walkthrough = walkthrough;
     this.currentStep = 0;
@@ -116,7 +123,7 @@ export class WalkthroughUI {
    * Check if the walkthrough is currently visible
    */
   isVisible(): boolean {
-    return this.overlay !== null;
+    return this.overlay !== null || this.isPopoutActive;
   }
 
   /**
