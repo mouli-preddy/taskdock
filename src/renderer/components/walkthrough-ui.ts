@@ -4,11 +4,7 @@
  */
 
 import type { CodeWalkthrough, WalkthroughStep, WalkthroughPreset } from '../../shared/ai-types.js';
-import {
-  renderMarkdown,
-  renderDiagramToElement,
-  initializeMermaid,
-} from '../utils/markdown-renderer.js';
+import { initializeMermaid } from '../utils/markdown-renderer.js';
 import { escapeHtml } from '../utils/html-utils.js';
 import {
   iconHtml,
@@ -20,9 +16,8 @@ import {
   Clock,
   ChevronLeft,
   ChevronRight,
-  FileText,
-  LayoutGrid,
 } from '../utils/icons.js';
+import { renderStepHtml, renderSummaryHtml, renderMarkdownInContainer } from './walkthrough-renderer.js';
 
 /**
  * Extended walkthrough with display metadata
@@ -372,67 +367,12 @@ export class WalkthroughUI {
   }
 
   private renderStepSync(step: WalkthroughStep): string {
-    const fileName = step.filePath.split('/').pop() || step.filePath;
-
-    return `
-      <div class="walkthrough-step">
-        <h3 class="walkthrough-step-title">${escapeHtml(step.title)}</h3>
-
-        <div class="walkthrough-step-location"
-             data-file="${step.filePath}"
-             data-line="${step.startLine}">
-          ${iconHtml(FileText, { size: 14 })}
-          <span class="walkthrough-file">${fileName}</span>
-          <span class="walkthrough-line">:${step.startLine}${step.endLine !== step.startLine ? `-${step.endLine}` : ''}</span>
-        </div>
-
-        <div class="walkthrough-step-description markdown-content" data-markdown="${encodeURIComponent(step.description)}">
-          <div class="loading-markdown">Loading...</div>
-        </div>
-
-        ${step.diagram ? `
-          <div class="walkthrough-step-diagram mermaid-diagram" data-diagram="${encodeURIComponent(step.diagram)}">
-            <div class="loading-diagram">Loading diagram...</div>
-          </div>
-        ` : ''}
-
-        ${step.relatedFiles && step.relatedFiles.length > 0 ? `
-          <div class="walkthrough-related">
-            <span class="walkthrough-related-label">Related files:</span>
-            ${step.relatedFiles.map(f => `
-              <span class="walkthrough-related-file" data-file="${f}">
-                ${f.split('/').pop()}
-              </span>
-            `).join('')}
-          </div>
-        ` : ''}
-      </div>
-    `;
+    return renderStepHtml(step);
   }
 
   private renderSummarySync(): string {
-    const hasArchDiagram = this.walkthrough?.architectureDiagram;
-
-    return `
-      <div class="walkthrough-summary">
-        <h3>Summary</h3>
-        <div class="walkthrough-summary-text markdown-content" data-markdown="${encodeURIComponent(this.walkthrough?.summary || '')}">
-          <div class="loading-markdown">Loading...</div>
-        </div>
-
-        ${hasArchDiagram ? `
-          <div class="walkthrough-architecture-diagram">
-            <h4>
-              ${iconHtml(LayoutGrid, { size: 16 })}
-              Architecture Overview
-            </h4>
-            <div class="mermaid-diagram" data-diagram="${encodeURIComponent(this.walkthrough?.architectureDiagram || '')}">
-              <div class="loading-diagram">Loading diagram...</div>
-            </div>
-          </div>
-        ` : ''}
-      </div>
-    `;
+    if (!this.walkthrough) return '';
+    return renderSummaryHtml(this.walkthrough);
   }
 
   /**
@@ -440,37 +380,7 @@ export class WalkthroughUI {
    */
   private async renderMarkdownContent(): Promise<void> {
     if (!this.overlay) return;
-
-    // Render markdown content
-    const markdownElements = this.overlay.querySelectorAll('.markdown-content[data-markdown]');
-    for (const el of markdownElements) {
-      const markdown = decodeURIComponent((el as HTMLElement).dataset.markdown || '');
-      if (markdown) {
-        try {
-          const html = await renderMarkdown(markdown);
-          el.innerHTML = html;
-        } catch (error) {
-          console.error('Failed to render markdown:', error);
-          el.innerHTML = `<p>${escapeHtml(markdown)}</p>`;
-        }
-      }
-    }
-
-    // Render mermaid diagrams
-    const diagramElements = this.overlay.querySelectorAll('.mermaid-diagram[data-diagram]');
-    for (const el of diagramElements) {
-      const diagramCode = decodeURIComponent((el as HTMLElement).dataset.diagram || '');
-      if (diagramCode) {
-        try {
-          // Convert escaped newlines to actual newlines
-          const normalizedCode = diagramCode.replace(/\\n/g, '\n');
-          await renderDiagramToElement(normalizedCode, el as HTMLElement);
-        } catch (error) {
-          console.error('Failed to render diagram:', error);
-          el.innerHTML = `<div class="mermaid-error">Failed to render diagram</div>`;
-        }
-      }
-    }
+    await renderMarkdownInContainer(this.overlay);
   }
 
   private navigateToCurrentStep(): void {
