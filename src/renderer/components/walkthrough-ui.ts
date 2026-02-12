@@ -715,6 +715,11 @@ export class WalkthroughUI {
         this.handlePopBack(event.payload.currentStep);
       });
 
+      // Listen for step changes from the popout (keeps main window in sync for state saving)
+      const unlistenStepChanged = await listen<{ currentStep: number }>('walkthrough:step-changed', (event) => {
+        this.currentStep = event.payload.currentStep;
+      });
+
       // Listen for the popout window being closed by the user (OS close button)
       const unlistenDestroyed = await popoutWindow.once('tauri://destroyed', () => {
         this.cleanupPopout();
@@ -728,7 +733,7 @@ export class WalkthroughUI {
       });
 
       // Store unlisteners for cleanup
-      this.popoutUnlisteners = [unlistenNavigate, unlistenPopBack, unlistenReady, unlistenDestroyed];
+      this.popoutUnlisteners = [unlistenNavigate, unlistenPopBack, unlistenStepChanged, unlistenReady, unlistenDestroyed];
 
       // Hide the in-app overlay (but don't clear walkthrough data)
       if (this.overlay) {

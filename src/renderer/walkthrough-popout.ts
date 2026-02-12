@@ -119,6 +119,11 @@ function navigateToStep(): void {
   }
 }
 
+/** Sync current step back to main window so state saves correctly */
+function syncStep(): void {
+  emit('walkthrough:step-changed', { currentStep });
+}
+
 function nextStep(): void {
   if (!walkthrough) return;
   const totalPages = getTotalPages();
@@ -126,6 +131,7 @@ function nextStep(): void {
     currentStep++;
     render();
     navigateToStep();
+    syncStep();
   }
 }
 
@@ -136,6 +142,7 @@ function previousStep(): void {
     if (currentStep > 0) {
       navigateToStep();
     }
+    syncStep();
   }
 }
 
@@ -148,6 +155,7 @@ function goToStep(pageNumber: number): void {
     if (currentStep > 0) {
       navigateToStep();
     }
+    syncStep();
   }
 }
 
