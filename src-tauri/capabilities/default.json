@@ -3,10 +3,13 @@
   "identifier": "default",
   "description": "enables the default permissions",
   "windows": [
-    "main"
+    "main",
+    "walkthrough-popout-*"
   ],
   "permissions": [
     "core:default",
+    "core:window:allow-create",
+    "core:webview:allow-create-webview-window",
     "shell:allow-open",
     "dialog:allow-open",
     "dialog:allow-save",

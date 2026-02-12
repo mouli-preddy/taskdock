@@ -678,6 +678,19 @@ export class WalkthroughUI {
       this.popoutWindow = popoutWindow;
       this.isPopoutActive = true;
 
+      // Listen for creation errors
+      popoutWindow.once('tauri://error', (e) => {
+        console.error('Failed to create popout webview:', e);
+        this.isPopoutActive = false;
+        this.popoutWindow = null;
+        // Restore in-app overlay on error
+        if (this.walkthrough) {
+          this.createOverlay();
+          this.render();
+          this.attachKeyboardListeners();
+        }
+      });
+
       // Listen for the popout window to be ready, then send data
       const unlistenCreated = await popoutWindow.once('tauri://created', async () => {
         // Small delay to ensure the popout's JS has initialized its listeners
