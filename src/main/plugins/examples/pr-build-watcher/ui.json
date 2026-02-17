@@ -1,0 +1,45 @@
+{
+  "tab": {
+    "id": "build-watcher",
+    "label": "Build Watcher",
+    "icon": "activity"
+  },
+  "layout": {
+    "type": "split-panel",
+    "sizes": [50, 50],
+    "children": [
+      {
+        "type": "table",
+        "id": "build-list",
+        "columns": [
+          { "key": "prId", "label": "PR", "width": 60 },
+          { "key": "title", "label": "Title" },
+          { "key": "buildStatus", "label": "Build", "component": "status-badge", "colorMap": { "succeeded": "green", "failed": "red", "inProgress": "blue" } },
+          { "key": "reviewStatus", "label": "Review", "component": "status-badge" }
+        ]
+      },
+      {
+        "type": "detail-panel",
+        "id": "build-detail",
+        "sections": [
+          {
+            "type": "header",
+            "title": "PR #{{prId}}: {{title}}"
+          },
+          {
+            "type": "card",
+            "label": "AI Review",
+            "content": "{{aiReview}}",
+            "renderAs": "markdown"
+          },
+          {
+            "type": "button-group",
+            "buttons": [
+              { "label": "Build & Review", "icon": "play", "action": "buildAndReview" }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

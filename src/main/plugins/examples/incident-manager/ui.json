@@ -1,0 +1,55 @@
+{
+  "tab": {
+    "id": "incidents",
+    "label": "Incidents",
+    "icon": "alert-triangle"
+  },
+  "layout": {
+    "type": "split-panel",
+    "sizes": [40, 60],
+    "children": [
+      {
+        "type": "table",
+        "id": "incident-list",
+        "columns": [
+          { "key": "id", "label": "ID", "width": 80 },
+          { "key": "title", "label": "Title" },
+          { "key": "severity", "label": "Sev", "component": "status-badge", "colorMap": { "0": "red", "1": "orange", "2": "yellow" } },
+          { "key": "status", "label": "Status", "component": "status-badge" }
+        ],
+        "onRowClick": "selectIncident"
+      },
+      {
+        "type": "detail-panel",
+        "id": "incident-detail",
+        "sections": [
+          {
+            "type": "header",
+            "title": "{{title}}",
+            "subtitle": "{{owningTeam}} · Created {{createdDate}}"
+          },
+          {
+            "type": "card",
+            "label": "AI Analysis",
+            "content": "{{aiAnalysis}}",
+            "renderAs": "markdown"
+          },
+          {
+            "type": "button-group",
+            "buttons": [
+              { "label": "Run Analysis", "icon": "sparkles", "action": "runAnalysis" },
+              { "label": "Link to PR", "icon": "git-pull-request", "action": "linkToPR" }
+            ]
+          },
+          {
+            "type": "tabs",
+            "items": [
+              { "label": "Impact", "content": { "type": "key-value", "id": "impact-kv" } },
+              { "label": "Timeline", "content": { "type": "timeline", "id": "incident-timeline" } }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

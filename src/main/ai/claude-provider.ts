@@ -203,7 +203,7 @@ ${chunk.diffContent}
 ${chunk.contextAfter ? `\n\n// Context after:\n${chunk.contextAfter}` : ''}
 \`\`\`
 
-Analyze this code and provide your review as a JSON object with a "comments" array. Each comment should have: startLine, endLine, severity (critical/warning/suggestion/praise), category (bug/security/performance/style/logic/other), title, content, suggestedFix (optional), confidence (0-1).
+Analyze this code and provide your review as a JSON object with a "comments" array. Each comment should have: startLine, endLine, severity (critical/major/minor/trivial), category (bug/security/performance/style/logic/compliance/recommendation/nitpick/other), title, content, suggestedFix (optional), confidence (0-1).
 
 If there are no issues, return: \`\`\`json\n{"comments": []}\n\`\`\``;
   }
@@ -270,7 +270,7 @@ Guidelines for diagrams:
         filePath,
         startLine: input.startLine || 1,
         endLine: input.endLine || input.startLine || 1,
-        severity: input.severity || 'suggestion',
+        severity: input.severity || 'minor',
         category: input.category || 'other',
         title: input.title || 'Review Comment',
         content: input.content || '',
@@ -303,7 +303,7 @@ Guidelines for diagrams:
           filePath,
           startLine: c.startLine || 1,
           endLine: c.endLine || c.startLine || 1,
-          severity: c.severity || 'suggestion',
+          severity: c.severity || 'minor',
           category: c.category || 'other',
           title: c.title || 'Review Comment',
           content: c.content || '',

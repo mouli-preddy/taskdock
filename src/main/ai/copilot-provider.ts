@@ -233,8 +233,8 @@ Analyze this code and respond with ONLY a JSON object (no other text). Use this 
 {
   "comments": [
     {
-      "severity": "critical|warning|suggestion|praise",
-      "category": "bug|security|performance|style|logic|other",
+      "severity": "critical|major|minor|trivial",
+      "category": "bug|security|performance|style|logic|compliance|recommendation|nitpick|other",
       "title": "Brief title",
       "content": "Detailed explanation",
       "startLine": 1,
@@ -338,7 +338,7 @@ Guidelines for diagrams:
           filePath,
           startLine: c.startLine || 1,
           endLine: c.endLine || c.startLine || 1,
-          severity: c.severity || 'suggestion',
+          severity: c.severity || 'minor',
           category: c.category || 'other',
           title: c.title || 'Review Comment',
           content: c.content || '',

@@ -28,12 +28,22 @@ interface DiffLine {
 export class DiffViewer {
   private container: HTMLElement;
   private lines: DiffLine[] = [];
+  private pairedLines: { old?: DiffLine; new?: DiffLine }[] = [];
   private currentFile: FileChange | null = null;
   private commentCallback?: (filePath: string, startLine: number, endLine: number, content: string) => void;
   private commentBadgeClickCallback?: (threadIds: number[]) => void;
   private aiCommentClickCallback?: (comment: AIReviewComment) => void;
   private activeCommentBox: HTMLElement | null = null;
   private aiComments: AIReviewComment[] = [];
+
+  // Change navigation cache
+  private changeGroupsCache: HTMLElement[][] = [];
+  private currentChangeGroupIndex = -1;
+  private eventListenersAttached = false;
+
+  // Minimap drag handlers (stored for cleanup)
+  private minimapDragMoveHandler: ((e: MouseEvent) => void) | null = null;
+  private minimapDragUpHandler: (() => void) | null = null;
 
   // Line selection state
   private isSelecting = false;
@@ -48,6 +58,9 @@ export class DiffViewer {
 
   setContainer(container: HTMLElement) {
     this.container = container;
+    this.eventListenersAttached = false;
+    this.changeGroupsCache = [];
+    this.currentChangeGroupIndex = -1;
   }
 
   private initGlobalListeners() {
@@ -339,11 +352,15 @@ export class DiffViewer {
     const newContainer = this.container.querySelector('#diffPaneNew .diff-lines')!;
 
     const paired = this.pairLinesForSplit();
+    this.pairedLines = paired;
 
     for (const pair of paired) {
       oldContainer.appendChild(this.createSplitLineElement(pair.old, 'old'));
       newContainer.appendChild(this.createSplitLineElement(pair.new, 'new'));
     }
+
+    this.wrapInChunks(oldContainer);
+    this.wrapInChunks(newContainer);
 
     // Sync scroll
     const oldPane = this.container.querySelector('#diffPaneOld')!;
@@ -352,6 +369,7 @@ export class DiffViewer {
 
     // Render minimap
     this.renderMinimap(newPane as HTMLElement);
+    this.buildChangeGroupsCache();
   }
 
   private renderUnifiedView(file: FileChange) {
@@ -381,15 +399,19 @@ export class DiffViewer {
       </div>
     `;
 
+    this.pairedLines = [];
     const container = this.container.querySelector('.diff-unified .diff-lines')!;
 
     for (const line of this.lines) {
       container.appendChild(this.createUnifiedLineElement(line));
     }
 
+    this.wrapInChunks(container);
+
     // Render minimap
     const scrollPane = this.container.querySelector('.diff-unified') as HTMLElement;
     this.renderMinimap(scrollPane);
+    this.buildChangeGroupsCache();
   }
 
   private pairLinesForSplit(): { old?: DiffLine; new?: DiffLine }[] {
@@ -473,10 +495,9 @@ export class DiffViewer {
 
     if (lineNum) {
       el.dataset.line = lineNum.toString();
-      el.addEventListener('dblclick', () => this.showCommentBox(lineNum, lineNum, el));
-      // Attach gutter handlers for line selection (only on the new/modified side)
       if (side === 'new') {
-        this.attachGutterHandlers(el, lineNum);
+        const gutter = el.querySelector('.diff-gutter') as HTMLElement;
+        if (gutter) gutter.classList.add('selectable');
       }
     }
 
@@ -508,9 +529,8 @@ export class DiffViewer {
     const lineNum = line.newLineNum || line.oldLineNum;
     if (lineNum) {
       el.dataset.line = lineNum.toString();
-      el.addEventListener('dblclick', () => this.showCommentBox(lineNum, lineNum, el));
-      // Attach gutter handlers for line selection
-      this.attachGutterHandlers(el, lineNum);
+      const gutter = el.querySelector('.diff-gutter') as HTMLElement;
+      if (gutter) gutter.classList.add('selectable');
     }
 
     return el;
@@ -675,20 +695,6 @@ export class DiffViewer {
     }
   }
 
-  private attachGutterHandlers(lineElement: HTMLElement, lineNum: number) {
-    const gutter = lineElement.querySelector('.diff-gutter') as HTMLElement;
-    if (!gutter) return;
-
-    // Mark gutter as selectable
-    gutter.classList.add('selectable');
-
-    gutter.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.startLineSelection(lineNum, lineElement);
-    });
-  }
-
   addCommentMarker(thread: CommentThread) {
     if (!thread.threadContext) return;
 
@@ -786,12 +792,12 @@ export class DiffViewer {
     // Create new AI comment badge with robot icon
     const severityColors: Record<string, string> = {
       critical: '#d13438',
-      warning: '#ffaa44',
-      suggestion: '#0078d4',
-      praise: '#107c10'
+      major: '#ffaa44',
+      minor: '#0078d4',
+      trivial: '#888888'
     };
 
-    const color = severityColors[comment.severity] || severityColors.suggestion;
+    const color = severityColors[comment.severity] || severityColors.minor;
 
     badge = document.createElement('span');
     badge.className = `ai-comment-badge severity-${comment.severity}`;
@@ -833,13 +839,35 @@ export class DiffViewer {
     newLine.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
-  navigateChanges(direction: number): boolean {
-    // Get all diff lines to identify change groups (hunks)
-    const allLines = Array.from(this.container.querySelectorAll('.diff-line'));
-    if (allLines.length === 0) return false;
+  private wrapInChunks(container: Element, chunkSize = 50) {
+    const lines = Array.from(container.children);
+    container.innerHTML = '';
 
-    // Find change groups - consecutive add/del lines form a group
-    const changeGroups: HTMLElement[][] = [];
+    for (let i = 0; i < lines.length; i += chunkSize) {
+      const chunk = document.createElement('div');
+      chunk.className = 'diff-chunk';
+      const end = Math.min(i + chunkSize, lines.length);
+      for (let j = i; j < end; j++) {
+        chunk.appendChild(lines[j]);
+      }
+      container.appendChild(chunk);
+    }
+  }
+
+  private buildChangeGroupsCache() {
+    this.changeGroupsCache = [];
+    this.currentChangeGroupIndex = -1;
+
+    // In split view, lines are in two separate panes — we must iterate
+    // by row index to collect changes in correct visual (line-number) order.
+    const splitView = this.container.querySelector('.diff-split');
+    if (splitView) {
+      this.buildSplitChangeGroupsCache();
+      return;
+    }
+
+    // Unified view: single pane, DOM order matches line order
+    const allLines = this.container.querySelectorAll('.diff-line');
     let currentGroup: HTMLElement[] = [];
 
     for (const line of allLines) {
@@ -847,62 +875,74 @@ export class DiffViewer {
       if (isChange) {
         currentGroup.push(line as HTMLElement);
       } else if (currentGroup.length > 0) {
-        changeGroups.push(currentGroup);
+        this.changeGroupsCache.push(currentGroup);
         currentGroup = [];
       }
     }
-    // Don't forget the last group
     if (currentGroup.length > 0) {
-      changeGroups.push(currentGroup);
+      this.changeGroupsCache.push(currentGroup);
     }
+  }
 
-    if (changeGroups.length === 0) return false;
+  private buildSplitChangeGroupsCache() {
+    const oldLines = this.container.querySelectorAll('#diffPaneOld .diff-line');
+    const newLines = this.container.querySelectorAll('#diffPaneNew .diff-line');
+    const rowCount = Math.max(oldLines.length, newLines.length);
 
-    // Find which group is currently highlighted
-    const currentHighlighted = this.container.querySelector('.diff-line.change-highlight');
-    let currentGroupIndex = -1;
+    let currentGroup: HTMLElement[] = [];
 
-    if (currentHighlighted) {
-      for (let i = 0; i < changeGroups.length; i++) {
-        if (changeGroups[i].includes(currentHighlighted as HTMLElement)) {
-          currentGroupIndex = i;
-          break;
-        }
+    for (let i = 0; i < rowCount; i++) {
+      const oldLine = oldLines[i] as HTMLElement | undefined;
+      const newLine = newLines[i] as HTMLElement | undefined;
+      const isOldChange = oldLine?.classList.contains('del') ?? false;
+      const isNewChange = newLine?.classList.contains('add') ?? false;
+
+      if (isOldChange || isNewChange) {
+        if (oldLine && isOldChange) currentGroup.push(oldLine);
+        if (newLine && isNewChange) currentGroup.push(newLine);
+      } else if (currentGroup.length > 0) {
+        this.changeGroupsCache.push(currentGroup);
+        currentGroup = [];
       }
     }
-
-    // Calculate new group index
-    if (currentGroupIndex === -1) {
-      currentGroupIndex = direction > 0 ? -1 : changeGroups.length;
+    if (currentGroup.length > 0) {
+      this.changeGroupsCache.push(currentGroup);
     }
+  }
 
-    const newGroupIndex = currentGroupIndex + direction;
+  navigateChanges(direction: number): boolean {
+    if (this.changeGroupsCache.length === 0) return false;
 
-    // Return false if we've reached the end
-    if (newGroupIndex < 0 || newGroupIndex >= changeGroups.length) {
+    const newIndex = this.currentChangeGroupIndex + direction;
+    if (newIndex < 0 || newIndex >= this.changeGroupsCache.length) {
       return false;
     }
 
-    // Remove all previous highlights
-    this.container.querySelectorAll('.diff-line.change-highlight').forEach(el => {
-      el.classList.remove('change-highlight');
-    });
+    // Remove previous highlights
+    if (this.currentChangeGroupIndex >= 0 && this.currentChangeGroupIndex < this.changeGroupsCache.length) {
+      for (const line of this.changeGroupsCache[this.currentChangeGroupIndex]) {
+        line.classList.remove('change-highlight');
+      }
+    }
 
-    // Highlight all lines in the new group
-    const newGroup = changeGroups[newGroupIndex];
+    // Apply new highlights
+    this.currentChangeGroupIndex = newIndex;
+    const newGroup = this.changeGroupsCache[newIndex];
     for (const line of newGroup) {
       line.classList.add('change-highlight');
     }
 
-    // Scroll to the first line of the group
     newGroup[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
     return true;
   }
 
   clearChangeHighlight() {
-    this.container.querySelectorAll('.diff-line.change-highlight').forEach(el => {
-      el.classList.remove('change-highlight');
-    });
+    if (this.currentChangeGroupIndex >= 0 && this.currentChangeGroupIndex < this.changeGroupsCache.length) {
+      for (const line of this.changeGroupsCache[this.currentChangeGroupIndex]) {
+        line.classList.remove('change-highlight');
+      }
+    }
+    this.currentChangeGroupIndex = -1;
   }
 
   hasChanges(): boolean {
@@ -910,27 +950,10 @@ export class DiffViewer {
   }
 
   getChangeStats(): { current: number; total: number } {
-    // Count change groups instead of individual lines
-    const allLines = Array.from(this.container.querySelectorAll('.diff-line'));
-    let groupCount = 0;
-    let inGroup = false;
-    let currentGroupIndex = 0;
-    const currentHighlighted = this.container.querySelector('.diff-line.change-highlight');
-
-    for (const line of allLines) {
-      const isChange = line.classList.contains('add') || line.classList.contains('del');
-      if (isChange && !inGroup) {
-        groupCount++;
-        inGroup = true;
-        if (line === currentHighlighted || line.classList.contains('change-highlight')) {
-          currentGroupIndex = groupCount;
-        }
-      } else if (!isChange) {
-        inGroup = false;
-      }
-    }
-
-    return { current: currentGroupIndex, total: groupCount };
+    return {
+      current: this.currentChangeGroupIndex >= 0 ? this.currentChangeGroupIndex + 1 : 0,
+      total: this.changeGroupsCache.length
+    };
   }
 
   private renderBinaryOrEmpty(file: FileChange) {
@@ -1008,17 +1031,19 @@ export class DiffViewer {
   }
 
   private syncScroll(el1: Element, el2: Element) {
-    let syncing = false;
+    let activeSource: Element | null = null;
 
     const sync = (source: Element, target: Element) => {
-      if (syncing) return;
-      syncing = true;
+      if (activeSource && activeSource !== source) return;
+      activeSource = source;
       target.scrollTop = source.scrollTop;
-      syncing = false;
+      requestAnimationFrame(() => {
+        activeSource = null;
+      });
     };
 
-    el1.addEventListener('scroll', () => sync(el1, el2));
-    el2.addEventListener('scroll', () => sync(el2, el1));
+    el1.addEventListener('scroll', () => sync(el1, el2), { passive: true });
+    el2.addEventListener('scroll', () => sync(el2, el1), { passive: true });
   }
 
   private highlightSyntax(filePath: string) {
@@ -1070,19 +1095,46 @@ export class DiffViewer {
   }
 
   private attachEventListeners() {
-    this.container.querySelectorAll('.diff-comment-badge').forEach(badge => {
-      badge.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const reviewScreen = document.getElementById('reviewScreen');
-        reviewScreen?.classList.add('comments-open');
+    if (this.eventListenersAttached) return;
+    this.eventListenersAttached = true;
 
-        // Get thread IDs and notify callback
-        const threadIdsStr = (badge as HTMLElement).dataset.threadIds;
-        if (threadIdsStr && this.commentBadgeClickCallback) {
-          const threadIds = threadIdsStr.split(',').map(id => parseInt(id)).filter(id => !isNaN(id));
-          this.commentBadgeClickCallback(threadIds);
-        }
-      });
+    // Delegated: dblclick on any diff line opens comment box
+    this.container.addEventListener('dblclick', (e) => {
+      const lineEl = (e.target as HTMLElement).closest('.diff-line[data-line]') as HTMLElement | null;
+      if (!lineEl) return;
+      const lineNum = parseInt(lineEl.dataset.line || '0');
+      if (lineNum > 0) {
+        this.showCommentBox(lineNum, lineNum, lineEl);
+      }
+    });
+
+    // Delegated: mousedown on selectable gutter starts line selection
+    this.container.addEventListener('mousedown', (e) => {
+      const gutter = (e.target as HTMLElement).closest('.diff-gutter.selectable') as HTMLElement | null;
+      if (!gutter) return;
+      const lineEl = gutter.closest('.diff-line[data-line]') as HTMLElement | null;
+      if (!lineEl) return;
+      const lineNum = parseInt(lineEl.dataset.line || '0');
+      if (lineNum > 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.startLineSelection(lineNum, lineEl);
+      }
+    });
+
+    // Delegated: click on comment badge
+    this.container.addEventListener('click', (e) => {
+      const badge = (e.target as HTMLElement).closest('.diff-comment-badge') as HTMLElement | null;
+      if (!badge) return;
+      e.stopPropagation();
+      const reviewScreen = document.getElementById('reviewScreen');
+      reviewScreen?.classList.add('comments-open');
+
+      const threadIdsStr = badge.dataset.threadIds;
+      if (threadIdsStr && this.commentBadgeClickCallback) {
+        const threadIds = threadIdsStr.split(',').map(id => parseInt(id)).filter(id => !isNaN(id));
+        this.commentBadgeClickCallback(threadIds);
+      }
     });
   }
 
@@ -1093,50 +1145,126 @@ export class DiffViewer {
 
     if (!minimap || !minimapContent || !viewport) return;
 
-    // Build minimap markers
-    const totalLines = this.lines.length;
-    if (totalLines === 0) {
-      minimap.style.display = 'none';
-      return;
-    }
+    const isSplitView = this.pairedLines.length > 0;
 
-    // Create markers for changes and comments (consolidate consecutive changes)
+    // Build minimap markers
     let markersHtml = '';
     let currentGroup: { type: 'add' | 'del'; startIndex: number; endIndex: number } | null = null;
 
-    const flushGroup = () => {
-      if (currentGroup) {
-        const startPos = (currentGroup.startIndex / totalLines) * 100;
-        const endPos = ((currentGroup.endIndex + 1) / totalLines) * 100;
-        const height = Math.max(endPos - startPos, 0.5); // Min height for visibility
-        markersHtml += `<div class="minimap-marker ${currentGroup.type}" style="top: ${startPos}%; height: ${height}%" data-index="${currentGroup.startIndex}"></div>`;
-        currentGroup = null;
+    if (isSplitView) {
+      // Split view: use paired lines for correct visual positioning
+      const totalPairs = this.pairedLines.length;
+      if (totalPairs === 0) {
+        minimap.style.display = 'none';
+        return;
       }
-    };
 
-    this.lines.forEach((line, index) => {
-      // Handle change groups
-      if (line.type === 'add' || line.type === 'del') {
-        if (currentGroup && currentGroup.type === line.type) {
-          currentGroup.endIndex = index;
+      const flushGroup = () => {
+        if (currentGroup) {
+          const startPos = (currentGroup.startIndex / totalPairs) * 100;
+          const endPos = ((currentGroup.endIndex + 1) / totalPairs) * 100;
+          const height = Math.max(endPos - startPos, 0.5);
+          markersHtml += `<div class="minimap-marker ${currentGroup.type}" style="top: ${startPos}%; height: ${height}%" data-visual-index="${currentGroup.startIndex}"></div>`;
+          currentGroup = null;
+        }
+      };
+
+      this.pairedLines.forEach((pair, pairIndex) => {
+        // Determine change type from both sides
+        const oldType = pair.old?.type;
+        const newType = pair.new?.type;
+        let changeType: 'add' | 'del' | null = null;
+
+        if (oldType === 'del' && newType === 'add') {
+          changeType = 'add'; // modification — show as add
+        } else if (newType === 'add') {
+          changeType = 'add';
+        } else if (oldType === 'del') {
+          changeType = 'del';
+        }
+
+        if (changeType) {
+          if (currentGroup && currentGroup.type === changeType) {
+            currentGroup.endIndex = pairIndex;
+          } else {
+            flushGroup();
+            currentGroup = { type: changeType, startIndex: pairIndex, endIndex: pairIndex };
+          }
         } else {
           flushGroup();
-          currentGroup = { type: line.type, startIndex: index, endIndex: index };
         }
-      } else {
-        flushGroup();
+
+        // Comments from both sides
+        const threads = [
+          ...(pair.old?.threads || []),
+          ...(pair.new?.threads || []),
+        ];
+        // Deduplicate threads that appear on both sides (context lines share the same object)
+        const uniqueThreads = pair.old === pair.new ? (pair.old?.threads || []) : threads;
+        if (uniqueThreads.length > 0) {
+          const position = (pairIndex / totalPairs) * 100;
+          markersHtml += `<div class="minimap-marker comment" style="top: ${position}%" data-visual-index="${pairIndex}" title="${uniqueThreads.length} comment(s)"></div>`;
+        }
+      });
+
+      flushGroup();
+    } else {
+      // Unified view: use this.lines
+      const totalLines = this.lines.length;
+      if (totalLines === 0) {
+        minimap.style.display = 'none';
+        return;
       }
 
-      // Comments are always shown individually
-      if (line.threads && line.threads.length > 0) {
-        const position = (index / totalLines) * 100;
-        markersHtml += `<div class="minimap-marker comment" style="top: ${position}%" data-index="${index}" title="${line.threads.length} comment(s)"></div>`;
-      }
-    });
+      const flushGroup = () => {
+        if (currentGroup) {
+          const startPos = (currentGroup.startIndex / totalLines) * 100;
+          const endPos = ((currentGroup.endIndex + 1) / totalLines) * 100;
+          const height = Math.max(endPos - startPos, 0.5);
+          markersHtml += `<div class="minimap-marker ${currentGroup.type}" style="top: ${startPos}%; height: ${height}%" data-visual-index="${currentGroup.startIndex}"></div>`;
+          currentGroup = null;
+        }
+      };
 
-    flushGroup(); // Don't forget the last group
+      this.lines.forEach((line, index) => {
+        if (line.type === 'add' || line.type === 'del') {
+          if (currentGroup && currentGroup.type === line.type) {
+            currentGroup.endIndex = index;
+          } else {
+            flushGroup();
+            currentGroup = { type: line.type, startIndex: index, endIndex: index };
+          }
+        } else {
+          flushGroup();
+        }
+
+        if (line.threads && line.threads.length > 0) {
+          const position = (index / totalLines) * 100;
+          markersHtml += `<div class="minimap-marker comment" style="top: ${position}%" data-visual-index="${index}" title="${line.threads.length} comment(s)"></div>`;
+        }
+      });
+
+      flushGroup();
+    }
 
     minimapContent.innerHTML = markersHtml;
+
+    // Align minimap-content to the scroll pane. In split view the pane header
+    // sits above the scroll area, making the minimap taller than the scroll pane.
+    // Offset minimap-content so marker/viewport percentages map to the scroll area.
+    const minimapRect = minimap.getBoundingClientRect();
+    const paneRect = scrollPane.getBoundingClientRect();
+    const topOffsetPx = paneRect.top - minimapRect.top;
+    minimapContent.style.top = `${topOffsetPx}px`;
+    minimapContent.style.bottom = '0px';
+
+    // Move viewport inside minimap-content so its CSS percentages are relative
+    // to the aligned area (scroll pane height, not full minimap height).
+    minimapContent.appendChild(viewport);
+
+    const LINE_HEIGHT = 22;
+    const totalVisualLines = isSplitView ? this.pairedLines.length : this.lines.length;
+    const expectedHeight = totalVisualLines * LINE_HEIGHT;
 
     // Update viewport indicator on scroll
     const updateViewport = () => {
@@ -1150,53 +1278,67 @@ export class DiffViewer {
       }
 
       viewport.style.display = 'block';
-      const viewportHeight = (clientHeight / scrollHeight) * 100;
-      const viewportTop = (scrollTop / scrollHeight) * 100;
 
-      viewport.style.height = `${Math.max(viewportHeight, 10)}%`;
-      viewport.style.top = `${viewportTop}%`;
+      const displayedHeight = Math.max((clientHeight / expectedHeight) * 100, 2);
+      const topPct = (scrollTop / expectedHeight) * 100;
+      viewport.style.height = `${displayedHeight}%`;
+      viewport.style.top = `${Math.min(topPct, 100 - displayedHeight)}%`;
     };
 
-    scrollPane.addEventListener('scroll', updateViewport);
+    let rafPending = false;
+    scrollPane.addEventListener('scroll', () => {
+      if (!rafPending) {
+        rafPending = true;
+        requestAnimationFrame(() => {
+          updateViewport();
+          rafPending = false;
+        });
+      }
+    }, { passive: true });
 
     // Initial viewport update
     setTimeout(updateViewport, 50);
 
-    // Click to navigate
-    minimap.addEventListener('click', (e) => {
-      const rect = minimap.getBoundingClientRect();
-      const clickY = e.clientY - rect.top;
-      const percentage = clickY / rect.height;
-
+    // Scroll so that a given line-space position is centered in the viewport.
+    // Pure math — no DOM queries, O(1) for any file size.
+    const scrollToLinePosition = (linePct: number) => {
+      const targetInExpected = linePct * expectedHeight;
       const scrollHeight = scrollPane.scrollHeight;
       const clientHeight = scrollPane.clientHeight;
-      const targetScroll = percentage * (scrollHeight - clientHeight);
-
+      // Map from line-space to scroll-space
+      const targetScroll = (targetInExpected / expectedHeight) * scrollHeight - clientHeight / 2;
+      const maxScroll = scrollHeight - clientHeight;
       scrollPane.scrollTo({
-        top: targetScroll,
+        top: Math.max(0, Math.min(targetScroll, maxScroll)),
         behavior: 'smooth'
       });
+    };
+
+    // Click on background to navigate — center viewport on clicked position
+    minimap.addEventListener('click', (e) => {
+      const rect = minimapContent.getBoundingClientRect();
+      const clickY = e.clientY - rect.top;
+      const percentage = Math.max(0, Math.min(clickY / rect.height, 1));
+      scrollToLinePosition(percentage);
     });
 
-    // Click on marker to scroll to that position
+    // Click on marker to scroll directly to that change
     minimapContent.querySelectorAll('.minimap-marker').forEach(marker => {
       marker.addEventListener('click', (e) => {
         e.stopPropagation();
-        const index = parseInt((marker as HTMLElement).dataset.index || '0');
-        const percentage = index / totalLines;
-
-        const scrollHeight = scrollPane.scrollHeight;
-        const clientHeight = scrollPane.clientHeight;
-        const targetScroll = percentage * (scrollHeight - clientHeight);
-
-        scrollPane.scrollTo({
-          top: targetScroll,
-          behavior: 'smooth'
-        });
+        const visualIndex = parseInt((marker as HTMLElement).dataset.visualIndex || '0');
+        scrollToLinePosition(visualIndex / totalVisualLines);
       });
     });
 
-    // Drag viewport to scroll
+    // Drag viewport to scroll - clean up previous document listeners
+    if (this.minimapDragMoveHandler) {
+      document.removeEventListener('mousemove', this.minimapDragMoveHandler);
+    }
+    if (this.minimapDragUpHandler) {
+      document.removeEventListener('mouseup', this.minimapDragUpHandler);
+    }
+
     let isDragging = false;
     let dragStartY = 0;
     let dragStartScroll = 0;
@@ -1208,21 +1350,22 @@ export class DiffViewer {
       e.preventDefault();
     });
 
-    document.addEventListener('mousemove', (e) => {
+    this.minimapDragMoveHandler = (e: MouseEvent) => {
       if (!isDragging) return;
 
-      const rect = minimap.getBoundingClientRect();
+      const rect = minimapContent.getBoundingClientRect();
       const deltaY = e.clientY - dragStartY;
-      const scrollHeight = scrollPane.scrollHeight;
-      const clientHeight = scrollPane.clientHeight;
 
-      const scrollDelta = (deltaY / rect.height) * scrollHeight;
+      const scrollDelta = (deltaY / rect.height) * expectedHeight;
       scrollPane.scrollTop = dragStartScroll + scrollDelta;
-    });
+    };
 
-    document.addEventListener('mouseup', () => {
+    this.minimapDragUpHandler = () => {
       isDragging = false;
-    });
+    };
+
+    document.addEventListener('mousemove', this.minimapDragMoveHandler);
+    document.addEventListener('mouseup', this.minimapDragUpHandler);
   }
 
 }

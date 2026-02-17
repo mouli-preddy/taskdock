@@ -1,0 +1,21 @@
+{
+  "id": "pr-build-watcher",
+  "name": "PR Build Watcher",
+  "version": "1.0.0",
+  "description": "Watch PR builds and trigger AI review when complete",
+  "config": {
+    "adoOrg": { "type": "string", "label": "ADO Organization", "required": true },
+    "adoProject": { "type": "string", "label": "ADO Project", "required": true },
+    "pat": { "type": "string", "label": "Personal Access Token", "secret": true }
+  },
+  "triggers": [
+    { "type": "manual", "id": "buildAndReview", "workflow": "workflows/build-and-review.ts", "label": "Build & Review" }
+  ],
+  "hooks": {
+    "pr-review": {
+      "toolbar": [
+        { "label": "Build & Review", "icon": "play", "trigger": "buildAndReview", "position": "right" }
+      ]
+    }
+  }
+}

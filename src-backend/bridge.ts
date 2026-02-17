@@ -26,6 +26,7 @@ import { getFixTrackerService } from '../src/main/ai/fix-tracker-service.js';
 import { getCommentAnalysisService } from '../src/main/ai/comment-analysis-service.js';
 import { initializeLogger, getLogger, disposeLogger } from '../src/main/services/logger-service.js';
 import { getWorktreeService, WorktreeService } from '../src/main/git/worktree-service.js';
+import { getPluginEngine, disposePluginEngine } from '../src/main/plugins/plugin-engine.js';
 import { buildReviewPrompt } from '../src/main/terminal/review-prompt.js';
 import type { ConsoleReviewSettings } from '../src/shared/terminal-types.js';
 import { DEFAULT_CONSOLE_REVIEW_SETTINGS } from '../src/shared/terminal-types.js';
@@ -151,8 +152,17 @@ const walkthroughService = getWalkthroughService();
 const reviewContextService = getReviewContextService();
 const applyChangesService = getApplyChangesService();
 
+// Initialize plugin engine
+const pluginEngine = getPluginEngine();
+pluginEngine.initialize();
+
 // Set up event forwarding
-aiService.onProgress((event) => broadcast('ai:progress', event));
+aiService.onProgress((event) => {
+  broadcast('ai:progress', event);
+  if (event.status === 'complete') {
+    pluginEngine.emitAppEvent('review:completed', { sessionId: event.sessionId });
+  }
+});
 aiService.onComment((event) => broadcast('ai:comment', event));
 aiService.onWalkthrough((event) => broadcast('ai:walkthrough', event));
 aiService.onError((event) => broadcast('ai:error', event));
@@ -161,9 +171,15 @@ walkthroughService.onProgress((event) => broadcast('walkthrough:progress', event
 walkthroughService.onComplete((event) => broadcast('walkthrough:complete', event));
 walkthroughService.onError((event) => broadcast('walkthrough:error', event));
 
-terminalManager.on('session-created', (event) => broadcast('terminal:session-created', event));
+terminalManager.on('session-created', (event) => {
+  broadcast('terminal:session-created', event);
+  pluginEngine.emitAppEvent('terminal:created', { sessionId: event?.sessionId ?? event?.id });
+});
 terminalManager.on('data', (event) => broadcast('terminal:data', event));
-terminalManager.on('exit', (event) => broadcast('terminal:exit', event));
+terminalManager.on('exit', (event) => {
+  broadcast('terminal:exit', event);
+  pluginEngine.emitAppEvent('terminal:exited', { sessionId: event?.sessionId ?? event?.id, exitCode: event?.exitCode });
+});
 terminalManager.on('status-change', (event) => broadcast('terminal:status-change', event));
 terminalManager.on('review-complete', (event) => broadcast('terminal:review-complete', event));
 
@@ -177,6 +193,38 @@ applyChangesService.onProgress((event) => broadcast('apply-changes:progress', ev
 
 const commentAnalysisService = getCommentAnalysisService();
 commentAnalysisService.onProgress((event) => broadcast('comment-analysis:progress', event));
+
+// Plugin engine events
+pluginEngine.on('ui:update', (event) => broadcast('plugin:ui-update', event));
+pluginEngine.on('ui:inject', (event) => broadcast('plugin:ui-inject', event));
+pluginEngine.on('ui:toast', (event) => broadcast('plugin:ui-toast', event));
+pluginEngine.on('plugin:log', (event) => broadcast('plugin:log', event));
+pluginEngine.on('execution:complete', (event) => broadcast('plugin:execution-complete', event));
+pluginEngine.on('plugin:reloaded', (event) => broadcast('plugin:reloaded', event));
+pluginEngine.on('plugins:reloaded', () => broadcast('plugin:plugins-reloaded', {}));
+pluginEngine.on('plugin:state-changed', (event) => broadcast('plugin:state-changed', event));
+pluginEngine.on('ui:navigate', (event) => broadcast('plugin:ui-navigate', event));
+
+// Handle plugin AI terminal launch requests
+pluginEngine.on('ai:launch-terminal', (event) => {
+  const { pluginId, ai, prompt, show, callback } = event;
+  try {
+    const contextPath = path.join(os.homedir(), '.taskdock', 'plugins', '_runtime', `terminal-${Date.now()}`);
+    fs.mkdirSync(contextPath, { recursive: true });
+    const sessionId = chatTerminalService.createSession({
+      ai,
+      workingDir: process.cwd(),
+      contextPath,
+      initialPrompt: prompt,
+    });
+    if (show) {
+      broadcast('plugin:ui-navigate', { pluginId, section: 'terminals' });
+    }
+    callback(sessionId);
+  } catch (err: any) {
+    callback('', err.message);
+  }
+});
 
 // Warm up provider cache asynchronously at startup
 // This runs in the background so dialogs open instantly
@@ -193,8 +241,11 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
     // ADO API
     case 'ado:get-token':
       return adoClient.getToken();
-    case 'ado:load-pr':
-      return adoClient.getPullRequest(params[0], params[1], params[2]);
+    case 'ado:load-pr': {
+      const result = await adoClient.getPullRequest(params[0], params[1], params[2]);
+      pluginEngine.emitAppEvent('pr:opened', { pr: result });
+      return result;
+    }
     case 'ado:get-iterations':
       return adoClient.getIterations(params[0], params[1], params[2], params[3]);
     case 'ado:get-changes':
@@ -208,14 +259,26 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       return adoClient.getFileContent(params[0], params[1], params[2], params[3]);
     case 'ado:get-file-from-branch':
       return adoClient.getFileFromBranch(params[0], params[1], params[2], params[3], params[4]);
-    case 'ado:create-comment':
-      return adoClient.createFileComment(params[0], params[1], params[2], params[3], params[4], params[5], params[6], params[7]);
-    case 'ado:reply-to-thread':
-      return adoClient.replyToThread(params[0], params[1], params[2], params[3], params[4], params[5]);
-    case 'ado:update-thread-status':
-      return adoClient.updateThreadStatus(params[0], params[1], params[2], params[3], params[4], params[5]);
-    case 'ado:submit-vote':
-      return adoClient.submitVote(params[0], params[1], params[2], params[3], params[4]);
+    case 'ado:create-comment': {
+      const result = await adoClient.createFileComment(params[0], params[1], params[2], params[3], params[4], params[5], params[6], params[7]);
+      pluginEngine.emitAppEvent('pr:comment-created', { pr: { org: params[0], project: params[1], prId: params[2] }, threadId: result?.id, filePath: params[4], comment: result });
+      return result;
+    }
+    case 'ado:reply-to-thread': {
+      const result = await adoClient.replyToThread(params[0], params[1], params[2], params[3], params[4], params[5]);
+      pluginEngine.emitAppEvent('pr:comment-replied', { pr: { org: params[0], project: params[1], prId: params[3] }, threadId: params[4], comment: result });
+      return result;
+    }
+    case 'ado:update-thread-status': {
+      const result = await adoClient.updateThreadStatus(params[0], params[1], params[2], params[3], params[4], params[5]);
+      pluginEngine.emitAppEvent('pr:thread-status-changed', { pr: { org: params[0], project: params[1], prId: params[3] }, threadId: params[4], status: params[5] });
+      return result;
+    }
+    case 'ado:submit-vote': {
+      const result = await adoClient.submitVote(params[0], params[1], params[2], params[3], params[4]);
+      pluginEngine.emitAppEvent('pr:vote-submitted', { pr: { org: params[0], project: params[1], prId: params[3] }, vote: params[4] });
+      return result;
+    }
     case 'ado:get-my-prs':
       return adoClient.getPullRequestsForReviewer(params[0], params[1]);
     case 'ado:get-created-prs':
@@ -230,8 +293,11 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       return adoClient.runQueryById(params[0], params[1], params[2]);
     case 'wi:get-items':
       return adoClient.getWorkItems(params[0], params[1], params[2]);
-    case 'wi:get-item':
-      return adoClient.getWorkItem(params[0], params[1], params[2]);
+    case 'wi:get-item': {
+      const result = await adoClient.getWorkItem(params[0], params[1], params[2]);
+      pluginEngine.emitAppEvent('workitem:opened', { workItem: result });
+      return result;
+    }
     case 'wi:get-my-items':
       return adoClient.getMyWorkItems(params[0], params[1]);
     case 'wi:get-created-by-me':
@@ -269,12 +335,18 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       saveStoreData(storeData);
       return;
     }
-    case 'wi:update':
-      return adoClient.updateWorkItem(params[0], params[1], params[2], params[3]);
+    case 'wi:update': {
+      const result = await adoClient.updateWorkItem(params[0], params[1], params[2], params[3]);
+      pluginEngine.emitAppEvent('workitem:updated', { workItem: { org: params[0], project: params[1], id: params[2] }, changes: params[3] });
+      return result;
+    }
     case 'wi:get-comments':
       return adoClient.getWorkItemComments(params[0], params[1], params[2]);
-    case 'wi:add-comment':
-      return adoClient.addWorkItemComment(params[0], params[1], params[2], params[3]);
+    case 'wi:add-comment': {
+      const result = await adoClient.addWorkItemComment(params[0], params[1], params[2], params[3]);
+      pluginEngine.emitAppEvent('workitem:comment-added', { workItem: { org: params[0], project: params[1], id: params[2] }, comment: result });
+      return result;
+    }
     case 'wi:get-team-members':
       return adoClient.getTeamMembers(params[0], params[1]);
     case 'wi:get-type-states':
@@ -331,6 +403,7 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
         params[2], params[3], params[4], params[5], settings, contentsMap as any, prContextKey
       );
       sessionContextMap.set(sessionId, { organization: params[0], project: params[1], prId: params[2].prId });
+      pluginEngine.emitAppEvent('review:started', { sessionId });
       return sessionId;
     }
     case 'ai:cancel-review':
@@ -575,20 +648,17 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
     // PR Context (backend-side file fetching - no large payload over IPC)
     case 'context:ensure-pr-context': {
       const settings = loadStoreData().consoleReview;
-      // params: [prContext, files, threads, lastCommitId, targetBranch, repoId]
+      // params: [prContext, files, threads, lastCommitId, repoId]
       const prContext = params[0];
       const files = params[1];
       const threads = params[2];
       const lastCommitId = params[3];
-      const targetBranch = params[4];
-      const repoId = params[5];
+      const repoId = params[4];
 
-      // Create fetcher that uses ADO client
+      // Create fetcher that uses ADO client (blob API only)
       const fetcher = {
         getFileContent: (objectId: string) =>
           adoClient.getFileContent(prContext.org, prContext.project, repoId, objectId),
-        getFileFromBranch: (filePath: string, branch: string) =>
-          adoClient.getFileFromBranch(prContext.org, prContext.project, repoId, filePath, branch),
       };
 
       const result = await reviewContextService.ensurePRContextWithFetch(
@@ -597,7 +667,6 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
         threads,
         { linkedRepositories: settings?.linkedRepositories || [], whenRepoFound: 'tempOnly' },
         lastCommitId,
-        targetBranch,
         repoId,
         fetcher
       );
@@ -731,6 +800,22 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       return commentAnalysisService.reanalyzeComment(thread, context, provider, fileContents, showTerminal ?? false);
     }
 
+    // Plugin Engine API
+    case 'plugin:get-plugins':
+      return pluginEngine.getPlugins();
+    case 'plugin:get-plugin':
+      return pluginEngine.getPlugin(params[0]);
+    case 'plugin:execute-trigger':
+      return pluginEngine.executeTrigger(params[0], params[1], params[2]);
+    case 'plugin:set-enabled':
+      pluginEngine.setPluginEnabled(params[0], params[1]);
+      return;
+    case 'plugin:save-config':
+      pluginEngine.savePluginConfig(params[0], params[1]);
+      return;
+    case 'plugin:get-logs':
+      return pluginEngine.getExecutionLogs(params[0]);
+
     default:
       throw new Error(`Unknown method: ${method}`);
   }
@@ -792,6 +877,7 @@ process.on('SIGINT', async () => {
   await disposeAIReviewService();
   await disposeWalkthroughService();
   disposeApplyChangesService();
+  disposePluginEngine();
   disposeLogger();
   wss.close();
   process.exit(0);
@@ -804,6 +890,7 @@ process.on('SIGTERM', async () => {
   await disposeAIReviewService();
   await disposeWalkthroughService();
   disposeApplyChangesService();
+  disposePluginEngine();
   disposeLogger();
   wss.close();
   process.exit(0);

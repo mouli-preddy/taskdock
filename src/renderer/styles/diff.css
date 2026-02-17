@@ -112,6 +112,8 @@
   flex: 1;
   overflow: auto;
   min-height: 0;
+  will-change: scroll-position;
+  overflow-anchor: none;
 }
 
 /* Unified View */
@@ -119,6 +121,8 @@
   flex: 1;
   overflow: auto;
   min-height: 0;
+  will-change: scroll-position;
+  overflow-anchor: none;
 }
 
 /* Diff Lines Container */
@@ -126,6 +130,14 @@
   font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.4;
+  width: fit-content;
+  min-width: 100%;
+}
+
+/* Line Chunks (content-visibility applied to groups, not individual lines) */
+.diff-chunk {
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto 1100px; /* 50 lines * 22px line-height */
 }
 
 /* Individual Line */
@@ -133,10 +145,13 @@
   display: flex;
   height: 22px;
   flex-shrink: 0;
+  contain: layout style;
 }
 
-.diff-line:hover {
-  background: var(--bg-hover);
+@media (hover: hover) {
+  .diff-line:hover {
+    background: var(--bg-hover);
+  }
 }
 
 /* Gutter */
@@ -174,10 +189,10 @@
 
 /* Line Content */
 .diff-content {
-  flex: 1;
+  flex: 1 0 auto;
   padding: 0 16px 0 8px;
   white-space: pre;
-  overflow-x: auto;
+  overflow: hidden;
   height: 22px;
   line-height: 22px;
   display: flex;
@@ -501,11 +516,9 @@
 @keyframes line-highlight {
   0%, 30% {
     background: var(--info-bg);
-    box-shadow: inset 4px 0 0 var(--accent-blue);
   }
   100% {
     background: transparent;
-    box-shadow: none;
   }
 }
 
@@ -558,7 +571,6 @@
 
 .minimap-marker:hover {
   opacity: 1 !important;
-  filter: brightness(1.2);
 }
 
 .minimap-marker.add {

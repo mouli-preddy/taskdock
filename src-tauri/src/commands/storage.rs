@@ -70,6 +70,16 @@ pub struct PollingSettings {
     pub interval_seconds: u32,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct NotificationSettings {
+    pub enabled: bool,
+    pub ai_review_complete: bool,
+    pub ai_analysis_complete: bool,
+    pub new_comments: bool,
+    pub new_iterations: bool,
+}
+
 fn get_config_dir() -> Result<PathBuf, String> {
     let home = dirs::home_dir().ok_or("Cannot find home directory")?;
     Ok(home.join(".taskdock"))
@@ -178,6 +188,13 @@ fn load_store_data() -> Result<Value, String> {
             "polling": {
                 "enabled": true,
                 "intervalSeconds": 30
+            },
+            "notifications": {
+                "enabled": true,
+                "aiReviewComplete": true,
+                "aiAnalysisComplete": true,
+                "newComments": true,
+                "newIterations": true
             },
             "workItems": {
                 "savedQueries": [],
@@ -289,6 +306,28 @@ pub fn set_polling_settings(settings: PollingSettings) -> Result<(), String> {
     let settings_value = serde_json::to_value(settings)
         .map_err(|e| format!("Failed to serialize settings: {}", e))?;
     set_nested_value(&mut data, "polling", settings_value)?;
+    save_store_data(&data)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_notification_settings() -> Result<NotificationSettings, String> {
+    let data = load_store_data()?;
+    let settings_value = get_nested_value(&data, "notifications")
+        .ok_or("Notification settings not found")?;
+
+    let settings: NotificationSettings = serde_json::from_value(settings_value)
+        .map_err(|e| format!("Failed to parse notification settings: {}", e))?;
+
+    Ok(settings)
+}
+
+#[tauri::command]
+pub fn set_notification_settings(settings: NotificationSettings) -> Result<(), String> {
+    let mut data = load_store_data()?;
+    let settings_value = serde_json::to_value(settings)
+        .map_err(|e| format!("Failed to serialize settings: {}", e))?;
+    set_nested_value(&mut data, "notifications", settings_value)?;
     save_store_data(&data)?;
     Ok(())
 }

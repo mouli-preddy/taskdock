@@ -219,8 +219,8 @@ export interface ElectronAPI {
         filePath: string;
         startLine: number;
         endLine: number;
-        severity: 'critical' | 'warning' | 'suggestion' | 'praise';
-        category: 'security' | 'bug' | 'performance' | 'style' | 'logic' | 'testing';
+        severity: 'critical' | 'major' | 'minor' | 'trivial';
+        category: 'security' | 'bug' | 'performance' | 'style' | 'logic' | 'compliance' | 'recommendation' | 'nitpick' | 'other';
         title: string;
         content: string;
         suggestedFix?: string;
@@ -322,8 +322,12 @@ export interface ElectronAPI {
   applyChangesRetry: (prId: number, itemId: string) => Promise<void>;
   applyChangesSkip: (prId: number, itemId: string) => Promise<void>;
   applyChangesClearCompleted: (prId: number) => Promise<void>;
-  applyChangesCanApply: (prId: number) => Promise<{ canApply: boolean }>;
+  applyChangesCanApply: (prId: number) => Promise<{ canApply: boolean; reason?: string }>;
   onApplyChangesProgress: (callback: (event: any) => void) => () => void;
+
+  // Fix Tracker API
+  fixTrackerLoad: (prId: number, org: string, project: string) => Promise<any>;
+  fixTrackerMarkFixed: (prId: number, org: string, project: string, fix: any) => Promise<void>;
 
   // Polling settings
   getPollingSettings: () => Promise<{
@@ -335,13 +339,28 @@ export interface ElectronAPI {
     intervalSeconds: number;
   }) => Promise<void>;
 
+  // Notification settings
+  getNotificationSettings: () => Promise<{
+    enabled: boolean;
+    aiReviewComplete: boolean;
+    aiAnalysisComplete: boolean;
+    newComments: boolean;
+    newIterations: boolean;
+  }>;
+  setNotificationSettings: (settings: {
+    enabled: boolean;
+    aiReviewComplete: boolean;
+    aiAnalysisComplete: boolean;
+    newComments: boolean;
+    newIterations: boolean;
+  }) => Promise<void>;
+
   // PR file cache API
   ensurePRContext: (
     prContext: any,
     files: any[],
     threads: any[],
     lastCommitId: string,
-    targetBranch: string,
     repoId: string
   ) => Promise<any>;
   getCachedFileContent: (
@@ -375,6 +394,25 @@ export interface ElectronAPI {
     showTerminal?: boolean
   ) => Promise<any>;
   onCommentAnalysisProgress: (callback: (event: { prId: number; status: string }) => void) => () => void;
+
+  // Plugin API
+  pluginGetPlugins: () => Promise<any[]>;
+  pluginGetPlugin: (pluginId: string) => Promise<any>;
+  pluginExecuteTrigger: (pluginId: string, triggerId: string, input?: any) => Promise<any>;
+  pluginSetEnabled: (pluginId: string, enabled: boolean) => Promise<void>;
+  pluginSaveConfig: (pluginId: string, config: Record<string, any>) => Promise<void>;
+  pluginGetLogs: (pluginId: string) => Promise<any[]>;
+
+  // Plugin Event listeners
+  onPluginUIUpdate: (callback: (event: any) => void) => () => void;
+  onPluginUIInject: (callback: (event: any) => void) => () => void;
+  onPluginUIToast: (callback: (event: any) => void) => () => void;
+  onPluginLog: (callback: (event: any) => void) => () => void;
+  onPluginExecutionComplete: (callback: (event: any) => void) => () => void;
+  onPluginReloaded: (callback: (event: any) => void) => () => void;
+  onPluginsReloaded: (callback: (event: any) => void) => () => void;
+  onPluginStateChanged: (callback: (event: any) => void) => () => void;
+  onPluginNavigate: (callback: (event: { pluginId: string; section: string }) => void) => () => void;
 }
 
 declare global {

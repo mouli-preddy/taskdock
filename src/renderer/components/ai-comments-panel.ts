@@ -17,7 +17,6 @@ import {
   File,
   AlertCircle,
   AlertTriangle,
-  CheckCircle,
   Lightbulb,
   Play,
   Code2,
@@ -47,7 +46,7 @@ export class AICommentsPanel {
     severity: AIReviewComment['severity'][];
     showPublished: boolean;
   } = {
-    severity: ['critical', 'warning', 'suggestion', 'praise'],
+    severity: ['critical', 'major', 'minor', 'trivial'],
     showPublished: true,
   };
 
@@ -350,17 +349,17 @@ export class AICommentsPanel {
           <span class="ai-stat-count">${stats.critical}</span>
           <span class="ai-stat-label">Critical</span>
         </div>
-        <div class="ai-stat warning" title="Warnings">
-          <span class="ai-stat-count">${stats.warning}</span>
-          <span class="ai-stat-label">Warnings</span>
+        <div class="ai-stat major" title="Major issues">
+          <span class="ai-stat-count">${stats.major}</span>
+          <span class="ai-stat-label">Major</span>
         </div>
-        <div class="ai-stat suggestion" title="Suggestions">
-          <span class="ai-stat-count">${stats.suggestion}</span>
-          <span class="ai-stat-label">Suggestions</span>
+        <div class="ai-stat minor" title="Minor issues">
+          <span class="ai-stat-count">${stats.minor}</span>
+          <span class="ai-stat-label">Minor</span>
         </div>
-        <div class="ai-stat praise" title="Good code">
-          <span class="ai-stat-count">${stats.praise}</span>
-          <span class="ai-stat-label">Praise</span>
+        <div class="ai-stat trivial" title="Trivial issues">
+          <span class="ai-stat-count">${stats.trivial}</span>
+          <span class="ai-stat-label">Trivial</span>
         </div>
       </div>
 
@@ -398,7 +397,7 @@ export class AICommentsPanel {
   }
 
   private renderSeverityFilters(): string {
-    return (['critical', 'warning', 'suggestion', 'praise'] as const)
+    return (['critical', 'major', 'minor', 'trivial'] as const)
       .map(severity => {
         const config = SEVERITY_CONFIG[severity];
         const isActive = this.filter.severity.includes(severity);
@@ -557,15 +556,15 @@ export class AICommentsPanel {
   private getSeverityIcon(severity: AIReviewComment['severity']): string {
     const severityIcons = {
       critical: iconHtml(AlertCircle, { size: 14 }),
-      warning: iconHtml(AlertTriangle, { size: 14 }),
-      suggestion: iconHtml(Lightbulb, { size: 14 }),
-      praise: iconHtml(CheckCircle, { size: 14 }),
+      major: iconHtml(AlertTriangle, { size: 14 }),
+      minor: iconHtml(Lightbulb, { size: 14 }),
+      trivial: iconHtml(Lightbulb, { size: 14 }),
     };
     return severityIcons[severity];
   }
 
   private getStats(): Record<AIReviewComment['severity'], number> {
-    const stats = { critical: 0, warning: 0, suggestion: 0, praise: 0 };
+    const stats = { critical: 0, major: 0, minor: 0, trivial: 0 };
     for (const comment of this.comments) {
       stats[comment.severity]++;
     }

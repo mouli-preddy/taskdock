@@ -1,0 +1,170 @@
+{
+  "tab": {
+    "id": "hello",
+    "label": "Hello",
+    "icon": "smile"
+  },
+  "layout": {
+    "type": "split-panel",
+    "sizes": [45, 55],
+    "children": [
+      {
+        "type": "detail-panel",
+        "sections": [
+          {
+            "type": "header",
+            "id": "main-header",
+            "title": "Hello World Plugin",
+            "subtitle": "Plugin system component showcase"
+          },
+          {
+            "type": "button-group",
+            "buttons": [
+              { "label": "Say Hello", "icon": "sparkles", "action": "greet", "variant": "primary" },
+              { "label": "Reset", "icon": "rotate-ccw", "action": "reset" }
+            ]
+          },
+          {
+            "type": "card",
+            "id": "greeting-card",
+            "label": "Greeting",
+            "content": "Click 'Say Hello' to run the greeting workflow"
+          },
+          {
+            "type": "card",
+            "id": "response-card",
+            "label": "Last Run",
+            "content": "No runs yet"
+          },
+          {
+            "type": "status-badge",
+            "id": "run-status",
+            "value": "Ready",
+            "colorMap": {
+              "Ready": "#58a6ff",
+              "Success": "#3fb950",
+              "Error": "#f85149"
+            }
+          },
+          {
+            "type": "key-value",
+            "id": "stats-kv"
+          }
+        ]
+      },
+      {
+        "type": "tabs",
+        "items": [
+          {
+            "label": "Activity",
+            "content": {
+              "type": "timeline",
+              "id": "activity-timeline"
+            }
+          },
+          {
+            "label": "Greetings",
+            "content": {
+              "type": "table",
+              "id": "greetings-table",
+              "columns": [
+                { "key": "time", "label": "Time", "width": 90 },
+                { "key": "message", "label": "Message" },
+                { "key": "count", "label": "#", "width": 40 }
+              ]
+            }
+          },
+          {
+            "label": "About",
+            "content": {
+              "type": "markdown",
+              "id": "about-md",
+              "content": "## Hello World Plugin\n\nThis plugin demonstrates all available UI components in the TaskDock plugin system.\n\n### Components Showcased\n\n- **Header** - Page title with subtitle\n- **Button Group** - Action buttons with icon and variant support\n- **Card** - Content containers with labels\n- **Status Badge** - Color-coded status indicators\n- **Key-Value** - Property/stat display\n- **Timeline** - Chronological activity feed\n- **Table** - Sortable data tables\n- **Tabs** - Tabbed content navigation\n- **Markdown** - Rich formatted text\n- **Form** - User input fields\n- **Empty State** - Placeholder with call to action\n- **Split Panel** - Side-by-side layout\n- **Detail Panel** - Scrollable section container\n\n### How It Works\n\nClick **Say Hello** to trigger the greeting workflow. The workflow uses `ctx.ui.update()` to push live data into each component, `ctx.store` to persist visit counts, and `ctx.ui.toast()` to show notifications."
+            }
+          },
+          {
+            "label": "Settings",
+            "content": {
+              "type": "detail-panel",
+              "sections": [
+                {
+                  "type": "form",
+                  "id": "settings-form",
+                  "fields": [
+                    { "key": "customGreeting", "label": "Custom Greeting Message", "type": "text" }
+                  ],
+                  "onSubmit": "save-settings"
+                },
+                {
+                  "type": "empty-state",
+                  "icon": "settings",
+                  "title": "More Settings Coming Soon",
+                  "description": "Additional plugin configuration options will be available in future updates.",
+                  "action": { "label": "View Documentation", "trigger": "greet" }
+                }
+              ]
+            }
+          },
+          {
+            "label": "AI",
+            "content": {
+              "type": "detail-panel",
+              "sections": [
+                {
+                  "type": "header",
+                  "title": "AI Integration",
+                  "subtitle": "Test Claude & Copilot SDK and Terminal features"
+                },
+                {
+                  "type": "button-group",
+                  "id": "ai-sdk-buttons",
+                  "buttons": [
+                    { "label": "Ask Claude (SDK)", "icon": "brain", "action": "ask-claude-sdk", "variant": "primary" },
+                    { "label": "Ask Copilot (SDK)", "icon": "bot", "action": "ask-copilot-sdk" }
+                  ]
+                },
+                {
+                  "type": "card",
+                  "id": "ai-sdk-result",
+                  "label": "SDK Response",
+                  "content": "Click a button above to send a prompt via SDK"
+                },
+                {
+                  "type": "header",
+                  "title": "AI Terminals",
+                  "subtitle": "Launch interactive AI terminal sessions"
+                },
+                {
+                  "type": "button-group",
+                  "id": "ai-terminal-buttons",
+                  "buttons": [
+                    { "label": "Claude Terminal", "icon": "terminal", "action": "launch-claude-terminal", "variant": "primary" },
+                    { "label": "Copilot Terminal", "icon": "terminal", "action": "launch-copilot-terminal" }
+                  ]
+                },
+                {
+                  "type": "card",
+                  "id": "ai-terminal-result",
+                  "label": "Terminal Session",
+                  "content": "Click a button above to launch an interactive AI terminal"
+                },
+                {
+                  "type": "status-badge",
+                  "id": "ai-status",
+                  "value": "Ready",
+                  "colorMap": {
+                    "Ready": "#58a6ff",
+                    "Calling...": "#d29922",
+                    "Done": "#3fb950",
+                    "Error": "#f85149",
+                    "Launched": "#a371f7"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

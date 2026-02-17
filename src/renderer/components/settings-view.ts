@@ -1,9 +1,10 @@
 import { Toast } from './toast.js';
 import type { ConsoleReviewSettings, MonitoredRepository } from '../../shared/terminal-types.js';
 import { DEFAULT_CONSOLE_REVIEW_SETTINGS } from '../../shared/terminal-types.js';
-import type { PollingSettings } from '../../shared/types.js';
-import { DEFAULT_POLLING_SETTINGS } from '../../shared/types.js';
+import type { PollingSettings, NotificationSettings } from '../../shared/types.js';
+import { DEFAULT_POLLING_SETTINGS, DEFAULT_NOTIFICATION_SETTINGS } from '../../shared/types.js';
 import { escapeHtml } from '../utils/html-utils.js';
+import { notificationService } from '../services/notification-service.js';
 import { getIcon, Eye, Plus, X, Globe, MessageSquare, Wand2 } from '../utils/icons.js';
 
 export interface ReviewSettings {
@@ -17,16 +18,125 @@ export class SettingsView {
   private settings: ReviewSettings = { organization: '', project: '', pat: '' };
   private consoleReviewSettings: ConsoleReviewSettings = { ...DEFAULT_CONSOLE_REVIEW_SETTINGS };
   private pollingSettings: PollingSettings = { ...DEFAULT_POLLING_SETTINGS };
+  private notificationSettings: NotificationSettings = { ...DEFAULT_NOTIFICATION_SETTINGS };
   private saveCallback: ((settings: ReviewSettings) => Promise<void>) | null = null;
   private testCallback: ((settings: ReviewSettings) => Promise<boolean>) | null = null;
   private consoleSettingsSavedCallback: ((settings: ConsoleReviewSettings) => void) | null = null;
   private pollingSettingsSavedCallback: ((settings: PollingSettings) => void) | null = null;
+  private notificationSettingsSavedCallback: ((settings: NotificationSettings) => void) | null = null;
 
   constructor(containerId: string) {
     this.container = document.getElementById(containerId)!;
     this.render();
     this.loadConsoleReviewSettings();
     this.loadPollingSettings();
+    this.loadNotificationSettings();
+    this.loadPlugins();
+  }
+
+  async loadPlugins(): Promise<void> {
+    try {
+      const plugins = await window.electronAPI.pluginGetPlugins();
+      const container = this.container.querySelector('#pluginSettingsList');
+      if (!container) return;
+
+      if (plugins.length === 0) {
+        container.innerHTML = '<p class="text-muted">No plugins installed. Add plugins to ~/.taskdock/plugins/</p>';
+        return;
+      }
+
+      container.innerHTML = plugins.map((plugin: any) => `
+        <div class="plugin-settings-item" data-plugin-id="${plugin.id}">
+          <div class="plugin-settings-header">
+            <div class="plugin-settings-info">
+              <span class="plugin-settings-name">${escapeHtml(plugin.name)}</span>
+              <span class="plugin-settings-version">v${escapeHtml(plugin.version)}</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" class="plugin-toggle" data-plugin-id="${plugin.id}" ${plugin.enabled ? 'checked' : ''}>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          ${plugin.description ? `<p class="plugin-settings-desc">${escapeHtml(plugin.description)}</p>` : ''}
+          ${plugin.manifest?.config ? this.renderPluginConfigFields(plugin) : ''}
+        </div>
+      `).join('');
+
+      // Attach toggle handlers
+      container.querySelectorAll('.plugin-toggle').forEach(toggle => {
+        toggle.addEventListener('change', async (e) => {
+          const el = e.target as HTMLInputElement;
+          const pluginId = el.dataset.pluginId!;
+          await window.electronAPI.pluginSetEnabled(pluginId, el.checked);
+        });
+      });
+
+      // Attach config save handlers
+      container.querySelectorAll('.plugin-config-save').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const el = e.currentTarget as HTMLElement;
+          const pluginId = el.dataset.pluginId!;
+          const item = container.querySelector(`.plugin-settings-item[data-plugin-id="${pluginId}"]`);
+          if (!item) return;
+
+          const config: Record<string, any> = {};
+          item.querySelectorAll('.plugin-config-input').forEach(input => {
+            const inp = input as HTMLInputElement;
+            const key = inp.dataset.configKey!;
+            const type = inp.dataset.configType!;
+            if (type === 'boolean') {
+              config[key] = inp.checked;
+            } else if (type === 'number') {
+              config[key] = Number(inp.value);
+            } else {
+              config[key] = inp.value;
+            }
+          });
+
+          try {
+            await window.electronAPI.pluginSaveConfig(pluginId, config);
+            Toast.success(`Plugin "${pluginId}" configuration saved`);
+          } catch (err: any) {
+            Toast.error(err.message || 'Failed to save plugin config');
+          }
+        });
+      });
+    } catch (err) {
+      console.error('Failed to load plugins:', err);
+    }
+  }
+
+  private renderPluginConfigFields(plugin: any): string {
+    const fields = Object.entries(plugin.manifest.config || {});
+    if (fields.length === 0) return '';
+
+    return `
+      <div class="plugin-config-fields">
+        ${fields.map(([key, field]: [string, any]) => {
+          const value = plugin.config?.[key] ?? field.default ?? '';
+          if (field.type === 'boolean') {
+            return `
+              <div class="form-group plugin-config-group">
+                <label>
+                  <input type="checkbox" class="plugin-config-input" data-config-key="${key}" data-config-type="boolean" ${value ? 'checked' : ''}>
+                  ${escapeHtml(field.label)}
+                </label>
+              </div>
+            `;
+          }
+          return `
+            <div class="form-group plugin-config-group">
+              <label>${escapeHtml(field.label)}${field.required ? ' *' : ''}</label>
+              <input type="${field.secret ? 'password' : field.type === 'number' ? 'number' : 'text'}"
+                class="plugin-config-input" data-config-key="${key}" data-config-type="${field.type}"
+                value="${escapeHtml(String(value))}"
+                placeholder="${escapeHtml(field.label)}">
+            </div>
+          `;
+        }).join('')}
+        <button class="btn btn-secondary plugin-config-save" data-plugin-id="${plugin.id}">Save Plugin Config</button>
+      </div>
+    `;
   }
 
   onSave(callback: (settings: ReviewSettings) => Promise<void>) {
@@ -43,6 +153,10 @@ export class SettingsView {
 
   onPollingSettingsSaved(callback: (settings: PollingSettings) => void) {
     this.pollingSettingsSavedCallback = callback;
+  }
+
+  onNotificationSettingsSaved(callback: (settings: NotificationSettings) => void) {
+    this.notificationSettingsSavedCallback = callback;
   }
 
   setSettings(settings: Partial<ReviewSettings>) {
@@ -308,6 +422,57 @@ export class SettingsView {
             </div>
 
           </div>
+
+          <div class="settings-section">
+            <h2 class="settings-section-title">Notifications</h2>
+            <p class="settings-section-description">Configure native Windows toast notifications for background events.</p>
+
+            <div class="form-group checkbox-group">
+              <label>
+                <input type="checkbox" id="notificationsEnabled" checked>
+                <span>Enable Windows notifications</span>
+              </label>
+            </div>
+
+            <div id="notificationEventToggles" class="form-group" style="margin-left: 24px;">
+              <div class="checkbox-group">
+                <label>
+                  <input type="checkbox" id="notifyAiReviewComplete" checked>
+                  <span>AI PR Review completed</span>
+                </label>
+              </div>
+              <div class="checkbox-group">
+                <label>
+                  <input type="checkbox" id="notifyAiAnalysisComplete" checked>
+                  <span>AI Comment Analysis completed</span>
+                </label>
+              </div>
+              <div class="checkbox-group">
+                <label>
+                  <input type="checkbox" id="notifyNewComments" checked>
+                  <span>New comments detected</span>
+                </label>
+              </div>
+              <div class="checkbox-group">
+                <label>
+                  <input type="checkbox" id="notifyNewIterations" checked>
+                  <span>New iterations (commits) detected</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-top: 12px;">
+              <button type="button" class="btn btn-secondary" id="testNotificationBtn">Test Notification</button>
+            </div>
+          </div>
+
+          <div class="settings-section" id="pluginSettingsSection">
+            <h2 class="settings-section-title">Plugins</h2>
+            <p class="settings-section-description">Manage installed plugins. Plugins are loaded from ~/.taskdock/plugins/</p>
+            <div id="pluginSettingsList" class="plugin-settings-list">
+              <p class="text-muted">Loading plugins...</p>
+            </div>
+          </div>
         </div>
       </div>
     `;
@@ -364,6 +529,25 @@ export class SettingsView {
     // Global save button
     const saveAllBtn = this.container.querySelector('#saveAllSettingsBtn');
     saveAllBtn?.addEventListener('click', () => this.handleSaveAll());
+
+    // Notification master toggle
+    const notificationsEnabled = this.container.querySelector('#notificationsEnabled') as HTMLInputElement;
+    notificationsEnabled?.addEventListener('change', () => {
+      const toggles = this.container.querySelector('#notificationEventToggles') as HTMLElement;
+      if (toggles) {
+        toggles.style.opacity = notificationsEnabled.checked ? '1' : '0.5';
+        toggles.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+          (cb as HTMLInputElement).disabled = !notificationsEnabled.checked;
+        });
+      }
+    });
+
+    // Test notification button
+    const testNotifBtn = this.container.querySelector('#testNotificationBtn');
+    testNotifBtn?.addEventListener('click', async () => {
+      await notificationService.sendTest();
+      Toast.info('Test notification sent');
+    });
   }
 
   private updateFormValues() {
@@ -443,6 +627,17 @@ export class SettingsView {
       };
       await window.electronAPI.setPollingSettings(this.pollingSettings);
       this.pollingSettingsSavedCallback?.(this.pollingSettings);
+
+      // Update and save Notification settings
+      this.notificationSettings = {
+        enabled: (this.container.querySelector('#notificationsEnabled') as HTMLInputElement).checked,
+        aiReviewComplete: (this.container.querySelector('#notifyAiReviewComplete') as HTMLInputElement).checked,
+        aiAnalysisComplete: (this.container.querySelector('#notifyAiAnalysisComplete') as HTMLInputElement).checked,
+        newComments: (this.container.querySelector('#notifyNewComments') as HTMLInputElement).checked,
+        newIterations: (this.container.querySelector('#notifyNewIterations') as HTMLInputElement).checked,
+      };
+      await window.electronAPI.setNotificationSettings(this.notificationSettings);
+      this.notificationSettingsSavedCallback?.(this.notificationSettings);
 
       Toast.success('All settings saved');
       this.showStatus('connected', 'Settings saved successfully');
@@ -760,5 +955,39 @@ export class SettingsView {
 
     if (pollingEnabled) pollingEnabled.checked = this.pollingSettings.enabled;
     if (pollingInterval) pollingInterval.value = String(this.pollingSettings.intervalSeconds);
+  }
+
+  // Notification Settings Methods
+
+  private async loadNotificationSettings(): Promise<void> {
+    try {
+      this.notificationSettings = await window.electronAPI.getNotificationSettings();
+      this.updateNotificationFormValues();
+    } catch (error) {
+      console.error('Failed to load notification settings:', error);
+    }
+  }
+
+  private updateNotificationFormValues(): void {
+    const enabled = this.container.querySelector('#notificationsEnabled') as HTMLInputElement;
+    const aiReview = this.container.querySelector('#notifyAiReviewComplete') as HTMLInputElement;
+    const aiAnalysis = this.container.querySelector('#notifyAiAnalysisComplete') as HTMLInputElement;
+    const newComments = this.container.querySelector('#notifyNewComments') as HTMLInputElement;
+    const newIterations = this.container.querySelector('#notifyNewIterations') as HTMLInputElement;
+
+    if (enabled) enabled.checked = this.notificationSettings.enabled;
+    if (aiReview) aiReview.checked = this.notificationSettings.aiReviewComplete;
+    if (aiAnalysis) aiAnalysis.checked = this.notificationSettings.aiAnalysisComplete;
+    if (newComments) newComments.checked = this.notificationSettings.newComments;
+    if (newIterations) newIterations.checked = this.notificationSettings.newIterations;
+
+    // Set initial disabled state
+    const toggles = this.container.querySelector('#notificationEventToggles') as HTMLElement;
+    if (toggles && !this.notificationSettings.enabled) {
+      toggles.style.opacity = '0.5';
+      toggles.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        (cb as HTMLInputElement).disabled = true;
+      });
+    }
   }
 }

@@ -11,9 +11,10 @@ export class TerminalsView {
   private activeSessionId: string | null = null;
   private terminals: Map<string, any> = new Map();
   private fitAddons: Map<string, any> = new Map();
+  private chatSessionIds: Set<string> = new Set(); // Track chat terminal sessions
 
   private selectCallback?: (sessionId: string) => void;
-  private closeCallback?: (sessionId: string) => void;
+  private closeCallback?: (sessionId: string, isChat: boolean) => void;
 
   constructor(containerId: string) {
     this.container = document.getElementById(containerId)!;
@@ -24,7 +25,7 @@ export class TerminalsView {
     this.selectCallback = callback;
   }
 
-  onClose(callback: (sessionId: string) => void): void {
+  onClose(callback: (sessionId: string, isChat: boolean) => void): void {
     this.closeCallback = callback;
   }
 
@@ -44,25 +45,31 @@ export class TerminalsView {
     this.render();
     // After render, refit any active terminal (fixes visibility after section switch)
     if (this.activeSessionId) {
+      const activeId = this.activeSessionId;
       // Use setTimeout to ensure DOM is ready after section becomes visible
       setTimeout(() => {
-        const fitAddon = this.fitAddons.get(this.activeSessionId!);
+        const fitAddon = this.fitAddons.get(activeId);
         if (fitAddon) {
           fitAddon.fit();
           // Also send resize to PTY to sync dimensions
-          const terminal = this.terminals.get(this.activeSessionId!);
+          const terminal = this.terminals.get(activeId);
           if (terminal) {
             const { cols, rows } = terminal;
-            window.electronAPI.terminalResize(this.activeSessionId!, cols, rows);
+            if (this.chatSessionIds.has(activeId)) {
+              window.electronAPI.chatTerminalResize(activeId, cols, rows);
+            } else {
+              window.electronAPI.terminalResize(activeId, cols, rows);
+            }
           }
         }
       }, 0);
     }
   }
 
-  addSession(session: TerminalSession): void {
-    console.log('[TerminalsView] addSession called:', session?.id, session?.label, 'current sessions:', this.sessions.length);
+  addSession(session: TerminalSession, isChat = false): void {
+    console.log('[TerminalsView] addSession called:', session?.id, session?.label, 'isChat:', isChat, 'current sessions:', this.sessions.length);
     this.sessions.push(session);
+    if (isChat) this.chatSessionIds.add(session.id);
     this.activeSessionId = session.id; // Set before render so container is created
     this.render();
     console.log('[TerminalsView] After render, sessions:', this.sessions.length, 'activeSessionId:', this.activeSessionId);
@@ -80,6 +87,7 @@ export class TerminalsView {
     this.sessions = this.sessions.filter(s => s.id !== sessionId);
     this.terminals.delete(sessionId);
     this.fitAddons.delete(sessionId);
+    this.chatSessionIds.delete(sessionId);
     if (this.activeSessionId === sessionId) {
       this.activeSessionId = this.sessions[0]?.id || null;
     }
@@ -251,16 +259,29 @@ export class TerminalsView {
 
       // Send initial resize to PTY
       const { cols, rows } = terminal;
-      window.electronAPI.terminalResize(sessionId, cols, rows);
+      const isChat = this.chatSessionIds.has(sessionId);
+      if (isChat) {
+        window.electronAPI.chatTerminalResize(sessionId, cols, rows);
+      } else {
+        window.electronAPI.terminalResize(sessionId, cols, rows);
+      }
 
       // Handle input
       terminal.onData((data: string) => {
-        window.electronAPI.terminalWrite(sessionId, data);
+        if (isChat) {
+          window.electronAPI.chatTerminalWrite(sessionId, data);
+        } else {
+          window.electronAPI.terminalWrite(sessionId, data);
+        }
       });
 
       // Handle resize
       terminal.onResize(({ cols, rows }: { cols: number; rows: number }) => {
-        window.electronAPI.terminalResize(sessionId, cols, rows);
+        if (isChat) {
+          window.electronAPI.chatTerminalResize(sessionId, cols, rows);
+        } else {
+          window.electronAPI.terminalResize(sessionId, cols, rows);
+        }
       });
 
       // Custom key handler for clipboard operations (following electron-terminal sample)
@@ -300,7 +321,11 @@ export class TerminalsView {
   private handlePaste(sessionId: string): void {
     const text = window.electronAPI.readClipboard();
     if (text) {
-      window.electronAPI.terminalWrite(sessionId, text);
+      if (this.chatSessionIds.has(sessionId)) {
+        window.electronAPI.chatTerminalWrite(sessionId, text);
+      } else {
+        window.electronAPI.terminalWrite(sessionId, text);
+      }
     }
   }
 
@@ -340,7 +365,7 @@ export class TerminalsView {
         e.stopPropagation();
         const id = (btn as HTMLElement).dataset.id;
         if (id) {
-          this.closeCallback?.(id);
+          this.closeCallback?.(id, this.chatSessionIds.has(id));
         }
       });
     });
@@ -348,13 +373,17 @@ export class TerminalsView {
     // Toolbar buttons
     this.container.querySelector('.kill-btn')?.addEventListener('click', () => {
       if (this.activeSessionId) {
-        window.electronAPI.terminalKill(this.activeSessionId);
+        if (this.chatSessionIds.has(this.activeSessionId)) {
+          window.electronAPI.chatTerminalKill(this.activeSessionId);
+        } else {
+          window.electronAPI.terminalKill(this.activeSessionId);
+        }
       }
     });
 
     this.container.querySelector('.close-btn')?.addEventListener('click', () => {
       if (this.activeSessionId) {
-        this.closeCallback?.(this.activeSessionId);
+        this.closeCallback?.(this.activeSessionId, this.chatSessionIds.has(this.activeSessionId));
       }
     });
   }

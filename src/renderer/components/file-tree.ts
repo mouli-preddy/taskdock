@@ -119,6 +119,46 @@ export class FileTree {
     return validFiles.filter(f => !this.isGeneratedFile(f.path));
   }
 
+  /**
+   * Returns visible files in the same order as they appear in the file explorer,
+   * respecting the current view mode (tree, flat, grouped).
+   */
+  getOrderedVisibleFiles(): FileChange[] {
+    const visible = this.getVisibleFiles();
+
+    if (this.viewMode === 'flat') {
+      return [...visible].sort((a, b) => a.path.localeCompare(b.path));
+    }
+
+    if (this.viewMode === 'grouped') {
+      const groups: Record<string, FileChange[]> = { add: [], edit: [], delete: [], rename: [] };
+      for (const file of visible) {
+        const type = file.changeType || 'edit';
+        (groups[type] || groups.edit).push(file);
+      }
+      return [...groups.add, ...groups.edit, ...groups.delete, ...groups.rename];
+    }
+
+    // Tree mode: build tree and collect files in display order (folders first, alphabetical)
+    const tree = this.buildTree();
+    const optimized = this.optimizeTree(tree);
+    return this.collectFilesInOrder(optimized, visible);
+  }
+
+  private collectFilesInOrder(nodes: FileNode[], visible: FileChange[]): FileChange[] {
+    const result: FileChange[] = [];
+    for (const node of nodes) {
+      if (node.isFolder) {
+        result.push(...this.collectFilesInOrder(node.children, visible));
+      } else {
+        const filePath = node.filePath || node.path;
+        const file = visible.find(f => f.path === filePath);
+        if (file) result.push(file);
+      }
+    }
+    return result;
+  }
+
   isFileReviewed(path: string): boolean {
     return this.reviewedFiles.has(path);
   }

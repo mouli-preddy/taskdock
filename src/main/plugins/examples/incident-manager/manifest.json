@@ -1,0 +1,24 @@
+{
+  "id": "incident-manager",
+  "name": "Incident Manager",
+  "version": "1.0.0",
+  "description": "Monitor and analyze ICM incidents with AI",
+  "config": {
+    "icmEndpoint": { "type": "string", "label": "ICM API Endpoint", "required": true },
+    "teamId": { "type": "number", "label": "Team ID" },
+    "pollInterval": { "type": "number", "label": "Poll interval (seconds)", "default": 30 },
+    "apiToken": { "type": "string", "label": "API Token", "secret": true }
+  },
+  "triggers": [
+    { "type": "manual", "id": "runAnalysis", "workflow": "workflows/run-analysis.ts", "label": "Run Analysis" },
+    { "type": "polling", "id": "pollIncidents", "workflow": "workflows/poll-incidents.ts", "interval": "{{config.pollInterval}}s" },
+    { "type": "scheduled", "id": "dailySummary", "workflow": "workflows/daily-summary.ts", "cron": "0 9 * * 1-5" }
+  ],
+  "hooks": {
+    "pr-review": {
+      "toolbar": [
+        { "label": "Check Incidents", "icon": "alert-triangle", "trigger": "runAnalysis", "position": "right" }
+      ]
+    }
+  }
+}

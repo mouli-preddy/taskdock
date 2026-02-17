@@ -50,8 +50,13 @@ import { WorkItemsListView, WorkItemViewType } from './components/workitems-list
 import { WorkItemQueryBuilder } from './components/workitem-query-builder.js';
 import { WorkItemDetailView } from './components/workitem-detail-view.js';
 import { ResizablePanels, setupResizablePanels } from './components/resizable-panels.js';
-import { icons, iconHtml, getIcon, MessageSquare, Bot, BookOpen, Globe, Columns, FileText, ChevronLeft, ChevronRight, ChevronDown, X, File, FileCode, ArrowRight, Link, CheckCircle, Check, Clock, XCircle, Circle, Home, LayoutGrid, Settings, ChevronsLeft, Sparkles, Eye, EyeOff, RefreshCw, Terminal } from './utils/icons.js';
+import { icons, iconHtml, getIcon, getIconByName, MessageSquare, Bot, BookOpen, Globe, Columns, FileText, ChevronLeft, ChevronRight, ChevronDown, X, File, FileCode, ArrowRight, Link, CheckCircle, Check, Clock, XCircle, Circle, Home, LayoutGrid, Settings, ChevronsLeft, Sparkles, Eye, EyeOff, RefreshCw, Terminal } from './utils/icons.js';
+import { renderMarkdownSync } from './utils/markdown-renderer.js';
 import { PRPollingService, type PollResult, type PollingState } from './services/pr-polling-service.js';
+import { PluginTabRenderer } from './components/plugin-tab-renderer.js';
+import type { LoadedPlugin, PluginToastEvent, PluginUIUpdateEvent } from '../shared/plugin-types.js';
+import { initDeepLinkHandler } from './deep-link-handler.js';
+import { notificationService } from './services/notification-service.js';
 
 // Tab type definitions
 interface ReviewTab {
@@ -88,6 +93,7 @@ interface PRTabState {
   selectedIteration: number | null;
   fileChanges: FileChange[];
   selectedFile: string | null;
+  /** All threads from the API (includes deleted/system). Use filterVisibleThreads() for display counts. */
   threads: CommentThread[];
   diffViewMode: 'split' | 'unified' | 'preview';
   // Context path for disk-based storage
@@ -111,6 +117,21 @@ interface PRTabState {
   // Chat Panel state
   copilotChatPanelOpen: boolean;
   copilotChatAI: 'copilot' | 'claude';
+  // Walkthrough popout state (for save/restore when switching tabs)
+  walkthroughPopoutState?: {
+    walkthrough: any;
+    currentStep: number;
+    displayName?: string;
+    preset?: any;
+    customPrompt?: string;
+  } | null;
+}
+
+/** Filter out deleted threads and threads with only system/deleted comments */
+function filterVisibleThreads(threads: CommentThread[]): CommentThread[] {
+  return threads.filter(t =>
+    !t.isDeleted && t.comments.some(c => c.commentType !== 'system' && !c.isDeleted)
+  );
 }
 
 class PRReviewApp {
@@ -160,6 +181,20 @@ class PRReviewApp {
   // ResizablePanels instances per tab (tabId -> ResizablePanels)
   private resizablePanels: Map<string, ResizablePanels> = new Map();
 
+  // Plugin renderers
+  private pluginRenderers: Map<string, PluginTabRenderer> = new Map();
+
+  // Plugin hook buttons for built-in tabs
+  private pluginHookButtons: Array<{
+    pluginId: string;
+    tab: string;
+    location: string;
+    label: string;
+    icon: string;
+    trigger: string;
+    position: string;
+  }> = [];
+
   // PR lists
   private myPRs: PullRequest[] = [];
   private createdPRs: PullRequest[] = [];
@@ -169,6 +204,9 @@ class PRReviewApp {
 
   // Cached enableWorkIQ setting
   private enableWorkIQ: boolean = true;
+
+  // Preferred diff view mode (loaded from saved settings)
+  private preferredDiffViewMode: 'split' | 'unified' = 'split';
 
   // Polling service
   private pollingService: PRPollingService;
@@ -200,9 +238,17 @@ class PRReviewApp {
     this.initAIListeners();
     this.initTerminalListeners();
     this.initTheme();
+    this.initPlugins();
+
+    // Load notification settings
+    notificationService.loadSettings();
 
     // Check if first launch
     this.checkFirstLaunch();
+
+    initDeepLinkHandler(this).catch(e => {
+      console.error('[deep-link] Failed to initialize:', e);
+    });
   }
 
   private initElements() {
@@ -225,17 +271,21 @@ class PRReviewApp {
     this.settingsView.onTest(async (settings) => this.testConnection(settings));
     this.settingsView.onConsoleSettingsSaved((settings) => this.onConsoleSettingsChanged(settings));
     this.settingsView.onPollingSettingsSaved((settings) => this.onPollingSettingsChanged(settings));
+    this.settingsView.onNotificationSettingsSaved((settings) => {
+      notificationService.updateSettings(settings);
+    });
 
     // Initialize PR home view
     this.prHomeView = new PRHomeView('homeTabPanel');
     this.prHomeView.onOpenPR((pr) => this.openPRTab(pr));
+    this.prHomeView.onOpenPRByUrl((org, project, prId) => this.openPRByUrl(org, project, prId));
     this.prHomeView.onRefresh(() => this.loadPRLists());
 
     // Initialize terminals view
     this.terminalsView = new TerminalsView('terminalsView');
     this.aboutView = new AboutView('aboutTabPanel');
-    this.terminalsView.onClose(async (sessionId) => {
-      await this.closeTerminalSession(sessionId);
+    this.terminalsView.onClose(async (sessionId, isChat) => {
+      await this.closeTerminalSession(sessionId, isChat);
     });
 
     // Initialize work items views
@@ -265,6 +315,105 @@ class PRReviewApp {
     // Set initial state
     this.updateTabBar();
     this.showHomeTab();
+  }
+
+  private async initPlugins() {
+    try {
+      const plugins: LoadedPlugin[] = await window.electronAPI.pluginGetPlugins();
+
+      for (const plugin of plugins) {
+        if (!plugin.enabled || !plugin.ui) continue;
+
+        // Add sidebar section
+        this.sectionSidebar.addSection({
+          id: `plugin-${plugin.id}`,
+          icon: getIconByName(plugin.ui.tab.icon, 20) || `<span class="plugin-icon-text">\uD83D\uDD0C</span>`,
+          label: plugin.ui.tab.label,
+        });
+
+        // Create container
+        const container = document.createElement('div');
+        container.className = 'section-content hidden';
+        container.id = `pluginSection-${plugin.id}`;
+        container.innerHTML = '<div class="tab-panel active plugin-tab-content"></div>';
+        document.getElementById('pluginSectionContents')?.appendChild(container);
+
+        // Create renderer
+        const renderer = new PluginTabRenderer(
+          container.querySelector('.plugin-tab-content')!,
+          plugin
+        );
+        renderer.onTrigger((triggerId, input) => {
+          window.electronAPI.pluginExecuteTrigger(plugin.id, triggerId, input);
+        });
+        renderer.render();
+        this.pluginRenderers.set(plugin.id, renderer);
+      }
+
+      // Collect hooks from all enabled plugins and render them
+      this.renderPluginHooks(plugins.filter(p => p.enabled));
+
+      // Subscribe to plugin events
+      window.electronAPI.onPluginUIUpdate((event: PluginUIUpdateEvent) => {
+        const renderer = this.pluginRenderers.get(event.pluginId);
+        if (renderer) renderer.updateComponent(event.componentId, event.data);
+      });
+
+      window.electronAPI.onPluginUIToast((event: PluginToastEvent) => {
+        switch (event.level) {
+          case 'success': Toast.success(event.message); break;
+          case 'error': Toast.error(event.message); break;
+          case 'warning': Toast.warning(event.message); break;
+          default: Toast.info(event.message);
+        }
+      });
+
+      window.electronAPI.onPluginUIInject((event: any) => {
+        // Handle dynamic injection of components into core tabs
+        console.log('Plugin UI inject:', event);
+      });
+
+      window.electronAPI.onPluginNavigate((event: { pluginId: string; section: string }) => {
+        this.switchSection(event.section as SectionId);
+      });
+
+      window.electronAPI.onPluginsReloaded(() => {
+        // Remove existing plugin sections and re-init
+        for (const [pluginId] of this.pluginRenderers) {
+          this.sectionSidebar.removeSection(`plugin-${pluginId}`);
+          document.getElementById(`pluginSection-${pluginId}`)?.remove();
+        }
+        this.pluginRenderers.clear();
+        this.pluginHookButtons = [];
+        this.initPlugins();
+      });
+    } catch (err) {
+      console.error('Failed to initialize plugins:', err);
+    }
+  }
+
+  private renderPluginHooks(plugins: LoadedPlugin[]): void {
+    // Collect all hooks from enabled plugins
+    for (const plugin of plugins) {
+      if (!plugin.manifest.hooks) continue;
+
+      // PR Review toolbar hooks
+      const prReviewHooks = plugin.manifest.hooks['pr-review'];
+      if (prReviewHooks?.toolbar) {
+        for (const hook of prReviewHooks.toolbar) {
+          // Store hook info so we can render it when PR tabs are created
+          this.pluginHookButtons.push({
+            pluginId: plugin.id,
+            tab: 'pr-review',
+            location: 'toolbar',
+            label: hook.label,
+            icon: hook.icon,
+            trigger: hook.trigger,
+            position: hook.position || 'right',
+          });
+        }
+      }
+    }
   }
 
   private initEventListeners() {
@@ -699,11 +848,39 @@ class PRReviewApp {
       await this.handleTerminalReviewComplete(event);
     });
 
-    // Chat terminal data listener - filter by session ID
+    // Chat terminal events (for plugin-launched AI terminals)
+    window.electronAPI.onChatTerminalSessionCreated((event) => {
+      console.log('[Renderer] Received chat-terminal:session-created:', event.session?.id);
+      // Add to terminals view so it's visible in the Terminals tab
+      this.terminalsView.addSession({
+        id: event.session.id,
+        label: `AI Chat (${event.session.ai})`,
+        status: event.session.status || 'running',
+        prId: 0,
+        organization: '',
+        project: '',
+        workingDir: event.session.workingDir || '',
+        contextPath: event.session.contextPath || '',
+        createdAt: event.session.createdAt || new Date().toISOString(),
+      }, true /* isChat */);
+    });
+
+    // Chat terminal data listener
     window.electronAPI.onChatTerminalData((event) => {
+      // Forward to copilot chat panel if it owns this session
       if (event.sessionId === this.copilotChatPanel.getSessionId()) {
         this.copilotChatPanel.writeToTerminal(event.data);
       }
+      // Also forward to terminals view (for plugin-launched chat terminals)
+      this.terminalsView.writeToTerminal(event.sessionId, event.data);
+    });
+
+    window.electronAPI.onChatTerminalExit((event) => {
+      this.terminalsView.updateSession(event.sessionId, { status: 'completed' });
+    });
+
+    window.electronAPI.onChatTerminalStatusChange((event) => {
+      this.terminalsView.updateSession(event.sessionId, { status: event.status as any });
     });
   }
 
@@ -741,7 +918,7 @@ class PRReviewApp {
           filePath: c.filePath,
           startLine: c.startLine,
           endLine: c.endLine,
-          severity: c.severity || 'suggestion',
+          severity: c.severity || 'minor',
           category: c.category || 'other',
           title: c.title || 'Review Comment',
           content: c.content || '',
@@ -855,6 +1032,13 @@ class PRReviewApp {
     if (settings.showNotification) {
       const commentCount = aiComments.length;
       Toast.success(`Deep review completed: ${commentCount} comment${commentCount !== 1 ? 's' : ''} found`);
+      if (state) {
+        notificationService.notify(
+          'aiReviewComplete',
+          'PR Review Complete',
+          `${commentCount} comment${commentCount !== 1 ? 's' : ''} found on PR #${state.prId}`
+        );
+      }
     }
 
     // Auto-close terminal if enabled
@@ -898,7 +1082,7 @@ class PRReviewApp {
   }
 
   // Section switching
-  private switchSection(section: SectionId) {
+  public switchSection(section: SectionId) {
     this.activeSection = section;
     this.sectionSidebar.setActive(section);
 
@@ -913,6 +1097,18 @@ class PRReviewApp {
     document.getElementById('terminalsSectionContent')?.classList.toggle('hidden', section !== 'terminals');
     document.getElementById('workItemsSectionContent')?.classList.toggle('hidden', section !== 'workItems');
     document.getElementById('aboutSectionContent')?.classList.toggle('hidden', section !== 'about');
+
+    // Hide/show plugin sections
+    const pluginContents = document.getElementById('pluginSectionContents');
+    if (pluginContents) {
+      for (const child of Array.from(pluginContents.children)) {
+        (child as HTMLElement).classList.add('hidden');
+      }
+      const pluginSection = document.getElementById(`pluginSection-${section.replace('plugin-', '')}`);
+      if (pluginSection) {
+        pluginSection.classList.remove('hidden');
+      }
+    }
 
     // Refresh terminals list when switching to terminals
     if (section === 'terminals') {
@@ -943,7 +1139,20 @@ class PRReviewApp {
     } else if (this.activeSection === 'about') {
       // About section has no tabs - hide the tab bar
       this.reviewTabBar.setTabs([]);
+    } else if (this.activeSection === 'settings') {
+      const tabs: Tab[] = this.settingsTabs.map(t => ({
+        id: t.id,
+        label: t.label,
+        closeable: t.closeable,
+        icon: getIcon(Settings, 14),
+      }));
+      this.reviewTabBar.setTabs(tabs);
+      this.reviewTabBar.setActive(this.activeSettingsTabId);
+    } else if (this.activeSection.startsWith('plugin-')) {
+      // Plugin sections have no tab bar
+      this.reviewTabBar.setTabs([]);
     } else {
+      // Default: show settings tabs for other sections (workItems, terminals)
       const tabs: Tab[] = this.settingsTabs.map(t => ({
         id: t.id,
         label: t.label,
@@ -981,6 +1190,11 @@ class PRReviewApp {
   private closeReviewTab(tabId: string) {
     const tab = this.reviewTabs.find(t => t.id === tabId);
     if (!tab || !tab.closeable) return;
+
+    // Close walkthrough popout if it belongs to this tab
+    if (this.walkthroughUI.getTabId() === tabId) {
+      this.walkthroughUI.hide();
+    }
 
     // Remove tab
     const index = this.reviewTabs.findIndex(t => t.id === tabId);
@@ -1174,6 +1388,15 @@ class PRReviewApp {
           <div class="reviewers-row" id="reviewersRow-${tabId}"></div>
         </div>
 
+        <!-- PR Description -->
+        <div class="pr-description-section hidden" id="prDescription-${tabId}">
+          <div class="pr-description-header">
+            ${iconHtml(ChevronRight, { size: 14, class: 'pr-description-chevron' })}
+            <span>Description</span>
+          </div>
+          <div class="pr-description-content" id="prDescriptionContent-${tabId}"></div>
+        </div>
+
         <!-- Toolbar -->
         <div class="toolbar">
           <div class="toolbar-left">
@@ -1208,10 +1431,10 @@ class PRReviewApp {
               </button>
             </div>
             <div class="view-toggle">
-              <button class="view-btn active" data-view="split" title="Split view">
+              <button class="view-btn${this.preferredDiffViewMode === 'split' ? ' active' : ''}" data-view="split" title="Split view">
                 ${iconHtml(Columns, { size: 18 })}
               </button>
-              <button class="view-btn" data-view="unified" title="Unified view">
+              <button class="view-btn${this.preferredDiffViewMode === 'unified' ? ' active' : ''}" data-view="unified" title="Unified view">
                 ${iconHtml(FileText, { size: 18 })}
               </button>
               <button class="view-btn preview-btn hidden" data-view="preview" title="Preview markdown">
@@ -1364,6 +1587,13 @@ class PRReviewApp {
     const controller = new AbortController();
     this.tabEventListeners.set(tabId, controller);
 
+    // Description toggle
+    const descSection = document.getElementById(`prDescription-${tabId}`);
+    const descHeader = descSection?.querySelector('.pr-description-header');
+    descHeader?.addEventListener('click', () => {
+      descSection!.classList.toggle('expanded');
+    }, { signal: controller.signal });
+
     // Vote dropdown
     const voteBtn = document.getElementById(`voteBtn-${tabId}`);
     const voteDropdown = document.getElementById(`voteDropdown-${tabId}`);
@@ -1504,6 +1734,12 @@ class PRReviewApp {
       state.aiPanelState = this.aiCommentsPanel.getState();
       // Save Apply Changes panel state for this PR tab
       state.applyChangesPanelState = this.applyChangesPanel.getState();
+      // Save walkthrough popout state if active
+      if (this.walkthroughUI.isInPopout()) {
+        state.walkthroughPopoutState = this.walkthroughUI.getPopoutState();
+      } else {
+        state.walkthroughPopoutState = null;
+      }
     }
   }
 
@@ -1549,6 +1785,11 @@ class PRReviewApp {
     // Restore comments (must be before setFileThreads since setThreads clears file-specific threads)
     this.commentsPanel.setThreads(state.threads);
 
+    // Sync view toggle buttons with current diff view mode
+    document.querySelectorAll(`#reviewScreen-${tabId} .view-btn`).forEach(btn => {
+      btn.classList.toggle('active', (btn as HTMLElement).dataset.view === state.diffViewMode);
+    });
+
     // Restore selected file
     if (state.selectedFile) {
       this.fileTree.setSelected(state.selectedFile);
@@ -1565,6 +1806,12 @@ class PRReviewApp {
     this.updateCommentCountForState(state, tabId);
     this.updateFileCountForState(state, tabId);
     this.updateReviewProgress();
+
+    // Restore walkthrough popout if it was active
+    if (state.walkthroughPopoutState) {
+      this.walkthroughUI.restorePopout(state.walkthroughPopoutState, tabId).catch(console.error);
+      state.walkthroughPopoutState = null; // Clear after restoring
+    }
   }
 
   private getCurrentPRState(): PRTabState | null {
@@ -1597,6 +1844,14 @@ class PRReviewApp {
   // First launch flow
   private async checkFirstLaunch() {
     const isConfigured = await window.electronAPI.isConfigured();
+
+    // Load saved diff view mode preference
+    try {
+      const settings = await window.electronAPI.getSettings() as Record<string, unknown> | null;
+      if (settings?.diffViewMode === 'split' || settings?.diffViewMode === 'unified') {
+        this.preferredDiffViewMode = settings.diffViewMode;
+      }
+    } catch { /* use default */ }
 
     // Load generated file patterns from console review settings
     await this.loadGeneratedFilePatterns();
@@ -1797,7 +2052,7 @@ class PRReviewApp {
         fileChanges: [],
         selectedFile: null,
         threads: [],
-        diffViewMode: 'unified',
+        diffViewMode: this.preferredDiffViewMode,
         prContextKey: null,
         contextPath: null,
         aiSessionId: null,
@@ -1821,6 +2076,56 @@ class PRReviewApp {
     }
   }
 
+  public async openPRByUrl(org: string, project: string, prId: number) {
+    const tabId = `pr-${org}-${project}-${prId}`;
+    const existingTab = this.reviewTabs.find(t => t.id === tabId);
+
+    if (existingTab) {
+      this.switchReviewTab(tabId);
+    } else {
+      const tab: ReviewTab = {
+        id: tabId,
+        type: 'pr',
+        label: `PR #${prId}`,
+        closeable: true,
+      };
+      this.reviewTabs.push(tab);
+
+      const state: PRTabState = {
+        org,
+        project,
+        repoId: '',
+        repoName: '',
+        prId,
+        pullRequest: null,
+        iterations: [],
+        selectedIteration: null,
+        fileChanges: [],
+        selectedFile: null,
+        threads: [],
+        diffViewMode: this.preferredDiffViewMode,
+        prContextKey: null,
+        contextPath: null,
+        aiSessionId: null,
+        aiReviewInProgress: false,
+        hasSavedReview: false,
+        hasSavedWalkthrough: false,
+        savedReviewInfo: null,
+        savedWalkthroughInfo: null,
+        pollingState: null,
+        hasNewVersion: false,
+        copilotChatPanelOpen: false,
+        copilotChatAI: 'copilot',
+      };
+      this.prTabStates.set(tabId, state);
+
+      this.updateTabBar();
+      this.switchReviewTab(tabId);
+
+      await this.loadPullRequest(state, tabId);
+    }
+  }
+
   private async loadPullRequest(state: PRTabState, tabId: string) {
     this.showLoading('Loading pull request...');
 
@@ -1831,6 +2136,18 @@ class PRReviewApp {
         state.project,
         state.prId
       );
+
+      // Populate repoId/repoName from response if not set (e.g. opened by URL)
+      if (!state.repoId && state.pullRequest) {
+        state.repoId = state.pullRequest.repository.id;
+        state.repoName = state.pullRequest.repository.name;
+        // Update tab label
+        const tab = this.reviewTabs.find(t => t.id === tabId);
+        if (tab) {
+          tab.label = `${state.repoName}/#${state.prId}`;
+          this.updateTabBar();
+        }
+      }
 
       // Set PR ID for file tree review tracking
       this.fileTree.setPrId(`${state.org}-${state.project}-${state.prId}`);
@@ -1957,6 +2274,11 @@ class PRReviewApp {
     if (result.hasNewVersion) {
       state.hasNewVersion = true;
       this.showNewVersionBanner(tabId);
+      notificationService.notify(
+        'newIterations',
+        'New Commits',
+        `New push detected on PR #${state.prId}`
+      );
     }
 
     // Handle comment changes (silent update)
@@ -1973,15 +2295,18 @@ class PRReviewApp {
         this.commentsPanel.setThreads(state.threads);
         this.updateCommentCountForState(state, tabId);
 
-        // Update file threads and re-render diff viewer if a file is selected
+        // Update all files' thread counts
+        for (const file of state.fileChanges) {
+          file.threads = filterVisibleThreads(
+            state.threads.filter(t => t.threadContext?.filePath === file.path)
+          );
+        }
+        this.fileTree.setFiles(state.fileChanges);
+
+        // Re-render diff viewer if a file is selected
         if (state.selectedFile) {
           const file = state.fileChanges.find(f => f.path === state.selectedFile);
           if (file) {
-            // Update file's threads from the new threads list
-            file.threads = state.threads.filter(
-              t => t.threadContext?.filePath === state.selectedFile
-            );
-            // Re-render to update comment badges
             this.diffViewer.render(file, state.diffViewMode);
             this.commentsPanel.setFileThreads(file.threads);
           }
@@ -1995,6 +2320,11 @@ class PRReviewApp {
       }
 
       console.log(`[App] Comments updated for tab ${tabId}: ${result.updatedThreads.length} threads`);
+      notificationService.notify(
+        'newComments',
+        'New Comments',
+        `Comments updated on PR #${state.prId}`
+      );
     }
   }
 
@@ -2118,6 +2448,17 @@ class PRReviewApp {
         </div>
       `;
     }).join('');
+
+    // Description
+    const descSection = document.getElementById(`prDescription-${tabId}`);
+    if (descSection) {
+      if (pr.description && pr.description.trim()) {
+        descSection.classList.remove('hidden');
+        document.getElementById(`prDescriptionContent-${tabId}`)!.innerHTML = renderMarkdownSync(pr.description);
+      } else {
+        descSection.classList.add('hidden');
+      }
+    }
   }
 
   private getVoteClass(vote: number): string {
@@ -2194,9 +2535,9 @@ class PRReviewApp {
     // Phase 1: Build file metadata (no content fetching - backend will fetch)
     const fileMetadata = changes.map(change => {
       // For deleted files, item.path may be null - use originalPath as fallback
-      const filePath = change.item?.path || change.originalPath;
-      const fileThreads = state.threads.filter(t =>
-        t.threadContext?.filePath === filePath
+      const filePath = change.item?.path || change.originalPath || '';
+      const fileThreads = filterVisibleThreads(
+        state.threads.filter(t => t.threadContext?.filePath === filePath)
       );
 
       return {
@@ -2207,7 +2548,7 @@ class PRReviewApp {
         originalPath: change.originalPath,
         threads: fileThreads,
       };
-    });
+    }).filter(f => f.path);
 
     // Phase 2: Let backend fetch files and write to disk via ensurePRContext
     try {
@@ -2228,7 +2569,6 @@ class PRReviewApp {
         fileMetadata,
         state.threads,
         lastCommitId,
-        targetBranch,
         state.repoId
       );
 
@@ -2291,7 +2631,7 @@ class PRReviewApp {
       console.error('[App] Failed to create PR context:', error);
       // Fallback: Fetch files in renderer if backend fails
       console.log('[App] Falling back to renderer-side file fetching...');
-      await this.processChangesWithFallback(state, changes, targetBranch);
+      await this.processChangesWithFallback(state, changes);
     }
   }
 
@@ -2299,13 +2639,15 @@ class PRReviewApp {
    * Fallback method for when backend file fetching fails.
    * Fetches files in the renderer (original behavior).
    */
-  private async processChangesWithFallback(state: PRTabState, changes: IterationChange[], targetBranch: string) {
-    const processedChanges = await Promise.all(
-      changes.map(async (change): Promise<FileChange> => {
+  private async processChangesWithFallback(state: PRTabState, changes: IterationChange[]) {
+    const processedChanges = (await Promise.all(
+      changes.map(async (change): Promise<FileChange | null> => {
         // For deleted files, item.path may be null - use originalPath as fallback
         const filePath = change.item?.path || change.originalPath;
-        const fileThreads = state.threads.filter(t =>
-          t.threadContext?.filePath === filePath
+        if (!filePath) return null;
+
+        const fileThreads = filterVisibleThreads(
+          state.threads.filter(t => t.threadContext?.filePath === filePath)
         );
 
         let originalContent: string | null = null;
@@ -2326,16 +2668,19 @@ class PRReviewApp {
         }
 
         if (['edit', 'delete', 'rename'].includes(change.changeType)) {
-          try {
-            originalContent = await window.electronAPI.getFileFromBranch(
-              state.org,
-              state.project,
-              state.repoId,
-              change.originalPath || filePath,
-              targetBranch
-            ) || null;
-          } catch (e) {
-            console.warn('Failed to load original content:', e);
+          if (change.item?.originalObjectId) {
+            try {
+              originalContent = await window.electronAPI.getFileContent(
+                state.org,
+                state.project,
+                state.repoId,
+                change.item.originalObjectId
+              ) || null;
+            } catch (e) {
+              console.warn('Failed to load original content:', e);
+            }
+          } else {
+            console.warn('No originalObjectId for', filePath, '- skipping original');
           }
         }
 
@@ -2349,7 +2694,7 @@ class PRReviewApp {
           threads: fileThreads,
         };
       })
-    );
+    )).filter((f): f is FileChange => f !== null);
 
     // Keep content in memory (no disk storage in fallback mode)
     state.fileChanges = processedChanges;
@@ -2448,6 +2793,13 @@ class PRReviewApp {
 
     // Don't persist 'preview' to settings - it's contextual
     if (mode !== 'preview') {
+      this.preferredDiffViewMode = mode;
+      // Apply to all other open PR tabs so switching tabs uses the same mode
+      for (const [tabId, tabState] of this.prTabStates) {
+        if (tabId !== this.activeReviewTabId) {
+          tabState.diffViewMode = mode;
+        }
+      }
       window.electronAPI.saveSettings({ diffViewMode: mode });
     }
   }
@@ -2519,11 +2871,14 @@ class PRReviewApp {
       this.commentsPanel.addThread(thread);
       this.updateCommentCountForState(state, this.activeReviewTabId);
 
-      // Update file threads
+      // Update file threads (rebuild from master list to stay consistent with filterVisibleThreads)
       const file = state.fileChanges.find(f => f.path === filePath);
       if (file) {
-        file.threads.push(thread);
+        file.threads = filterVisibleThreads(
+          state.threads.filter(t => t.threadContext?.filePath === filePath)
+        );
         this.diffViewer.addCommentMarker(thread);
+        this.fileTree.setFiles(state.fileChanges);
       }
 
       Toast.success('Comment added');
@@ -2608,6 +2963,11 @@ class PRReviewApp {
       );
       this.commentsPanel.setAnalyses(allAnalyses?.analyses || []);
       Toast.success('Analysis complete');
+      notificationService.notify(
+        'aiAnalysisComplete',
+        'Comment Analysis Complete',
+        `${threads.length} comment${threads.length !== 1 ? 's' : ''} analyzed on PR #${state.prId}`
+      );
 
       // Auto-fix if enabled - apply fixes for all 'fix' recommendations
       if (this.commentsPanel.isAutoFixEnabled()) {
@@ -2782,9 +3142,7 @@ class PRReviewApp {
   }
 
   private updateCommentCountForState(state: PRTabState, tabId: string) {
-    const userThreads = state.threads.filter(t =>
-      t.comments.some(c => c.commentType !== 'system')
-    );
+    const userThreads = filterVisibleThreads(state.threads);
     const el = document.getElementById(`commentCount-${tabId}`);
     if (el) el.textContent = userThreads.length.toString();
   }
@@ -2882,8 +3240,8 @@ class PRReviewApp {
     const state = this.getCurrentPRState();
     if (!state?.selectedFile || state.fileChanges.length === 0) return;
 
-    // Use visible files to skip generated files when hidden
-    const visibleFiles = this.fileTree.getVisibleFiles();
+    // Use ordered visible files so navigation matches file explorer order
+    const visibleFiles = this.fileTree.getOrderedVisibleFiles();
     if (visibleFiles.length === 0) return;
 
     const currentIndex = visibleFiles.findIndex(f => f.path === state.selectedFile);
@@ -2901,8 +3259,8 @@ class PRReviewApp {
     const navigated = this.diffViewer.navigateChanges(direction);
 
     if (!navigated && state.selectedFile) {
-      // Use visible files to skip generated files when hidden
-      const visibleFiles = this.fileTree.getVisibleFiles();
+      // Use ordered visible files so cross-file navigation matches file explorer order
+      const visibleFiles = this.fileTree.getOrderedVisibleFiles();
       const currentIndex = visibleFiles.findIndex(f => f.path === state.selectedFile);
       const newIndex = currentIndex + direction;
 
@@ -3879,11 +4237,11 @@ After this, respond with a simple text response to greet the user and ask them w
   }
 
   private formatAICommentForADO(comment: AIReviewComment): string {
-    const severityEmoji = {
+    const severityEmoji: Record<string, string> = {
       critical: '🔴',
-      warning: '🟡',
-      suggestion: '🔵',
-      praise: '🟢',
+      major: '🟡',
+      minor: '🔵',
+      trivial: '⚪',
     };
 
     let content = `${severityEmoji[comment.severity]} **[${comment.severity.toUpperCase()}]** ${comment.title}\n\n`;
@@ -3894,7 +4252,7 @@ After this, respond with a simple text response to greet the user and ask them w
     }
 
     content += `_Category: ${comment.category} | Confidence: ${Math.round(comment.confidence * 100)}%_\n\n`;
-    content += `_Generated by AI Code Review_`;
+    content += `_Generated by TaskDock's AI Review Agent_`;
 
     return content;
   }
@@ -4055,8 +4413,15 @@ After this, respond with a simple text response to greet the user and ask them w
     }
   }
 
-  private async closeTerminalSession(sessionId: string) {
-    // Get the session to find context path for cleanup
+  private async closeTerminalSession(sessionId: string, isChat = false) {
+    if (isChat) {
+      // Chat terminal (plugin-launched AI terminal) — simpler cleanup
+      await window.electronAPI.chatTerminalRemove(sessionId);
+      this.terminalsView.removeSession(sessionId);
+      return;
+    }
+
+    // Regular terminal — get session for cleanup info
     const session = await window.electronAPI.terminalGetSession(sessionId);
 
     // Remove the terminal from backend (kills process)

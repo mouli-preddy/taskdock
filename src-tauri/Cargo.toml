@@ -26,6 +26,9 @@ tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-process = "2"
 tauri-plugin-store = "2"
+tauri-plugin-deep-link = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 
 [profile.release]
 strip = true

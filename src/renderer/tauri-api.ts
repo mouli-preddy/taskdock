@@ -459,9 +459,8 @@ export const tauriAPI = {
     files: any[],
     threads: any[],
     lastCommitId: string,
-    targetBranch: string,
     repoId: string
-  ) => invoke('context:ensure-pr-context', prContext, files, threads, lastCommitId, targetBranch, repoId),
+  ) => invoke('context:ensure-pr-context', prContext, files, threads, lastCommitId, repoId),
   getCachedFileContent: (
     prContextKey: string,
     filePath: string,
@@ -486,6 +485,16 @@ export const tauriAPI = {
   setPollingSettings: async (settings: any) => {
     const { invoke } = await import('@tauri-apps/api/core');
     return invoke('set_polling_settings', { settings });
+  },
+
+  // Notification settings
+  getNotificationSettings: async () => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke('get_notification_settings');
+  },
+  setNotificationSettings: async (settings: any) => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke('set_notification_settings', { settings });
   },
 
   // Apply Changes API
@@ -541,6 +550,29 @@ export const tauriAPI = {
   ) => invoke('comment-analysis:reanalyze', thread, context, provider, fileContents, showTerminal ?? false),
   onCommentAnalysisProgress: (callback: (event: { prId: number; status: string }) => void) =>
     subscribe('comment-analysis:progress', callback),
+
+  // Plugin API
+  pluginGetPlugins: () => invoke('plugin:get-plugins'),
+  pluginGetPlugin: (pluginId: string) => invoke('plugin:get-plugin', pluginId),
+  pluginExecuteTrigger: (pluginId: string, triggerId: string, input?: any) =>
+    invoke('plugin:execute-trigger', pluginId, triggerId, input),
+  pluginSetEnabled: (pluginId: string, enabled: boolean) =>
+    invoke('plugin:set-enabled', pluginId, enabled),
+  pluginSaveConfig: (pluginId: string, config: Record<string, any>) =>
+    invoke('plugin:save-config', pluginId, config),
+  pluginGetLogs: (pluginId: string) =>
+    invoke('plugin:get-logs', pluginId),
+
+  // Plugin event listeners
+  onPluginUIUpdate: (callback: (event: any) => void) => subscribe('plugin:ui-update', callback),
+  onPluginUIInject: (callback: (event: any) => void) => subscribe('plugin:ui-inject', callback),
+  onPluginUIToast: (callback: (event: any) => void) => subscribe('plugin:ui-toast', callback),
+  onPluginLog: (callback: (event: any) => void) => subscribe('plugin:log', callback),
+  onPluginExecutionComplete: (callback: (event: any) => void) => subscribe('plugin:execution-complete', callback),
+  onPluginReloaded: (callback: (event: any) => void) => subscribe('plugin:reloaded', callback),
+  onPluginsReloaded: (callback: () => void) => subscribe('plugin:plugins-reloaded', callback),
+  onPluginStateChanged: (callback: (event: any) => void) => subscribe('plugin:state-changed', callback),
+  onPluginNavigate: (callback: (event: any) => void) => subscribe('plugin:ui-navigate', callback),
 };
 
 // Initialize connection when module loads

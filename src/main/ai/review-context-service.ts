@@ -28,6 +28,10 @@ export interface ReviewOutputFiles {
   walkthrough?: CodeWalkthrough;
 }
 
+// Bump this when the context format or file-fetching strategy changes
+// to auto-invalidate stale caches (e.g. switching from target-tip to merge-base blobs).
+const CONTEXT_VERSION = 2;
+
 export class ReviewContextService {
   private prContextsDir: string;  // Renamed from reviewsDir
 
@@ -91,14 +95,15 @@ export class ReviewContextService {
         const manifestPath = path.join(contextPath, 'context', 'files.json');
         const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
 
-        // If lastCommitId matches, context is still valid
-        if (manifest.lastCommitId === lastCommitId) {
+        // If lastCommitId and version match, context is still valid
+        if (manifest.lastCommitId === lastCommitId && manifest.contextVersion === CONTEXT_VERSION) {
           console.log(`[ReviewContextService] Reusing existing PR context: ${prContextKey}`);
           return { contextPath, prContextKey, reused: true };
         }
 
-        // PR was updated - remove stale context
-        console.log(`[ReviewContextService] PR updated, refreshing context: ${prContextKey}`);
+        // PR was updated or context version changed - remove stale context
+        const reason = manifest.contextVersion !== CONTEXT_VERSION ? 'context version changed' : 'PR updated';
+        console.log(`[ReviewContextService] ${reason}, refreshing context: ${prContextKey}`);
         fs.rmSync(contextPath, { recursive: true, force: true });
       } catch (error) {
         console.warn(`[ReviewContextService] Error reading existing context, recreating:`, error);
@@ -130,11 +135,9 @@ export class ReviewContextService {
     threads: CommentThread[],
     settings: ReviewContextSettings,
     lastCommitId: string,
-    targetBranch: string,
     repoId: string,
     fetcher: {
       getFileContent: (objectId: string) => Promise<string>;
-      getFileFromBranch: (filePath: string, branch: string) => Promise<string | null>;
     }
   ): Promise<{ contextPath: string; prContextKey: string; reused: boolean }> {
     if (!prContext.org || !prContext.project) {
@@ -149,14 +152,15 @@ export class ReviewContextService {
         const manifestPath = path.join(contextPath, 'context', 'files.json');
         const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
 
-        // If lastCommitId matches, context is still valid
-        if (manifest.lastCommitId === lastCommitId) {
+        // If lastCommitId and version match, context is still valid
+        if (manifest.lastCommitId === lastCommitId && manifest.contextVersion === CONTEXT_VERSION) {
           console.log(`[ReviewContextService] Reusing existing PR context: ${prContextKey}`);
           return { contextPath, prContextKey, reused: true };
         }
 
-        // PR was updated - remove stale context
-        console.log(`[ReviewContextService] PR updated, refreshing context: ${prContextKey}`);
+        // PR was updated or context version changed - remove stale context
+        const reason = manifest.contextVersion !== CONTEXT_VERSION ? 'context version changed' : 'PR updated';
+        console.log(`[ReviewContextService] ${reason}, refreshing context: ${prContextKey}`);
         fs.rmSync(contextPath, { recursive: true, force: true });
       } catch (error) {
         console.warn(`[ReviewContextService] Error reading existing context, recreating:`, error);
@@ -167,7 +171,7 @@ export class ReviewContextService {
     }
 
     // Create new context by fetching files
-    await this.prepareContextWithFetch(prContextKey, prContext, files, threads, settings, lastCommitId, targetBranch, fetcher);
+    await this.prepareContextWithFetch(prContextKey, prContext, files, threads, settings, lastCommitId, fetcher);
 
     return { contextPath, prContextKey, reused: false };
   }
@@ -189,10 +193,8 @@ export class ReviewContextService {
     threads: CommentThread[],
     settings: ReviewContextSettings,
     lastCommitId: string,
-    targetBranch: string,
     fetcher: {
       getFileContent: (objectId: string) => Promise<string>;
-      getFileFromBranch: (filePath: string, branch: string) => Promise<string | null>;
     }
   ): Promise<void> {
     const contextPath = this.getPRContextPath(prContextKey);
@@ -239,6 +241,7 @@ export class ReviewContextService {
 
       // Write files list with manifest info
       const manifest = {
+        contextVersion: CONTEXT_VERSION,
         prId: prContext.prId,
         org: prContext.org,
         project: prContext.project,
@@ -295,17 +298,18 @@ export class ReviewContextService {
           }
         }
 
-        // Fetch original content
+        // Fetch original content using merge-base blob (originalObjectId)
         if (['edit', 'delete', 'rename'].includes(file.changeType)) {
-          try {
-            const originalFilePath = file.originalPath || file.path;
-            const originalContent = await fetcher.getFileFromBranch(originalFilePath, targetBranch);
-            if (originalContent !== null) {
+          if (file.originalObjectId) {
+            try {
+              const originalContent = await fetcher.getFileContent(file.originalObjectId);
               fs.mkdirSync(path.dirname(originalPath), { recursive: true });
               fs.writeFileSync(originalPath, originalContent);
+            } catch (e) {
+              console.warn(`[ReviewContextService] Failed to fetch original content for ${file.path}:`, e);
             }
-          } catch (e) {
-            console.warn(`[ReviewContextService] Failed to fetch original content for ${file.path}:`, e);
+          } else {
+            console.warn(`[ReviewContextService] No originalObjectId for ${file.path}, skipping original`);
           }
         }
       }
@@ -375,6 +379,7 @@ export class ReviewContextService {
 
       // Write files list with manifest info
       const manifest = {
+        contextVersion: CONTEXT_VERSION,
         prId: prContext.prId,
         org: prContext.org,
         project: prContext.project,

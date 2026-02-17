@@ -1,7 +1,7 @@
 import type { PullRequest } from '../../shared/types.js';
 import type { MonitoredRepository } from '../../shared/terminal-types.js';
 import { escapeHtml, formatTimeAgo } from '../utils/html-utils.js';
-import { iconHtml, RefreshCw, GitPullRequest, Link, Clock, Globe } from '../utils/icons.js';
+import { iconHtml, RefreshCw, GitPullRequest, Link, Clock, Globe, ExternalLink } from '../utils/icons.js';
 
 interface LinkedRepo {
   path: string;
@@ -22,6 +22,7 @@ export class PRHomeView {
   private monitoredPRsMap: Map<string, PullRequest[]> = new Map(); // key: repo.name
   private activeTab: string = 'review'; // 'review', 'created', or 'monitored-{repoName}'
   private openPRCallback: ((pr: PullRequest) => void) | null = null;
+  private openPRByUrlCallback: ((org: string, project: string, prId: number) => void) | null = null;
   private refreshCallback: (() => void) | null = null;
   private linkedReposCache: Map<string, LinkedRepo | null> = new Map();
 
@@ -32,6 +33,10 @@ export class PRHomeView {
 
   onOpenPR(callback: (pr: PullRequest) => void) {
     this.openPRCallback = callback;
+  }
+
+  onOpenPRByUrl(callback: (org: string, project: string, prId: number) => void) {
+    this.openPRByUrlCallback = callback;
   }
 
   onRefresh(callback: () => void) {
@@ -156,6 +161,15 @@ export class PRHomeView {
           </button>
         </header>
 
+        <div class="pr-url-bar">
+          <div class="pr-url-input-group">
+            ${iconHtml(ExternalLink, { size: 16 })}
+            <input type="text" class="pr-url-input" id="prUrlInput" placeholder="Paste Azure DevOps PR URL to open..." />
+            <button class="btn btn-primary" id="openPrUrlBtn">Open</button>
+          </div>
+          <div class="pr-url-error hidden" id="prUrlError">Invalid Azure DevOps PR URL</div>
+        </div>
+
         <div class="pr-home-tabs">
           <button class="pr-tab active" data-tab="review">
             <span>For Review</span>
@@ -192,6 +206,42 @@ export class PRHomeView {
     this.container.querySelector('#refreshPRsBtn')?.addEventListener('click', () => {
       this.refreshCallback?.();
     });
+
+    this.container.querySelector('#openPrUrlBtn')?.addEventListener('click', () => {
+      this.handleOpenByUrl();
+    });
+
+    this.container.querySelector('#prUrlInput')?.addEventListener('keydown', (e) => {
+      if ((e as KeyboardEvent).key === 'Enter') {
+        this.handleOpenByUrl();
+      }
+    });
+
+    this.container.querySelector('#prUrlInput')?.addEventListener('input', () => {
+      this.container.querySelector('#prUrlError')?.classList.add('hidden');
+    });
+  }
+
+  private handleOpenByUrl() {
+    const input = this.container.querySelector('#prUrlInput') as HTMLInputElement | null;
+    const errorEl = this.container.querySelector('#prUrlError');
+    if (!input || !errorEl) return;
+
+    const url = input.value.trim();
+    const match = url.match(
+      /https:\/\/(?:dev\.azure\.com\/([^/]+)\/([^/]+)|([^.]+)\.visualstudio\.com\/([^/]+))\/_git\/[^/]+\/pullrequest\/(\d+)/
+    );
+
+    if (match) {
+      const org = decodeURIComponent(match[1] || match[3]);
+      const project = decodeURIComponent(match[2] || match[4]);
+      const prId = parseInt(match[5], 10);
+      errorEl.classList.add('hidden');
+      input.value = '';
+      this.openPRByUrlCallback?.(org, project, prId);
+    } else {
+      errorEl.classList.remove('hidden');
+    }
   }
 
   private switchTab(tab: string) {

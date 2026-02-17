@@ -4,11 +4,7 @@
  */
 
 import type { CodeWalkthrough, WalkthroughStep, WalkthroughPreset } from '../../shared/ai-types.js';
-import {
-  renderMarkdown,
-  renderDiagramToElement,
-  initializeMermaid,
-} from '../utils/markdown-renderer.js';
+import { initializeMermaid } from '../utils/markdown-renderer.js';
 import { escapeHtml } from '../utils/html-utils.js';
 import {
   iconHtml,
@@ -20,9 +16,9 @@ import {
   Clock,
   ChevronLeft,
   ChevronRight,
-  FileText,
-  LayoutGrid,
+  ExternalLink,
 } from '../utils/icons.js';
+import { renderStepHtml, renderSummaryHtml, renderMarkdownInContainer } from './walkthrough-renderer.js';
 
 /**
  * Extended walkthrough with display metadata
@@ -54,6 +50,11 @@ export class WalkthroughUI {
   // Track which tab this walkthrough belongs to
   private tabId: string | null = null;
 
+  // Popout state
+  private isPopoutActive = false;
+  private popoutWindow: any = null; // WebviewWindow reference
+  private popoutUnlisteners: Array<() => void> = [];
+
   private navigateCallback?: (filePath: string, line: number) => void;
   private closeCallback?: () => void;
 
@@ -70,6 +71,13 @@ export class WalkthroughUI {
   }
 
   show(walkthrough: ExtendedWalkthrough, tabId?: string): void {
+    // Close any existing popout before showing new walkthrough
+    if (this.isPopoutActive) {
+      this.closePopoutWindow();
+      this.cleanupPopout();
+      this.isPopoutActive = false;
+    }
+
     initializeMermaid();
     this.walkthrough = walkthrough;
     this.currentStep = 0;
@@ -93,6 +101,11 @@ export class WalkthroughUI {
       this.overlay.remove();
       this.overlay = null;
     }
+    if (this.isPopoutActive) {
+      this.closePopoutWindow();
+      this.cleanupPopout();
+      this.isPopoutActive = false;
+    }
     this.tabId = null;
     this.removeKeyboardListeners();
     this.removeMouseListeners();
@@ -110,15 +123,27 @@ export class WalkthroughUI {
    * Check if the walkthrough is currently visible
    */
   isVisible(): boolean {
-    return this.overlay !== null;
+    return this.overlay !== null || this.isPopoutActive;
   }
 
   /**
    * Hide the walkthrough if it doesn't belong to the specified tab
    */
   hideIfNotOnTab(currentTabId: string): void {
-    if (this.overlay && this.tabId && this.tabId !== currentTabId) {
-      this.hide();
+    if (this.tabId && this.tabId !== currentTabId) {
+      if (this.overlay) {
+        this.overlay.remove();
+        this.overlay = null;
+      }
+      if (this.isPopoutActive) {
+        this.closePopoutWindow();
+        this.cleanupPopout();
+        this.isPopoutActive = false;
+      }
+      this.tabId = null;
+      this.removeKeyboardListeners();
+      this.removeMouseListeners();
+      this.closeCallback?.();
     }
   }
 
@@ -298,6 +323,9 @@ export class WalkthroughUI {
             ` : ''}
           </div>
           <div class="walkthrough-header-actions">
+            <button class="btn btn-icon walkthrough-popout-btn" title="Open in separate window">
+              ${iconHtml(ExternalLink, { size: 16 })}
+            </button>
             <button class="btn btn-icon walkthrough-minimize-btn" title="Minimize">
               ${iconHtml(Minus, { size: 16 })}
             </button>
@@ -372,67 +400,12 @@ export class WalkthroughUI {
   }
 
   private renderStepSync(step: WalkthroughStep): string {
-    const fileName = step.filePath.split('/').pop() || step.filePath;
-
-    return `
-      <div class="walkthrough-step">
-        <h3 class="walkthrough-step-title">${escapeHtml(step.title)}</h3>
-
-        <div class="walkthrough-step-location"
-             data-file="${step.filePath}"
-             data-line="${step.startLine}">
-          ${iconHtml(FileText, { size: 14 })}
-          <span class="walkthrough-file">${fileName}</span>
-          <span class="walkthrough-line">:${step.startLine}${step.endLine !== step.startLine ? `-${step.endLine}` : ''}</span>
-        </div>
-
-        <div class="walkthrough-step-description markdown-content" data-markdown="${encodeURIComponent(step.description)}">
-          <div class="loading-markdown">Loading...</div>
-        </div>
-
-        ${step.diagram ? `
-          <div class="walkthrough-step-diagram mermaid-diagram" data-diagram="${encodeURIComponent(step.diagram)}">
-            <div class="loading-diagram">Loading diagram...</div>
-          </div>
-        ` : ''}
-
-        ${step.relatedFiles && step.relatedFiles.length > 0 ? `
-          <div class="walkthrough-related">
-            <span class="walkthrough-related-label">Related files:</span>
-            ${step.relatedFiles.map(f => `
-              <span class="walkthrough-related-file" data-file="${f}">
-                ${f.split('/').pop()}
-              </span>
-            `).join('')}
-          </div>
-        ` : ''}
-      </div>
-    `;
+    return renderStepHtml(step);
   }
 
   private renderSummarySync(): string {
-    const hasArchDiagram = this.walkthrough?.architectureDiagram;
-
-    return `
-      <div class="walkthrough-summary">
-        <h3>Summary</h3>
-        <div class="walkthrough-summary-text markdown-content" data-markdown="${encodeURIComponent(this.walkthrough?.summary || '')}">
-          <div class="loading-markdown">Loading...</div>
-        </div>
-
-        ${hasArchDiagram ? `
-          <div class="walkthrough-architecture-diagram">
-            <h4>
-              ${iconHtml(LayoutGrid, { size: 16 })}
-              Architecture Overview
-            </h4>
-            <div class="mermaid-diagram" data-diagram="${encodeURIComponent(this.walkthrough?.architectureDiagram || '')}">
-              <div class="loading-diagram">Loading diagram...</div>
-            </div>
-          </div>
-        ` : ''}
-      </div>
-    `;
+    if (!this.walkthrough) return '';
+    return renderSummaryHtml(this.walkthrough);
   }
 
   /**
@@ -440,37 +413,7 @@ export class WalkthroughUI {
    */
   private async renderMarkdownContent(): Promise<void> {
     if (!this.overlay) return;
-
-    // Render markdown content
-    const markdownElements = this.overlay.querySelectorAll('.markdown-content[data-markdown]');
-    for (const el of markdownElements) {
-      const markdown = decodeURIComponent((el as HTMLElement).dataset.markdown || '');
-      if (markdown) {
-        try {
-          const html = await renderMarkdown(markdown);
-          el.innerHTML = html;
-        } catch (error) {
-          console.error('Failed to render markdown:', error);
-          el.innerHTML = `<p>${escapeHtml(markdown)}</p>`;
-        }
-      }
-    }
-
-    // Render mermaid diagrams
-    const diagramElements = this.overlay.querySelectorAll('.mermaid-diagram[data-diagram]');
-    for (const el of diagramElements) {
-      const diagramCode = decodeURIComponent((el as HTMLElement).dataset.diagram || '');
-      if (diagramCode) {
-        try {
-          // Convert escaped newlines to actual newlines
-          const normalizedCode = diagramCode.replace(/\\n/g, '\n');
-          await renderDiagramToElement(normalizedCode, el as HTMLElement);
-        } catch (error) {
-          console.error('Failed to render diagram:', error);
-          el.innerHTML = `<div class="mermaid-error">Failed to render diagram</div>`;
-        }
-      }
-    }
+    await renderMarkdownInContainer(this.overlay);
   }
 
   private navigateToCurrentStep(): void {
@@ -493,6 +436,11 @@ export class WalkthroughUI {
     this.overlay.querySelector('.walkthrough-minimize-btn')?.addEventListener('click', () => {
       this.isMinimized = true;
       this.render();
+    });
+
+    // Popout button
+    this.overlay.querySelector('.walkthrough-popout-btn')?.addEventListener('click', () => {
+      this.popout();
     });
 
     // Expand button
@@ -700,6 +648,201 @@ export class WalkthroughUI {
 
     this.updateSize();
     this.updatePosition();
+  }
+
+  /**
+   * Pop the walkthrough out into a separate Tauri window.
+   * Hides the in-app overlay and sends walkthrough data to the new window.
+   */
+  async popout(): Promise<void> {
+    if (this.isPopoutActive || !this.walkthrough) return;
+
+    try {
+      const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+      const { emit, listen } = await import('@tauri-apps/api/event');
+
+      // Create the popout window
+      const popoutLabel = `walkthrough-popout-${Date.now()}`;
+      const popoutWindow = new WebviewWindow(popoutLabel, {
+        url: 'walkthrough-popout.html',
+        title: this.displayName || 'Code Walkthrough',
+        width: 450,
+        height: 550,
+        minWidth: 350,
+        minHeight: 400,
+        resizable: true,
+        decorations: true,
+        center: true,
+      });
+
+      this.popoutWindow = popoutWindow;
+      this.isPopoutActive = true;
+
+      // Listen for creation errors
+      popoutWindow.once('tauri://error', (e) => {
+        console.error('Failed to create popout webview:', e);
+        this.isPopoutActive = false;
+        this.popoutWindow = null;
+        // Restore in-app overlay on error
+        if (this.walkthrough) {
+          this.createOverlay();
+          this.render();
+          this.attachKeyboardListeners();
+        }
+      });
+
+      // Wait for the popout window's JS to initialize and signal ready
+      const unlistenReady = await listen('walkthrough:popout-ready', async () => {
+        await emit('walkthrough:popout-data', {
+          walkthrough: this.walkthrough,
+          currentStep: this.currentStep,
+          displayName: this.displayName,
+          preset: this.preset,
+          customPrompt: this.customPrompt,
+          theme: document.documentElement.getAttribute('data-theme') || 'dark',
+        });
+        unlistenReady();
+      });
+
+      // Listen for navigation events from the popout
+      const unlistenNavigate = await listen<{ filePath: string; line: number }>('walkthrough:navigate', (event) => {
+        if (this.navigateCallback) {
+          this.navigateCallback(event.payload.filePath, event.payload.line);
+        }
+      });
+
+      // Listen for pop-back events
+      const unlistenPopBack = await listen<{ currentStep: number }>('walkthrough:pop-back', (event) => {
+        this.handlePopBack(event.payload.currentStep);
+      });
+
+      // Listen for step changes from the popout (keeps main window in sync for state saving)
+      const unlistenStepChanged = await listen<{ currentStep: number }>('walkthrough:step-changed', (event) => {
+        this.currentStep = event.payload.currentStep;
+      });
+
+      // Listen for the popout window being closed by the user (OS close button)
+      const unlistenDestroyed = await popoutWindow.once('tauri://destroyed', () => {
+        this.cleanupPopout();
+        // If the walkthrough tab is still active, re-show the overlay
+        if (this.walkthrough && this.tabId) {
+          this.isPopoutActive = false;
+          this.createOverlay();
+          this.render();
+          this.attachKeyboardListeners();
+        }
+      });
+
+      // Store unlisteners for cleanup
+      this.popoutUnlisteners = [unlistenNavigate, unlistenPopBack, unlistenStepChanged, unlistenReady, unlistenDestroyed];
+
+      // Hide the in-app overlay (but don't clear walkthrough data)
+      if (this.overlay) {
+        this.overlay.remove();
+        this.overlay = null;
+      }
+      this.removeKeyboardListeners();
+      this.removeMouseListeners();
+
+    } catch (error) {
+      console.error('Failed to create popout window:', error);
+      this.isPopoutActive = false;
+      this.popoutWindow = null;
+      // Restore in-app overlay on error
+      if (this.walkthrough) {
+        this.createOverlay();
+        this.render();
+        this.attachKeyboardListeners();
+      }
+    }
+  }
+
+  /**
+   * Handle the user clicking "pop back in" from the popout window.
+   * Restores the in-app overlay and closes the popout.
+   */
+  private handlePopBack(currentStep: number): void {
+    this.currentStep = currentStep;
+    this.closePopoutWindow();
+    this.cleanupPopout();
+    this.isPopoutActive = false;
+
+    // Re-show the in-app overlay
+    if (this.walkthrough) {
+      this.createOverlay();
+      this.render();
+      this.attachKeyboardListeners();
+    }
+  }
+
+  /**
+   * Close the popout window (if open).
+   * Uses destroy() for immediate teardown without close-requested events.
+   */
+  private closePopoutWindow(): void {
+    if (this.popoutWindow) {
+      this.popoutWindow.destroy().catch(() => {
+        // Window may already be closed
+      });
+      this.popoutWindow = null;
+    }
+  }
+
+  /**
+   * Clean up popout event listeners.
+   */
+  private cleanupPopout(): void {
+    for (const unlisten of this.popoutUnlisteners) {
+      unlisten();
+    }
+    this.popoutUnlisteners = [];
+    this.popoutWindow = null;
+  }
+
+  /**
+   * Whether the walkthrough is currently in a popout window
+   */
+  isInPopout(): boolean {
+    return this.isPopoutActive;
+  }
+
+  /**
+   * Get the current walkthrough state for saving/restoring across tab switches
+   */
+  getPopoutState(): {
+    walkthrough: CodeWalkthrough;
+    currentStep: number;
+    displayName?: string;
+    preset?: WalkthroughPreset;
+    customPrompt?: string;
+  } | null {
+    if (!this.walkthrough) return null;
+    return {
+      walkthrough: this.walkthrough,
+      currentStep: this.currentStep,
+      displayName: this.displayName,
+      preset: this.preset,
+      customPrompt: this.customPrompt,
+    };
+  }
+
+  /**
+   * Restore a popout window from saved state (used when switching back to a PR tab)
+   */
+  async restorePopout(state: {
+    walkthrough: CodeWalkthrough;
+    currentStep: number;
+    displayName?: string;
+    preset?: WalkthroughPreset;
+    customPrompt?: string;
+  }, tabId: string): Promise<void> {
+    this.walkthrough = state.walkthrough;
+    this.currentStep = state.currentStep;
+    this.displayName = state.displayName;
+    this.preset = state.preset;
+    this.customPrompt = state.customPrompt;
+    this.tabId = tabId;
+    await this.popout();
   }
 
   private keyboardHandler = (e: KeyboardEvent): void => {

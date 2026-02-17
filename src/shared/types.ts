@@ -206,6 +206,23 @@ export const DEFAULT_POLLING_SETTINGS: PollingSettings = {
   intervalSeconds: 30,
 };
 
+// Notification settings for native Windows toast notifications
+export interface NotificationSettings {
+  enabled: boolean;
+  aiReviewComplete: boolean;
+  aiAnalysisComplete: boolean;
+  newComments: boolean;
+  newIterations: boolean;
+}
+
+export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
+  enabled: true,
+  aiReviewComplete: true,
+  aiAnalysisComplete: true,
+  newComments: true,
+  newIterations: true,
+};
+
 // Apply Changes types
 export type ApplyChangeItemStatus = 'pending' | 'running' | 'success' | 'failed' | 'skipped';
 

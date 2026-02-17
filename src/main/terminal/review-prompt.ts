@@ -84,6 +84,7 @@ Write a JSON file with this structure:
 {
   "summary": "Brief overview of what this PR accomplishes",
   "architectureDiagram": "Optional mermaid diagram showing component relationships",
+  "estimatedReadTime": <estimated minutes to read through this walkthrough, as an integer>,
   "steps": [
     {
       "order": 1,
@@ -191,11 +192,18 @@ ${contextSection}
 
 ${taskInstructions}
 
+## Review Strategy
+1. First, read the file list and PR metadata to understand the overall scope and purpose of the changes
+2. Then dispatch subagents to review files in depth — group related files together and prioritize high-risk files (files touching auth, data access, configuration)
+3. Each subagent should focus on its assigned file(s) and return structured findings
+4. After all subagents complete, consolidate findings and remove duplicates
+
 ## Review Criteria
 Evaluate each change for:
 - **Security**: Injection vulnerabilities, authentication issues, data exposure, OWASP top 10
 - **Bugs**: Logic errors, null/undefined handling, edge cases, race conditions
-- **Performance**: N+1 queries, unnecessary loops, memory leaks, inefficient algorithms
+- **Performance**: Unnecessary loops, repeated O(N) or O(N^2) operations, N+1 queries, memory leaks, inefficient algorithms
+- **Compliance**: User ID or PII being logged, data retention violations, audit trail gaps
 - **Code Quality**: Readability, naming conventions, code duplication, SOLID principles
 - **Testing**: Missing test coverage for new or changed code paths`;
 
@@ -212,13 +220,9 @@ Evaluate each change for:
   // Add generated files note
   if (options.generatedFilePatterns && options.generatedFilePatterns.length > 0) {
     const patterns = options.generatedFilePatterns.join(', ');
-    reviewInstructions += `\n\n## Generated Files Note
+    reviewInstructions += `\n\n## Generated Files — SKIP ENTIRELY
 The following file patterns are auto-generated: ${patterns}
-These files are typically machine-generated and should receive lighter review scrutiny. Focus on:
-- Verifying the generation source/config is correct
-- Checking for accidental manual modifications
-- Ensuring generated output matches expected format
-Skip detailed code quality reviews for these files unless they appear to have been manually modified.`;
+Do NOT review these files. Skip them completely during your review. Do not include any comments about generated files.`;
   }
 
   // Add WorkIQ instructions when enabled
@@ -244,7 +248,7 @@ Write a JSON file with this structure:
       "filePath": "/src/example.ts",
       "startLine": 42,
       "endLine": 45,
-      "severity": "warning",
+      "severity": "major",
       "category": "security",
       "title": "Short summary of the issue",
       "content": "Detailed explanation in markdown format",
@@ -254,8 +258,8 @@ Write a JSON file with this structure:
   ]
 }
 
-Severity values: "critical" | "warning" | "suggestion" | "praise"
-Category values: "security" | "bug" | "performance" | "style" | "logic" | "testing"
+Severity values: "critical" | "major" | "minor" | "trivial"
+Category values: "security" | "bug" | "performance" | "style" | "logic" | "compliance" | "recommendation" | "nitpick" | "other"
 Confidence: 0.0 to 1.0
 
 ### ${outputPath}/walkthrough.json
@@ -263,6 +267,7 @@ Write a JSON file with this structure:
 {
   "summary": "Markdown overview of what this PR accomplishes",
   "architectureDiagram": "Optional mermaid diagram showing component relationships",
+  "estimatedReadTime": <estimated minutes to read through this walkthrough, as an integer>,
   "steps": [
     {
       "order": 1,
@@ -291,7 +296,7 @@ After completing review.json and walkthrough.json, write:
 2. If you encounter an error that prevents completion, still write ${guid}.done.json with:
    { "status": "error", "error": "description of what went wrong", ... }
 3. Be thorough but concise - focus on actionable feedback
-4. Praise good code patterns, not just problems
+4. Do NOT include praise or "good job" comments — only report issues and actionable suggestions
 5. Consider the PR description context when reviewing`;
   // === SKILL-EXTRACTABLE SECTION END ===
 

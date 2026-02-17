@@ -1,18 +1,28 @@
+use std::net::TcpStream;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
+use tauri::Manager;
+use tauri_plugin_deep_link::DeepLinkExt;
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
 mod commands;
 
+const BACKEND_PORT: u16 = 5198;
+
 // Store the backend process handle
 static BACKEND_PROCESS: Mutex<Option<Child>> = Mutex::new(None);
 // Flag to stop the monitor thread on shutdown
 static SHOULD_MONITOR: AtomicBool = AtomicBool::new(true);
+
+/// Check if the backend is already listening on its port
+fn is_backend_running() -> bool {
+    TcpStream::connect(("127.0.0.1", BACKEND_PORT)).is_ok()
+}
 
 /// Check if the backend process is still running, restart if it died
 fn check_and_restart_backend() {
@@ -40,6 +50,11 @@ fn check_and_restart_backend() {
     };
 
     if needs_restart {
+        if is_backend_running() {
+            log::info!("Backend already running on port {} (external process), skipping spawn", BACKEND_PORT);
+            *guard = None; // Clear stale handle so we don't keep polling a dead child
+            return;
+        }
         log::info!("Restarting backend process...");
         match spawn_backend() {
             Ok(child) => {
@@ -84,7 +99,12 @@ fn spawn_backend() -> Result<Child, std::io::Error> {
         
         log::info!("Starting backend from project root: {:?}", project_root);
         
-        Command::new("npx")
+        #[cfg(target_os = "windows")]
+        let npx = "npx.cmd";
+        #[cfg(not(target_os = "windows"))]
+        let npx = "npx";
+
+        Command::new(npx)
             .args(["tsx", "src-backend/bridge.ts"])
             .current_dir(project_root)
             .stdout(Stdio::null())
@@ -114,11 +134,25 @@ fn spawn_backend() -> Result<Child, std::io::Error> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    use commands::deep_link::InitialDeepLink;
+
+    let initial_url = std::env::args()
+        .find(|arg| arg.starts_with("taskdock://"));
+
     tauri::Builder::default()
+        .manage(InitialDeepLink(Mutex::new(initial_url)))
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             commands::storage::load_config,
             commands::storage::save_config,
@@ -129,18 +163,32 @@ pub fn run() {
             commands::storage::set_console_review_settings,
             commands::storage::get_polling_settings,
             commands::storage::set_polling_settings,
+            commands::storage::get_notification_settings,
+            commands::storage::set_notification_settings,
             commands::file_io::read_review_output,
+            commands::deep_link::get_initial_deep_link,
         ])
         .setup(|app| {
-            // Start the Node.js backend
-            match spawn_backend() {
-                Ok(child) => {
-                    *BACKEND_PROCESS.lock().unwrap() = Some(child);
-                    log::info!("Backend process started with PID: {:?}",
-                        BACKEND_PROCESS.lock().unwrap().as_ref().map(|c| c.id()));
-                }
-                Err(e) => {
-                    log::error!("Failed to start backend: {}", e);
+            // Register deep-link schemes for development
+            // (production installer handles this automatically)
+            #[cfg(debug_assertions)]
+            if let Err(e) = app.deep_link().register_all() {
+                log::error!("Failed to register deep-link schemes: {}", e);
+            }
+
+            // Start the Node.js backend (skip if already running, e.g. via `npm run dev`)
+            if is_backend_running() {
+                log::info!("Backend already running on port {}, skipping spawn", BACKEND_PORT);
+            } else {
+                match spawn_backend() {
+                    Ok(child) => {
+                        *BACKEND_PROCESS.lock().unwrap() = Some(child);
+                        log::info!("Backend process started with PID: {:?}",
+                            BACKEND_PROCESS.lock().unwrap().as_ref().map(|c| c.id()));
+                    }
+                    Err(e) => {
+                        log::error!("Failed to start backend: {}", e);
+                    }
                 }
             }
 
