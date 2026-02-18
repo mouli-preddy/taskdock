@@ -30,6 +30,8 @@ import { initializeLogger, getLogger, disposeLogger } from '../src/main/services
 import { getWorktreeService, WorktreeService } from '../src/main/git/worktree-service.js';
 import { getPluginEngine, disposePluginEngine } from '../src/main/plugins/plugin-engine.js';
 import { getCfvService, disposeCfvService, getCfvChatService, disposeCfvChatService, getCfvFilterService } from '../src/main/cfv/index.js';
+import { getDGrepService, disposeDGrepService } from '../src/main/dgrep/dgrep-service.js';
+import type { LogId } from '../src/shared/dgrep-types.js';
 import { buildReviewPrompt } from '../src/main/terminal/review-prompt.js';
 import type { ConsoleReviewSettings } from '../src/shared/terminal-types.js';
 import { DEFAULT_CONSOLE_REVIEW_SETTINGS } from '../src/shared/terminal-types.js';
@@ -240,6 +242,13 @@ pluginEngine.on('ai:launch-terminal', (event) => {
     callback('', err.message);
   }
 });
+
+// DGrep service
+const dgrepService = getDGrepService();
+dgrepService.on('progress', (event) => broadcast('dgrep:progress', event));
+dgrepService.on('complete', (event) => broadcast('dgrep:complete', event));
+dgrepService.on('error', (event) => broadcast('dgrep:error', event));
+dgrepService.on('intermediate-results', (event) => broadcast('dgrep:intermediate-results', event));
 
 // Warm up provider cache asynchronously at startup
 // This runs in the background so dialogs open instantly
@@ -974,6 +983,47 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
     case 'icm:get-cloud-instances':
       return icmCall(() => icmClient.getCloudInstances());
 
+    // DGrep API
+    case 'dgrep:search-by-log-id':
+      return dgrepService.startSearchByLogId(
+        params[0] as LogId,
+        params[1],
+        params[2],
+        params[3] || {}
+      );
+    case 'dgrep:search':
+      return dgrepService.startSearch(params[0]);
+    case 'dgrep:cancel-search':
+      dgrepService.cancelSearch(params[0]);
+      return;
+    case 'dgrep:get-session':
+      return dgrepService.getSession(params[0]);
+    case 'dgrep:get-all-sessions':
+      return dgrepService.getAllSessions();
+    case 'dgrep:get-results':
+      return dgrepService.getResults(params[0]);
+    case 'dgrep:remove-session':
+      dgrepService.removeSession(params[0]);
+      return;
+    case 'dgrep:get-namespaces':
+      return dgrepService.getNamespaces(params[0]);
+    case 'dgrep:get-events':
+      return dgrepService.getEvents(params[0], params[1]);
+    case 'dgrep:generate-url':
+      return dgrepService.generateQueryUrl(
+        params[0] as LogId,
+        params[1],
+        params[2],
+        params[3]
+      );
+    case 'dgrep:get-results-page':
+      return dgrepService.getResultsPage(params[0], params[1], params[2]);
+    case 'dgrep:run-client-query':
+      dgrepService.runClientQuery(params[0], params[1]);
+      return;
+    case 'dgrep:get-monitoring-accounts':
+      return dgrepService.getMonitoringAccounts();
+
     default:
       throw new Error(`Unknown method: ${method}`);
   }
@@ -1038,6 +1088,7 @@ process.on('SIGINT', async () => {
   disposePluginEngine();
   disposeCfvChatService();
   disposeCfvService();
+  disposeDGrepService();
   disposeLogger();
   wss.close();
   process.exit(0);
@@ -1053,6 +1104,7 @@ process.on('SIGTERM', async () => {
   disposePluginEngine();
   disposeCfvChatService();
   disposeCfvService();
+  disposeDGrepService();
   disposeLogger();
   wss.close();
   process.exit(0);

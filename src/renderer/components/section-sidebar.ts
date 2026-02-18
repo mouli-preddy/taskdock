@@ -1,4 +1,4 @@
-import { getIcon, GitPullRequest, LayoutGrid, Terminal, Settings, Info, Activity, AlertTriangle } from '../utils/icons.js';
+import { getIcon, GitPullRequest, LayoutGrid, Search, Terminal, Settings, Info, Activity, AlertTriangle } from '../utils/icons.js';
 
 export type SectionId = 'review' | 'workItems' | 'icm' | 'terminals' | 'settings' | 'about' | string;
 
@@ -18,6 +18,11 @@ const SECTIONS: SectionDef[] = [
     id: 'workItems',
     icon: getIcon(LayoutGrid, 20),
     label: 'Work Items',
+  },
+  {
+    id: 'dgrep',
+    icon: getIcon(Search, 20),
+    label: 'Log Search',
   },
   {
     id: 'cfv',

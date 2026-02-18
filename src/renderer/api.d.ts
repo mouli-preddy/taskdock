@@ -479,6 +479,27 @@ export interface ElectronAPI {
   icmGetBreakingNews: () => Promise<any[]>;
   icmGetPropertyGroups: () => Promise<any[]>;
   icmGetCloudInstances: () => Promise<any[]>;
+
+  // DGrep API
+  dgrepSearchByLogId: (logId: string, startTime: string, endTime: string, options?: any) => Promise<string>;
+  dgrepSearch: (params: any) => Promise<string>;
+  dgrepCancelSearch: (sessionId: string) => Promise<void>;
+  dgrepGetSession: (sessionId: string) => Promise<any>;
+  dgrepGetAllSessions: () => Promise<any[]>;
+  dgrepGetResults: (sessionId: string) => Promise<{ columns: string[]; rows: Record<string, any>[] } | undefined>;
+  dgrepGetResultsPage: (sessionId: string, offset: number, limit: number) => Promise<{ columns: string[]; rows: Record<string, any>[]; totalCount: number } | undefined>;
+  dgrepRunClientQuery: (sessionId: string, clientQuery: string) => Promise<void>;
+  dgrepRemoveSession: (sessionId: string) => Promise<void>;
+  dgrepGetNamespaces: (endpoint: string) => Promise<string[]>;
+  dgrepGetEvents: (endpoint: string, namespace: string) => Promise<string[]>;
+  dgrepGenerateUrl: (logId: string, timeCenter: string, serverQuery: string, options?: any) => Promise<string>;
+  dgrepGetMonitoringAccounts: () => Promise<any>;
+
+  // DGrep event listeners
+  onDgrepProgress: (callback: (event: any) => void) => () => void;
+  onDgrepComplete: (callback: (event: any) => void) => () => void;
+  onDgrepError: (callback: (event: any) => void) => () => void;
+  onDgrepIntermediateResults: (callback: (event: any) => void) => () => void;
 }
 
 declare global {

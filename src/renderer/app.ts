@@ -64,6 +64,8 @@ import { PluginTabRenderer } from './components/plugin-tab-renderer.js';
 import type { LoadedPlugin, PluginToastEvent, PluginUIUpdateEvent } from '../shared/plugin-types.js';
 import { initDeepLinkHandler } from './deep-link-handler.js';
 import { notificationService } from './services/notification-service.js';
+import { DGrepSearchView } from './components/dgrep-search-view.js';
+import type { DGrepProgressEvent, DGrepCompleteEvent, DGrepErrorEvent } from '../shared/dgrep-types.js';
 
 // Tab type definitions
 interface ReviewTab {
@@ -165,6 +167,7 @@ class PRReviewApp {
   private workItemsListView!: WorkItemsListView;
   private workItemQueryBuilder!: WorkItemQueryBuilder;
   private workItemDetailViews: Map<string, WorkItemDetailView> = new Map();
+  private dgrepSearchView!: DGrepSearchView;
 
   private activeSection: SectionId = 'review';
   private reviewTabs: ReviewTab[] = [];
@@ -265,6 +268,7 @@ class PRReviewApp {
     this.initEventListeners();
     this.initAIListeners();
     this.initTerminalListeners();
+    this.initDgrepListeners();
     this.initTheme();
     this.initPlugins();
 
@@ -329,6 +333,36 @@ class PRReviewApp {
     this.workItemQueryBuilder = new WorkItemQueryBuilder();
     this.workItemQueryBuilder.onSave((query) => this.saveQuery(query));
 
+    // Initialize DGrep search view
+    this.dgrepSearchView = new DGrepSearchView('dgrepSearchPanel');
+    this.dgrepSearchView.onSearch(async (params) => {
+      return window.electronAPI.dgrepSearch(params);
+    });
+    this.dgrepSearchView.onSearchByLogId(async (logId, startTime, endTime, options) => {
+      return window.electronAPI.dgrepSearchByLogId(logId, startTime, endTime, options);
+    });
+    this.dgrepSearchView.onCancel((sessionId) => {
+      window.electronAPI.dgrepCancelSearch(sessionId);
+    });
+    this.dgrepSearchView.onOpenInGeneva(async (url) => {
+      window.electronAPI.openExternal(url);
+    });
+    this.dgrepSearchView.onFetchNamespaces(async (endpoint) => {
+      return window.electronAPI.dgrepGetNamespaces(endpoint);
+    });
+    this.dgrepSearchView.onFetchEvents(async (endpoint, namespace) => {
+      return window.electronAPI.dgrepGetEvents(endpoint, namespace);
+    });
+    this.dgrepSearchView.onGetResults(async (sessionId) => {
+      return window.electronAPI.dgrepGetResults(sessionId);
+    });
+    this.dgrepSearchView.onGetResultsPage(async (sessionId, offset, limit) => {
+      return window.electronAPI.dgrepGetResultsPage(sessionId, offset, limit);
+    });
+    this.dgrepSearchView.onRunClientQuery(async (sessionId, clientQuery) => {
+      return window.electronAPI.dgrepRunClientQuery(sessionId, clientQuery);
+    });
+
     // Initialize CFV home view
     this.cfvHomeView = new CfvHomeView('cfvHomePanel');
     this.cfvHomeView.onFetchCall((callId) => this.cfvFetchCall(callId));
@@ -368,6 +402,7 @@ class PRReviewApp {
     this.icmTabs = [
       { id: 'list', type: 'list', label: 'Incidents', closeable: false },
     ];
+
 
     // Initialize tabs
     this.reviewTabs = [
@@ -955,6 +990,24 @@ class PRReviewApp {
     });
   }
 
+  private initDgrepListeners(): void {
+    window.electronAPI.onDgrepProgress((event: DGrepProgressEvent) => {
+      this.dgrepSearchView.setSearchProgress(event);
+    });
+
+    window.electronAPI.onDgrepComplete((event: DGrepCompleteEvent) => {
+      this.dgrepSearchView.setSearchComplete(event);
+    });
+
+    window.electronAPI.onDgrepError((event: DGrepErrorEvent) => {
+      this.dgrepSearchView.setSearchError(event);
+    });
+
+    window.electronAPI.onDgrepIntermediateResults((event: { sessionId: string; columns: string[]; rows: Record<string, any>[]; totalCount: number }) => {
+      this.dgrepSearchView.setIntermediateResults(event);
+    });
+  }
+
   private async handleTerminalReviewComplete(event: { sessionId: string; result: any }) {
     const { sessionId, result } = event;
 
@@ -1168,6 +1221,7 @@ class PRReviewApp {
     document.getElementById('terminalsSectionContent')?.classList.toggle('hidden', section !== 'terminals');
     document.getElementById('workItemsSectionContent')?.classList.toggle('hidden', section !== 'workItems');
     document.getElementById('icmSectionContent')?.classList.toggle('hidden', section !== 'icm');
+    document.getElementById('dgrepSectionContent')?.classList.toggle('hidden', section !== 'dgrep');
     document.getElementById('aboutSectionContent')?.classList.toggle('hidden', section !== 'about');
     document.getElementById('cfvSectionContent')?.classList.toggle('hidden', section !== 'cfv');
 
@@ -1219,8 +1273,8 @@ class PRReviewApp {
       }));
       this.reviewTabBar.setTabs(tabs);
       this.reviewTabBar.setActive(this.activeReviewTabId);
-    } else if (this.activeSection === 'about') {
-      // About section has no tabs - hide the tab bar
+    } else if (this.activeSection === 'about' || this.activeSection === 'dgrep') {
+      // About and DGrep sections have no tabs - hide the tab bar
       this.reviewTabBar.setTabs([]);
     } else if (this.activeSection === 'settings') {
       const tabs: Tab[] = this.settingsTabs.map(t => ({

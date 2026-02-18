@@ -87,8 +87,12 @@ function connect(): Promise<void> {
 }
 
 async function invoke(method: string, ...params: any[]): Promise<any> {
+  return invokeWithTimeout(60000, method, ...params);
+}
+
+async function invokeWithTimeout(timeoutMs: number, method: string, ...params: any[]): Promise<any> {
   await connect();
-  
+
   if (!ws || ws.readyState !== WebSocket.OPEN) {
     throw new Error('Not connected to backend');
   }
@@ -96,7 +100,7 @@ async function invoke(method: string, ...params: any[]): Promise<any> {
   return new Promise((resolve, reject) => {
     const id = ++messageId;
     pendingCalls.set(id, { resolve, reject });
-    
+
     ws!.send(JSON.stringify({
       type: 'rpc',
       id,
@@ -104,13 +108,12 @@ async function invoke(method: string, ...params: any[]): Promise<any> {
       params,
     }));
 
-    // Timeout after 60 seconds
     setTimeout(() => {
       if (pendingCalls.has(id)) {
         pendingCalls.delete(id);
         reject(new Error(`RPC timeout: ${method}`));
       }
-    }, 60000);
+    }, timeoutMs);
   });
 }
 
@@ -640,6 +643,40 @@ export const tauriAPI = {
   icmGetBreakingNews: () => invoke('icm:get-breaking-news'),
   icmGetPropertyGroups: () => invoke('icm:get-property-groups'),
   icmGetCloudInstances: () => invoke('icm:get-cloud-instances'),
+
+  // DGrep API
+  dgrepSearchByLogId: (logId: string, startTime: string, endTime: string, options?: any) =>
+    invoke('dgrep:search-by-log-id', logId, startTime, endTime, options),
+  dgrepSearch: (params: any) =>
+    invoke('dgrep:search', params),
+  dgrepCancelSearch: (sessionId: string) =>
+    invoke('dgrep:cancel-search', sessionId),
+  dgrepGetSession: (sessionId: string) =>
+    invoke('dgrep:get-session', sessionId),
+  dgrepGetAllSessions: () =>
+    invoke('dgrep:get-all-sessions'),
+  dgrepGetResults: (sessionId: string) =>
+    invokeWithTimeout(300000, 'dgrep:get-results', sessionId),
+  dgrepGetResultsPage: (sessionId: string, offset: number, limit: number) =>
+    invoke('dgrep:get-results-page', sessionId, offset, limit),
+  dgrepRunClientQuery: (sessionId: string, clientQuery: string) =>
+    invoke('dgrep:run-client-query', sessionId, clientQuery),
+  dgrepRemoveSession: (sessionId: string) =>
+    invoke('dgrep:remove-session', sessionId),
+  dgrepGetNamespaces: (endpoint: string) =>
+    invokeWithTimeout(120000, 'dgrep:get-namespaces', endpoint),
+  dgrepGetEvents: (endpoint: string, namespace: string) =>
+    invoke('dgrep:get-events', endpoint, namespace),
+  dgrepGenerateUrl: (logId: string, timeCenter: string, serverQuery: string, options?: any) =>
+    invoke('dgrep:generate-url', logId, timeCenter, serverQuery, options),
+  dgrepGetMonitoringAccounts: () =>
+    invoke('dgrep:get-monitoring-accounts'),
+
+  // DGrep event listeners
+  onDgrepProgress: (callback: (event: any) => void) => subscribe('dgrep:progress', callback),
+  onDgrepComplete: (callback: (event: any) => void) => subscribe('dgrep:complete', callback),
+  onDgrepError: (callback: (event: any) => void) => subscribe('dgrep:error', callback),
+  onDgrepIntermediateResults: (callback: (event: any) => void) => subscribe('dgrep:intermediate-results', callback),
 };
 
 // Initialize connection when module loads
