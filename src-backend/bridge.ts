@@ -843,7 +843,7 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
     // CFV Chat API
     case 'cfv-chat:create': {
       const callOutputDir = cfvService.getCallOutputDir(params[0]);
-      return cfvChatService.createSession(params[0], callOutputDir);
+      return cfvChatService.createSession(params[0], callOutputDir, params[1]);
     }
     case 'cfv-chat:send':
       await cfvChatService.send(params[0], params[1]);
@@ -853,6 +853,18 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
     case 'cfv-chat:destroy':
       await cfvChatService.destroySession(params[0]);
       return;
+    case 'cfv-chat:list-sessions': {
+      const dir = cfvService.getCallOutputDir(params[0]);
+      return cfvChatService.listPersistedSessions(dir);
+    }
+    case 'cfv-chat:load-session-messages': {
+      const dir = cfvService.getCallOutputDir(params[0]);
+      return cfvChatService.loadSessionMessages(dir, params[1]);
+    }
+    case 'cfv-chat:delete-session': {
+      const dir = cfvService.getCallOutputDir(params[0]);
+      return cfvChatService.deletePersistedSession(dir, params[1]);
+    }
 
     // CFV Filter API
     case 'cfv-filter:save':

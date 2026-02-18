@@ -551,6 +551,52 @@ export class CfvCallFlowPanel {
   }
 
   // ---------------------------------------------------------------------------
+  // Public API (for chat agent actions)
+  // ---------------------------------------------------------------------------
+
+  navigateToLine(lineNumber: number) {
+    let targetIdx = this.visibleMessages.findIndex(m => m.index === lineNumber);
+
+    if (targetIdx === -1) {
+      // Message is filtered out — temporarily disable filters so it becomes visible
+      const exists = this.messages.some(m => m.index === lineNumber);
+      if (!exists) return;
+      this.filterState.rules.forEach(r => r.enabled = false);
+      this.filterState.showMatchedOnly = false;
+      this.applyFilters();
+      targetIdx = this.visibleMessages.findIndex(m => m.index === lineNumber);
+      if (targetIdx === -1) return; // shouldn't happen
+    }
+
+    this.currentPage = Math.floor(targetIdx / PAGE_SIZE);
+    this.render();
+
+    requestAnimationFrame(() => {
+      const row = this.container.querySelector(`.cfv-seq-row[data-seq="${lineNumber}"]`) as HTMLElement;
+      row?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (row) {
+        row.classList.add('cfv-flash');
+        setTimeout(() => row.classList.remove('cfv-flash'), 1500);
+      }
+    });
+  }
+
+  addFilterRule(rule: FilterRule) {
+    this.filterState.rules.push(rule);
+    this.applyFilters();
+    this.render();
+    this.persistFilters();
+  }
+
+  clearFilters() {
+    this.filterState.rules = [];
+    this.filterState.showMatchedOnly = false;
+    this.applyFilters();
+    this.render();
+    this.persistFilters();
+  }
+
+  // ---------------------------------------------------------------------------
   // Cleanup
   // ---------------------------------------------------------------------------
 

@@ -49,6 +49,9 @@ import { AboutView } from './components/about-view.js';
 import { WorkItemsListView, WorkItemViewType } from './components/workitems-list-view.js';
 import { WorkItemQueryBuilder } from './components/workitem-query-builder.js';
 import { WorkItemDetailView } from './components/workitem-detail-view.js';
+import { CfvHomeView } from './components/cfv/cfv-home-view.js';
+import { CfvCallView } from './components/cfv/cfv-call-view.js';
+import type { CfvCallTab } from '../shared/cfv-types.js';
 import { ResizablePanels, setupResizablePanels } from './components/resizable-panels.js';
 import { icons, iconHtml, getIcon, getIconByName, MessageSquare, Bot, BookOpen, Globe, Columns, FileText, ChevronLeft, ChevronRight, ChevronDown, X, File, FileCode, ArrowRight, Link, CheckCircle, Check, Clock, XCircle, Circle, Home, LayoutGrid, Settings, ChevronsLeft, Sparkles, Eye, EyeOff, RefreshCw, Terminal } from './utils/icons.js';
 import { renderMarkdownSync } from './utils/markdown-renderer.js';
@@ -159,6 +162,12 @@ class PRReviewApp {
   private workItemsTabs: WorkItemTab[] = [];
   private activeWorkItemsTabId: string = 'list';
   private savedQueries: SavedQuery[] = [];
+
+  // CFV state
+  private cfvHomeView!: CfvHomeView;
+  private cfvCallViews: Map<string, CfvCallView> = new Map();
+  private cfvTabs: CfvCallTab[] = [];
+  private activeCfvTabId: string = 'home';
 
   // PR tab states map (tabId -> PRTabState)
   private prTabStates: Map<string, PRTabState> = new Map();
@@ -301,6 +310,36 @@ class PRReviewApp {
     this.workItemQueryBuilder = new WorkItemQueryBuilder();
     this.workItemQueryBuilder.onSave((query) => this.saveQuery(query));
 
+    // Initialize CFV home view
+    this.cfvHomeView = new CfvHomeView('cfvHomePanel');
+    this.cfvHomeView.onFetchCall((callId) => this.cfvFetchCall(callId));
+    this.cfvHomeView.onOpenCall((callId) => this.cfvOpenCallTab(callId));
+    this.cfvHomeView.onSetToken((token) => this.cfvSetToken(token));
+    this.cfvHomeView.onDeleteCall((callId) => this.cfvDeleteCall(callId));
+    this.cfvHomeView.onRefresh(() => this.cfvRefreshHome());
+    this.cfvHomeView.onAcquireToken(() => this.cfvAcquireToken());
+    this.cfvHomeView.onCancelAcquireToken(() => this.cfvCancelTokenAcquisition());
+
+    // Listen for CFV progress events
+    window.electronAPI.onCfvProgress((event: any) => {
+      this.cfvHomeView.setFetchProgress(event);
+    });
+
+    // Listen for CFV token acquisition events
+    window.electronAPI.onCfvTokenProgress((event) => {
+      this.cfvHomeView.setTokenAcquisitionProgress(event);
+    });
+
+    window.electronAPI.onCfvTokenResult((event) => {
+      if (event.success) {
+        Toast.success('Token acquired');
+        this.cfvRefreshHome();
+      } else {
+        Toast.error('Token acquisition failed: ' + (event.error || 'Unknown error'));
+      }
+      this.cfvHomeView.setTokenAcquisitionProgress(null);
+    });
+
     // Initialize tabs
     this.reviewTabs = [
       { id: 'home', type: 'home', label: 'Home', closeable: false },
@@ -310,6 +349,9 @@ class PRReviewApp {
     ];
     this.workItemsTabs = [
       { id: 'list', type: 'list', label: 'Work Items', closeable: false },
+    ];
+    this.cfvTabs = [
+      { id: 'home', type: 'home', label: 'Home', closeable: false },
     ];
 
     // Set initial state
@@ -1097,6 +1139,7 @@ class PRReviewApp {
     document.getElementById('terminalsSectionContent')?.classList.toggle('hidden', section !== 'terminals');
     document.getElementById('workItemsSectionContent')?.classList.toggle('hidden', section !== 'workItems');
     document.getElementById('aboutSectionContent')?.classList.toggle('hidden', section !== 'about');
+    document.getElementById('cfvSectionContent')?.classList.toggle('hidden', section !== 'cfv');
 
     // Hide/show plugin sections
     const pluginContents = document.getElementById('pluginSectionContents');
@@ -1119,6 +1162,11 @@ class PRReviewApp {
     if (section === 'workItems') {
       this.refreshWorkItems();
       this.loadSavedQueries();
+    }
+
+    // Load CFV data when switching to CFV section
+    if (section === 'cfv') {
+      this.cfvRefreshHome();
     }
 
     // Update tab bar
@@ -1148,6 +1196,10 @@ class PRReviewApp {
       }));
       this.reviewTabBar.setTabs(tabs);
       this.reviewTabBar.setActive(this.activeSettingsTabId);
+    } else if (this.activeSection === 'cfv') {
+      // CFV uses inline tabs, hide the main tab bar
+      this.reviewTabBar.setTabs([]);
+      this.updateCfvTabBar();
     } else if (this.activeSection.startsWith('plugin-')) {
       // Plugin sections have no tab bar
       this.reviewTabBar.setTabs([]);
@@ -4734,6 +4786,227 @@ After this, respond with a simple text response to greet the user and ask them w
     // Focus input
     inputEl.focus();
   }
+
+  // =========================================================================
+  // CFV Section Methods
+  // =========================================================================
+
+  private async cfvRefreshHome() {
+    try {
+      const [tokenStatus, calls] = await Promise.all([
+        window.electronAPI.cfvGetTokenStatus(),
+        window.electronAPI.cfvListCachedCalls(),
+      ]);
+      this.cfvHomeView.setTokenStatus(tokenStatus);
+      this.cfvHomeView.setCalls(calls);
+      this.cfvHomeView.setSubtitle(`${calls.length} cached call${calls.length !== 1 ? 's' : ''}`);
+    } catch (error) {
+      console.error('Failed to refresh CFV home:', error);
+      this.cfvHomeView.setCalls([]);
+    }
+  }
+
+  private async cfvSetToken(token: string) {
+    try {
+      await window.electronAPI.cfvSetToken(token);
+      const status = await window.electronAPI.cfvGetTokenStatus();
+      this.cfvHomeView.setTokenStatus(status);
+      Toast.success('CFV token saved');
+    } catch (error) {
+      Toast.error('Failed to set CFV token: ' + (error as Error).message);
+    }
+  }
+
+  private async cfvAcquireToken() {
+    try {
+      await window.electronAPI.cfvAcquireToken();
+      // Results come via cfv:token-progress and cfv:token-result events
+    } catch (error) {
+      Toast.error('Failed to start token acquisition: ' + (error as Error).message);
+    }
+  }
+
+  private async cfvCancelTokenAcquisition() {
+    try {
+      await window.electronAPI.cfvCancelTokenAcquisition();
+    } catch (error) {
+      console.error('Failed to cancel token acquisition:', error);
+    }
+  }
+
+  private async cfvFetchCall(callId: string) {
+    try {
+      // Check token status first; auto-acquire if missing/expired
+      const tokenStatus = await window.electronAPI.cfvGetTokenStatus();
+      if (!tokenStatus.hasToken || !tokenStatus.valid) {
+        Toast.info('No valid token. Starting auto-login...');
+        await window.electronAPI.cfvAcquireToken();
+        return; // User will re-trigger fetch after token is acquired
+      }
+
+      this.cfvHomeView.setFetchProgress({ step: 0, totalSteps: 5, label: 'Starting...' });
+      const result = await window.electronAPI.cfvFetchCall(callId);
+      this.cfvHomeView.setFetchProgress(null);
+      Toast.success(`Fetched call: ${result.stats.callflowMessages} messages`);
+      await this.cfvRefreshHome();
+      this.cfvOpenCallTab(callId);
+    } catch (error) {
+      this.cfvHomeView.setFetchProgress(null);
+      Toast.error('Failed to fetch call: ' + (error as Error).message);
+    }
+  }
+
+  private cfvOpenCallTab(callId: string) {
+    const tabId = `cfv-${callId}`;
+
+    // Check if tab already exists
+    const existingTab = this.cfvTabs.find(t => t.id === tabId);
+    if (existingTab) {
+      this.switchCfvTab(tabId);
+      return;
+    }
+
+    // Create new tab
+    const shortId = callId.length > 12 ? callId.slice(0, 8) + '...' : callId;
+    const tab: CfvCallTab = {
+      id: tabId,
+      type: 'call',
+      label: shortId,
+      closeable: true,
+      callId,
+    };
+    this.cfvTabs.push(tab);
+
+    // Create panel container
+    const container = document.getElementById('cfvCallPanelsContainer')!;
+    const panel = document.createElement('div');
+    panel.id = `cfvPanel-${tabId}`;
+    panel.className = 'tab-panel cfv-call-panel';
+    container.appendChild(panel);
+
+    // Create call view
+    const callView = new CfvCallView(panel, callId);
+    this.cfvCallViews.set(tabId, callView);
+
+    // Switch to new tab
+    this.switchCfvTab(tabId);
+    this.updateCfvTabBar();
+  }
+
+  private switchCfvTab(tabId: string) {
+    this.activeCfvTabId = tabId;
+
+    // Show/hide panels
+    const homePanel = document.getElementById('cfvHomePanel');
+    if (homePanel) {
+      homePanel.classList.toggle('active', tabId === 'home');
+      homePanel.style.display = tabId === 'home' ? '' : 'none';
+    }
+
+    this.cfvCallViews.forEach((_, id) => {
+      const panel = document.getElementById(`cfvPanel-${id}`);
+      if (panel) {
+        panel.classList.toggle('active', id === tabId);
+        panel.style.display = id === tabId ? '' : 'none';
+      }
+    });
+
+    this.updateCfvTabBar();
+  }
+
+  private closeCfvTab(tabId: string) {
+    const index = this.cfvTabs.findIndex(t => t.id === tabId);
+    if (index === -1) return;
+
+    // Remove tab
+    this.cfvTabs.splice(index, 1);
+
+    // Dispose and remove view
+    const view = this.cfvCallViews.get(tabId);
+    if (view) {
+      view.dispose();
+      this.cfvCallViews.delete(tabId);
+    }
+
+    // Remove panel
+    document.getElementById(`cfvPanel-${tabId}`)?.remove();
+
+    // Switch to another tab if we closed the active one
+    if (this.activeCfvTabId === tabId) {
+      const newTab = this.cfvTabs[Math.max(0, index - 1)];
+      if (newTab) {
+        this.switchCfvTab(newTab.id);
+      }
+    }
+
+    this.updateCfvTabBar();
+  }
+
+  private async cfvDeleteCall(callId: string) {
+    try {
+      await window.electronAPI.cfvDeleteCall(callId);
+
+      // Close tab if open
+      const tabId = `cfv-${callId}`;
+      if (this.cfvTabs.find(t => t.id === tabId)) {
+        this.closeCfvTab(tabId);
+      }
+
+      await this.cfvRefreshHome();
+      Toast.success('Call deleted');
+    } catch (error) {
+      Toast.error('Failed to delete call: ' + (error as Error).message);
+    }
+  }
+
+  private updateCfvTabBar() {
+    if (this.cfvTabs.length <= 1) {
+      this.hideCfvTabs();
+      return;
+    }
+
+    const container = document.getElementById('cfvSectionContent');
+    if (!container) return;
+
+    let tabBar = container.querySelector('.cfv-tab-bar') as HTMLElement;
+    if (!tabBar) {
+      tabBar = document.createElement('div');
+      tabBar.className = 'cfv-tab-bar';
+      container.insertBefore(tabBar, container.firstChild);
+    }
+
+    tabBar.innerHTML = this.cfvTabs.map(tab => `
+      <button class="cfv-tab-btn ${tab.id === this.activeCfvTabId ? 'active' : ''}" data-tab-id="${tab.id}">
+        <span>${tab.label}</span>
+        ${tab.closeable ? `<span class="cfv-tab-close" data-tab-id="${tab.id}">&times;</span>` : ''}
+      </button>
+    `).join('');
+
+    tabBar.querySelectorAll('.cfv-tab-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        if (target.classList.contains('cfv-tab-close')) {
+          e.stopPropagation();
+          const tabId = target.dataset.tabId!;
+          this.closeCfvTab(tabId);
+        } else {
+          const tabId = (btn as HTMLElement).dataset.tabId!;
+          this.switchCfvTab(tabId);
+        }
+      });
+    });
+  }
+
+  private hideCfvTabs() {
+    const container = document.getElementById('cfvSectionContent');
+    if (!container) return;
+    const tabBar = container.querySelector('.cfv-tab-bar');
+    tabBar?.remove();
+  }
+
+  // =========================================================================
+  // Work Items Section Methods
+  // =========================================================================
 
   private async openWorkItemTab(item: WorkItem) {
     const tabId = `wi-${item.id}`;

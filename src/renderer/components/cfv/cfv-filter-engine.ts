@@ -28,7 +28,13 @@ export function evaluateFilters(
 
     let passesFilter = true;
     if (hasFilterRules) {
-      passesFilter = filterRules.some(rule => evaluateGroup(rule.group, msg));
+      passesFilter = filterRules.some(rule => {
+        const matched = evaluateGroup(rule.group, msg);
+        if (matched) {
+          marks.push({ color: rule.color, ruleId: rule.id });
+        }
+        return matched;
+      });
     }
 
     let visible = passesFilter;

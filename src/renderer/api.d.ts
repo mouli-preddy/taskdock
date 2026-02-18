@@ -412,10 +412,13 @@ export interface ElectronAPI {
   onCfvTokenResult: (callback: (event: { success: boolean; tokenLength?: number; error?: string }) => void) => () => void;
 
   // CFV Chat API
-  cfvChatCreate: (callId: string) => Promise<string>;
+  cfvChatCreate: (callId: string, persistentSessionId?: string) => Promise<{ sdkSessionId: string; persistentSessionId: string }>;
   cfvChatSend: (sessionId: string, message: string) => Promise<void>;
   cfvChatGetHistory: (sessionId: string) => Promise<import('../shared/cfv-types.js').CfvChatMessage[]>;
   cfvChatDestroy: (sessionId: string) => Promise<void>;
+  cfvChatListSessions: (callId: string) => Promise<{ sessions: import('../shared/cfv-types.js').CfvChatSessionInfo[]; lastActiveSessionId: string | null }>;
+  cfvChatLoadSessionMessages: (callId: string, persistentSessionId: string) => Promise<import('../shared/cfv-types.js').CfvChatMessage[]>;
+  cfvChatDeleteSession: (callId: string, persistentSessionId: string) => Promise<void>;
   onCfvChatEvent: (callback: (event: import('../shared/cfv-types.js').CfvChatEvent) => void) => () => void;
 
   // CFV Filter API

@@ -1,4 +1,5 @@
 import type { CallFlowData, CallDetailsData, CallFlowMessage } from '../../../main/cfv/cfv-types.js';
+import type { CfvChatAction } from '../../../shared/cfv-types.js';
 import { escapeHtml } from '../../utils/html-utils.js';
 import { getIcon, MessageSquare } from '../../utils/icons.js';
 import { CfvCallFlowPanel } from './cfv-callflow-panel.js';
@@ -227,18 +228,67 @@ export class CfvCallView {
     if (!callView || !chatContainer) return;
 
     if (this.chatOpen) {
-      // Close chat
+      // Close chat — just hide, keep session alive
       this.chatOpen = false;
       callView.classList.remove('chat-open');
       chatToggle?.classList.remove('active');
-      this.chatPanel?.dispose();
-      this.chatPanel = null;
     } else {
       // Open chat
       this.chatOpen = true;
       callView.classList.add('chat-open');
       chatToggle?.classList.add('active');
-      this.chatPanel = new CfvChatPanel(chatContainer, this.callId, () => this.toggleChat());
+      // Create panel only once; reuse on subsequent opens
+      if (!this.chatPanel) {
+        this.chatPanel = new CfvChatPanel(
+          chatContainer,
+          this.callId,
+          () => this.toggleChat(),
+          (action) => this.handleChatAction(action),
+        );
+      }
+    }
+  }
+
+  private handleChatAction(action: CfvChatAction) {
+    // Ensure call flow panel exists and is initialized
+    this.ensureCallFlowPanel();
+
+    switch (action.action) {
+      case 'navigate_to_line':
+        if (action.lineNumber != null) {
+          // Switch to callflow tab if not already there
+          if (this.activeSubTab !== 'callflow') {
+            this.switchSubTab('callflow');
+          }
+          this.callFlowPanel?.navigateToLine(action.lineNumber);
+        }
+        break;
+
+      case 'set_filter':
+        if (action.filterRule) {
+          // Switch to callflow tab if not already there
+          if (this.activeSubTab !== 'callflow') {
+            this.switchSubTab('callflow');
+          }
+          this.callFlowPanel?.addFilterRule(action.filterRule);
+        }
+        break;
+
+      case 'clear_filters':
+        this.callFlowPanel?.clearFilters();
+        break;
+    }
+  }
+
+  private ensureCallFlowPanel() {
+    if (this.callFlowPanel || this.loading) return;
+    const panel = this.container.querySelector('#cfvSubCallflow') as HTMLElement;
+    if (panel) {
+      this.callFlowPanel = new CfvCallFlowPanel(panel);
+      if (this.callFlowData) {
+        const messages = (this.callFlowData?.nrtStreamingIndexAugmentedCall?.fullCallFlow?.messages ?? []) as CallFlowMessage[];
+        this.callFlowPanel.setData(messages, this.callId);
+      }
     }
   }
 

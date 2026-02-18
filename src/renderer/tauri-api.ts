@@ -568,10 +568,13 @@ export const tauriAPI = {
   onCfvTokenResult: (callback: (event: any) => void) => subscribe('cfv:token-result', callback),
 
   // CFV Chat API
-  cfvChatCreate: (callId: string) => invoke('cfv-chat:create', callId),
+  cfvChatCreate: (callId: string, persistentSessionId?: string) => invoke('cfv-chat:create', callId, persistentSessionId),
   cfvChatSend: (sessionId: string, message: string) => invoke('cfv-chat:send', sessionId, message),
   cfvChatGetHistory: (sessionId: string) => invoke('cfv-chat:get-history', sessionId),
   cfvChatDestroy: (sessionId: string) => invoke('cfv-chat:destroy', sessionId),
+  cfvChatListSessions: (callId: string) => invoke('cfv-chat:list-sessions', callId),
+  cfvChatLoadSessionMessages: (callId: string, persistentSessionId: string) => invoke('cfv-chat:load-session-messages', callId, persistentSessionId),
+  cfvChatDeleteSession: (callId: string, persistentSessionId: string) => invoke('cfv-chat:delete-session', callId, persistentSessionId),
   onCfvChatEvent: (callback: (event: any) => void) => subscribe('cfv:chat-event', callback),
 
   // CFV Filter API

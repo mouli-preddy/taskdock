@@ -257,6 +257,14 @@
   overflow: hidden;
 }
 
+.cfv-call-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .cfv-call-toolbar {
   display: flex;
   align-items: center;
@@ -449,6 +457,15 @@
 
 .cfv-seq-row.failure .cfv-seq-desc {
   color: var(--error);
+}
+
+.cfv-seq-row.cfv-flash {
+  animation: cfv-flash-highlight 1.5s ease-out;
+}
+
+@keyframes cfv-flash-highlight {
+  0% { background: rgba(74, 158, 255, 0.3); }
+  100% { background: transparent; }
 }
 
 .cfv-seq-num {
@@ -1135,14 +1152,6 @@
   flex-direction: row;
 }
 
-.cfv-call-view.chat-open .cfv-call-main {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
 .cfv-chat-container {
   display: none;
 }
@@ -1176,6 +1185,47 @@
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
+}
+
+.cfv-chat-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.cfv-chat-session-select {
+  padding: 2px 4px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  max-width: 140px;
+  cursor: pointer;
+  text-overflow: ellipsis;
+}
+
+.cfv-chat-session-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.cfv-chat-new-btn {
+  padding: 2px 8px;
+  border: 1px solid var(--border-color);
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+
+.cfv-chat-new-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--text-tertiary);
 }
 
 .cfv-chat-close-btn {
