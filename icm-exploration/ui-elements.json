@@ -1,0 +1,316 @@
+{
+  "advanced-search-initial": {
+    "forms": [],
+    "buttons": [],
+    "inputs": [
+      {
+        "tag": "INPUT",
+        "type": "radio",
+        "name": "identityProvider",
+        "id": "",
+        "placeholder": "",
+        "className": "",
+        "value": "AzureActiveDirectory",
+        "ariaLabel": null,
+        "dataBindings": []
+      },
+      {
+        "tag": "INPUT",
+        "type": "radio",
+        "name": "identityProvider",
+        "id": "",
+        "placeholder": "",
+        "className": "",
+        "value": "EntraID-OIDC",
+        "ariaLabel": null,
+        "dataBindings": []
+      },
+      {
+        "tag": "INPUT",
+        "type": "radio",
+        "name": "identityProvider",
+        "id": "",
+        "placeholder": "",
+        "className": "",
+        "value": "IcMdSTS",
+        "ariaLabel": null,
+        "dataBindings": []
+      },
+      {
+        "tag": "INPUT",
+        "type": "radio",
+        "name": "identityProvider",
+        "id": "",
+        "placeholder": "",
+        "className": "",
+        "value": "IcMdSTSMooncake",
+        "ariaLabel": null,
+        "dataBindings": []
+      }
+    ],
+    "selects": [],
+    "dropdowns": [],
+    "links": [],
+    "tables": [],
+    "tabs": [],
+    "modals": [],
+    "panels": [],
+    "dataAttributes": [],
+    "angularComponents": [],
+    "reactComponents": [],
+    "framework": {
+      "angular": false,
+      "react": false,
+      "vue": false,
+      "knockout": false,
+      "jquery": false
+    },
+    "pageStructure": {
+      "title": "Identity Provider Selection - IcM",
+      "bodyClasses": "ms-Fabric",
+      "mainSections": []
+    }
+  },
+  "after-filter-exploration": {
+    "forms": [],
+    "buttons": [],
+    "inputs": [
+      {
+        "tag": "INPUT",
+        "type": "radio",
+        "name": "identityProvider",
+        "id": "",
+        "placeholder": "",
+        "className": "",
+        "value": "AzureActiveDirectory",
+        "ariaLabel": null,
+        "dataBindings": []
+      },
+      {
+        "tag": "INPUT",
+        "type": "radio",
+        "name": "identityProvider",
+        "id": "",
+        "placeholder": "",
+        "className": "",
+        "value": "EntraID-OIDC",
+        "ariaLabel": null,
+        "dataBindings": []
+      },
+      {
+        "tag": "INPUT",
+        "type": "radio",
+        "name": "identityProvider",
+        "id": "",
+        "placeholder": "",
+        "className": "",
+        "value": "IcMdSTS",
+        "ariaLabel": null,
+        "dataBindings": []
+      },
+      {
+        "tag": "INPUT",
+        "type": "radio",
+        "name": "identityProvider",
+        "id": "",
+        "placeholder": "",
+        "className": "",
+        "value": "IcMdSTSMooncake",
+        "ariaLabel": null,
+        "dataBindings": []
+      }
+    ],
+    "selects": [],
+    "dropdowns": [],
+    "links": [],
+    "tables": [],
+    "tabs": [],
+    "modals": [],
+    "panels": [],
+    "dataAttributes": [],
+    "angularComponents": [],
+    "reactComponents": [],
+    "framework": {
+      "angular": false,
+      "react": false,
+      "vue": false,
+      "knockout": false,
+      "jquery": false
+    },
+    "pageStructure": {
+      "title": "Identity Provider Selection - IcM",
+      "bodyClasses": "ms-Fabric",
+      "mainSections": []
+    }
+  },
+  "navigationLinks": [
+    {
+      "text": "visit our documentation",
+      "href": "https://aka.ms/icmguide/loggingin"
+    },
+    {
+      "text": "Learn more",
+      "href": "https://aka.ms/icmguide/loggingin"
+    },
+    {
+      "text": "Sign in",
+      "href": "/sso2?ReturnUrl=https%3A%2F%2Fportal.microsofticm.com%2Fimp%2Fv3%2Fincidents%2Fsearch%2Fadvanced&activeIdentityProviders=IcMdSTS%2CEntraID-OIDC%2CIcMdSTSMooncake&identityProvider=EntraID-OIDC"
+    }
+  ],
+  "dashboard": {
+    "forms": [],
+    "buttons": [],
+    "inputs": [
+      {
+        "tag": "INPUT",
+        "type": "radio",
+        "name": "identityProvider",
+        "id": "",
+        "placeholder": "",
+        "className": "",
+        "value": "AzureActiveDirectory",
+        "ariaLabel": null,
+        "dataBindings": []
+      },
+      {
+        "tag": "INPUT",
+        "type": "radio",
+        "name": "identityProvider",
+        "id": "",
+        "placeholder": "",
+        "className": "",
+        "value": "EntraID-OIDC",
+        "ariaLabel": null,
+        "dataBindings": []
+      },
+      {
+        "tag": "INPUT",
+        "type": "radio",
+        "name": "identityProvider",
+        "id": "",
+        "placeholder": "",
+        "className": "",
+        "value": "IcMdSTS",
+        "ariaLabel": null,
+        "dataBindings": []
+      },
+      {
+        "tag": "INPUT",
+        "type": "radio",
+        "name": "identityProvider",
+        "id": "",
+        "placeholder": "",
+        "className": "",
+        "value": "IcMdSTSMooncake",
+        "ariaLabel": null,
+        "dataBindings": []
+      }
+    ],
+    "selects": [],
+    "dropdowns": [],
+    "links": [],
+    "tables": [],
+    "tabs": [],
+    "modals": [],
+    "panels": [],
+    "dataAttributes": [],
+    "angularComponents": [],
+    "reactComponents": [],
+    "framework": {
+      "angular": false,
+      "react": false,
+      "vue": false,
+      "knockout": false,
+      "jquery": false
+    },
+    "pageStructure": {
+      "title": "Identity Provider Selection - IcM",
+      "bodyClasses": "ms-Fabric",
+      "mainSections": []
+    }
+  },
+  "my-incidents": {
+    "forms": [],
+    "buttons": [],
+    "inputs": [
+      {
+        "tag": "INPUT",
+        "type": "radio",
+        "name": "identityProvider",
+        "id": "",
+        "placeholder": "",
+        "className": "",
+        "value": "AzureActiveDirectory",
+        "ariaLabel": null,
+        "dataBindings": []
+      },
+      {
+        "tag": "INPUT",
+        "type": "radio",
+        "name": "identityProvider",
+        "id": "",
+        "placeholder": "",
+        "className": "",
+        "value": "EntraID-OIDC",
+        "ariaLabel": null,
+        "dataBindings": []
+      },
+      {
+        "tag": "INPUT",
+        "type": "radio",
+        "name": "identityProvider",
+        "id": "",
+        "placeholder": "",
+        "className": "",
+        "value": "IcMdSTS",
+        "ariaLabel": null,
+        "dataBindings": []
+      },
+      {
+        "tag": "INPUT",
+        "type": "radio",
+        "name": "identityProvider",
+        "id": "",
+        "placeholder": "",
+        "className": "",
+        "value": "IcMdSTSMooncake",
+        "ariaLabel": null,
+        "dataBindings": []
+      }
+    ],
+    "selects": [],
+    "dropdowns": [],
+    "links": [],
+    "tables": [],
+    "tabs": [],
+    "modals": [],
+    "panels": [],
+    "dataAttributes": [],
+    "angularComponents": [],
+    "reactComponents": [],
+    "framework": {
+      "angular": false,
+      "react": false,
+      "vue": false,
+      "knockout": false,
+      "jquery": false
+    },
+    "pageStructure": {
+      "title": "Identity Provider Selection - IcM",
+      "bodyClasses": "ms-Fabric",
+      "mainSections": []
+    }
+  },
+  "jsInfo": {
+    "serviceWorker": false,
+    "localStorageKeys": [],
+    "sessionStorageKeys": [],
+    "scriptSources": [],
+    "metaTags": [
+      {
+        "name": "viewport",
+        "content": "width=device-width, initial-scale=1.0"
+      }
+    ]
+  }
+}

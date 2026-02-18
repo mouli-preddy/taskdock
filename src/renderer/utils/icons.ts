@@ -111,6 +111,9 @@ import UserCircle from 'lucide-static/icons/user-circle.svg?raw';
 import Smile from 'lucide-static/icons/smile.svg?raw';
 import Activity from 'lucide-static/icons/activity.svg?raw';
 
+// ICM icons
+import Siren from 'lucide-static/icons/siren.svg?raw';
+
 // Misc
 import Link from 'lucide-static/icons/link.svg?raw';
 import Paperclip from 'lucide-static/icons/paperclip.svg?raw';
@@ -249,6 +252,7 @@ export {
   Cloud,
   Smile,
   Activity,
+  Siren,
 };
 
 /**
@@ -300,6 +304,7 @@ const iconByName: Record<string, string> = {
   'zap': Zap, 'lightbulb': Lightbulb, 'target': Target,
   'crosshair': Crosshair, 'cloud': Cloud,
   'smile': Smile, 'activity': Activity,
+  'siren': Siren,
 };
 
 /**

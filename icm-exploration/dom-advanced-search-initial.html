@@ -1,0 +1,129 @@
+<!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head>
+    <title>Identity Provider Selection - IcM</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="shortcut icon" type="image/x-icon" href="https://icmcdn.akamaized.net/imp/v3/shell/platform/assets/images/favicon.ico">
+    <script type="text/javascript">
+        window.addEventListener("load", function () {
+            const path = window.location.pathname;
+            const baseUrl = path.substring(0, Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")));
+            const urlParams = new URLSearchParams(window.location.search);
+            const signInButton = document.getElementById('signInButton');
+            const identityProviderRadioElements = document.querySelectorAll('input[name="identityProvider"]');
+
+            // Register the event listener for the radio buttons of each identity provider
+            identityProviderRadioElements.forEach(radio => {
+                // When the radio button is selected, update the sign in link/button
+                radio.addEventListener('change', function () {
+                    const urlParams = new URLSearchParams(window.location.search);
+                    urlParams.set('identityProvider', this.value);
+                    signInButton.href = `${baseUrl}?${urlParams}`;
+                });
+            });
+           
+            // List of valid identity providers
+            const validIdentityProviderNames = Array.from(identityProviderRadioElements).map(radio => radio.value.toLowerCase());
+
+            // Parse the activeIdentityProviders query parameter
+            let activeIdentityProviders = urlParams.get('activeIdentityProviders')?.split(',').map(provider => provider.toLowerCase().trim());
+
+            // Validate the list of active identity providers and fallback to a default list if necessary
+            if (activeIdentityProviders == null || // Query parameter was not provided
+                activeIdentityProviders.length < 2 || // Query parameter is empty or contains only one provider. If only 1 provider is active, the backend should've automatically redirected to it.
+                activeIdentityProviders.some(provider => !validIdentityProviderNames.includes(provider))) // Some providers in list are not valid
+            {
+                activeIdentityProviders = ["AzureActiveDirectory", "IcMdSTS", "IcMdSTSMooncake"].map(provider => provider.toLowerCase());
+            }
+
+            // Hide the radio buttons that are not included in the activeIdentityProvider query parameter
+            identityProviderRadioElements.forEach(radio => {
+                if (!activeIdentityProviders.includes(radio.value.toLowerCase())) {
+                    radio.parentElement.style.display = 'none';
+                }
+            });
+            
+            // Try to pre-select one of the primary providers 
+            for (let primaryProvider of ['AzureActiveDirectory', 'EntraID-OIDC']) {
+                if (activeIdentityProviders.includes(primaryProvider.toLowerCase())) {
+                    const radioButton = document.querySelector(`input[name="identityProvider"][value="${primaryProvider}"]`);
+                    
+                    // Using the click() method to trigger the change event and update the sign in link/button
+                    radioButton?.click();
+                    
+                    break;
+                }
+            }
+        });
+    </script>
+    <link rel="stylesheet" type="text/css" href="assets/IdentityProviderSelection.css">
+</head>
+
+<body class="ms-Fabric">
+    <div id="outerContainer">
+        <img class="hideOnMobile" src="assets/lockKeyShield.svg" alt="Authentication Logo">
+        <img class="hideOnMobile" src="assets/verticalDivider.svg" alt="Vertical Divider">
+        <div id="providerListContainer">
+            <h1>Authentication Required</h1>
+            <p>Select an identity provider below. For details on authenticating to IcM, <a href="https://aka.ms/icmguide/loggingin" target="_blank">visit our documentation</a>.</p>
+            <label class="providerContainer" style="display: none;">
+                <input type="radio" name="identityProvider" value="AzureActiveDirectory" autocomplete="off" style="">
+                <div class="providerLabel">
+                    <span class="headingRow">
+                        <span class="heading">Microsoft Entra ID</span>
+                    </span>
+                    <span class="subheading">
+                        <img class="icon" focusable="false" src="assets/infoIcon.svg" alt="Warning icon">
+                        Formerly known as Azure Active Directory (AAD)
+                    </span>
+                    <span class="details">
+                        Sign in with your Microsoft Entra account (e.g. @microsoft.com, @linkedin.biz).
+                    </span>
+                </div>
+            </label>
+            <label class="providerContainer">
+                <input type="radio" name="identityProvider" value="EntraID-OIDC" autocomplete="off" style="">
+                <div class="providerLabel">
+                    <span class="headingRow">
+                        <span class="heading">Microsoft Entra ID</span>
+                    </span>
+                    <span class="subheading">
+                        <img class="icon" focusable="false" src="assets/infoIcon.svg" alt="Warning icon">
+                        Formerly known as Azure Active Directory (AAD)
+                    </span>
+                    <span class="details">
+                        Sign in with your Microsoft Entra account (e.g. @microsoft.com, @linkedin.biz).
+                    </span>
+                </div>
+            </label>
+            <label class="providerContainer">
+                <input type="radio" name="identityProvider" value="IcMdSTS" autocomplete="off" style="">
+                <div class="providerLabel">
+                    <span class="headingRow">
+                        <span class="heading">Datacenter Security Token Service (dSTS)</span>
+                    </span>
+                    <span class="subheading warning">
+                        <img class="icon" focusable="false" src="assets/warningIcon.svg" alt="Warning icon">
+                        Only accessible from SAW, Microsoft campus or via AzureVPN. <a href="https://aka.ms/icmguide/loggingin" target="_blank">Learn more</a>
+                    </span>
+                    <span class="details">
+                        This service includes the following providers: @ame.gbl, @pme.gbl, @gme.gbl, @usme.gbl, @msftgreen, @torus, ANME-ADFE-Federation, DCME-ADFS-Federation.
+                    </span>
+                </div>
+            </label>
+            <label class="providerContainer">
+                <input type="radio" name="identityProvider" value="IcMdSTSMooncake" autocomplete="off" style="">
+                <div class="providerLabel">
+                    <span class="headingRow">
+                        <span class="heading">Datacenter Security Token Service (dSTS) - China</span>
+                    </span>
+                    <span class="details">
+                        This service should be used for the @cme.gbl identity provider.
+                    </span>
+                </div>
+            </label>
+            <div><a id="signInButton" href="/sso2?ReturnUrl=https%3A%2F%2Fportal.microsofticm.com%2Fimp%2Fv3%2Fincidents%2Fsearch%2Fadvanced&amp;activeIdentityProviders=IcMdSTS%2CEntraID-OIDC%2CIcMdSTSMooncake&amp;identityProvider=EntraID-OIDC">Sign in</a></div>
+        </div>
+    </div>
+
+
+</body></html>

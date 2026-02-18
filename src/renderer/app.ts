@@ -52,8 +52,12 @@ import { WorkItemDetailView } from './components/workitem-detail-view.js';
 import { CfvHomeView } from './components/cfv/cfv-home-view.js';
 import { CfvCallView } from './components/cfv/cfv-call-view.js';
 import type { CfvCallTab } from '../shared/cfv-types.js';
+import { IcmIncidentsListView, IcmViewType, IcmSharedQueryGroup } from './components/icm-incidents-list-view.js';
+import { IcmIncidentDetailView } from './components/icm-incident-detail-view.js';
+import type { IcmIncidentListItem, IcmIncident, IcmFavoriteQuery, IcmQuery, IcmContact } from '../shared/icm-types.js';
+import { compileIcmCriteria } from '../shared/icm-types.js';
 import { ResizablePanels, setupResizablePanels } from './components/resizable-panels.js';
-import { icons, iconHtml, getIcon, getIconByName, MessageSquare, Bot, BookOpen, Globe, Columns, FileText, ChevronLeft, ChevronRight, ChevronDown, X, File, FileCode, ArrowRight, Link, CheckCircle, Check, Clock, XCircle, Circle, Home, LayoutGrid, Settings, ChevronsLeft, Sparkles, Eye, EyeOff, RefreshCw, Terminal } from './utils/icons.js';
+import { icons, iconHtml, getIcon, getIconByName, MessageSquare, Bot, BookOpen, Globe, Columns, FileText, ChevronLeft, ChevronRight, ChevronDown, X, File, FileCode, ArrowRight, Link, CheckCircle, Check, Clock, XCircle, Circle, Home, LayoutGrid, Settings, ChevronsLeft, Sparkles, Eye, EyeOff, RefreshCw, Terminal, AlertTriangle } from './utils/icons.js';
 import { renderMarkdownSync } from './utils/markdown-renderer.js';
 import { PRPollingService, type PollResult, type PollingState } from './services/pr-polling-service.js';
 import { PluginTabRenderer } from './components/plugin-tab-renderer.js';
@@ -83,6 +87,14 @@ interface WorkItemTab {
   label: string;
   closeable: boolean;
   workItemId?: number;
+}
+
+interface IcmTab {
+  id: string;
+  type: 'list' | 'detail';
+  label: string;
+  closeable: boolean;
+  incidentId?: number;
 }
 
 interface PRTabState {
@@ -168,6 +180,13 @@ class PRReviewApp {
   private cfvCallViews: Map<string, CfvCallView> = new Map();
   private cfvTabs: CfvCallTab[] = [];
   private activeCfvTabId: string = 'home';
+
+  // ICM state
+  private icmListView!: IcmIncidentsListView;
+  private icmDetailViews: Map<string, IcmIncidentDetailView> = new Map();
+  private icmTabs: IcmTab[] = [];
+  private activeIcmTabId: string = 'list';
+  private icmCurrentUser: IcmContact | null = null;
 
   // PR tab states map (tabId -> PRTabState)
   private prTabStates: Map<string, PRTabState> = new Map();
@@ -339,6 +358,16 @@ class PRReviewApp {
       }
       this.cfvHomeView.setTokenAcquisitionProgress(null);
     });
+
+    // Initialize ICM views
+    this.icmListView = new IcmIncidentsListView('icmListPanel');
+    this.icmListView.onSelect((incident) => this.openIcmIncidentTab(incident));
+    this.icmListView.onRefresh(() => this.refreshIcmIncidents());
+    this.icmListView.onOpenById((id) => this.openIcmIncidentById(id));
+
+    this.icmTabs = [
+      { id: 'list', type: 'list', label: 'Incidents', closeable: false },
+    ];
 
     // Initialize tabs
     this.reviewTabs = [
@@ -1138,6 +1167,7 @@ class PRReviewApp {
     document.getElementById('settingsSectionContent')?.classList.toggle('hidden', section !== 'settings');
     document.getElementById('terminalsSectionContent')?.classList.toggle('hidden', section !== 'terminals');
     document.getElementById('workItemsSectionContent')?.classList.toggle('hidden', section !== 'workItems');
+    document.getElementById('icmSectionContent')?.classList.toggle('hidden', section !== 'icm');
     document.getElementById('aboutSectionContent')?.classList.toggle('hidden', section !== 'about');
     document.getElementById('cfvSectionContent')?.classList.toggle('hidden', section !== 'cfv');
 
@@ -1167,6 +1197,11 @@ class PRReviewApp {
     // Load CFV data when switching to CFV section
     if (section === 'cfv') {
       this.cfvRefreshHome();
+    }
+
+    // Load ICM incidents when switching to ICM section
+    if (section === 'icm') {
+      this.initIcmUser().then(() => this.refreshIcmIncidents());
     }
 
     // Update tab bar
@@ -1200,6 +1235,9 @@ class PRReviewApp {
       // CFV uses inline tabs, hide the main tab bar
       this.reviewTabBar.setTabs([]);
       this.updateCfvTabBar();
+    } else if (this.activeSection === 'icm') {
+      // ICM section uses its own inline tabs - hide the main tab bar
+      this.reviewTabBar.setTabs([]);
     } else if (this.activeSection.startsWith('plugin-')) {
       // Plugin sections have no tab bar
       this.reviewTabBar.setTabs([]);
@@ -5239,6 +5277,415 @@ After this, respond with a simple text response to greet the user and ask them w
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  // ==================== ICM Methods ====================
+
+  private async initIcmUser() {
+    if (this.icmCurrentUser) return;
+
+    try {
+      // Ensure we have a valid token (acquires via Playwright if needed)
+      const hasToken = await window.electronAPI.icmHasValidToken();
+      if (!hasToken) {
+        this.icmListView.setSubtitle('Authenticating to ICM...');
+        await window.electronAPI.icmAcquireToken();
+      }
+
+      const user = await window.electronAPI.icmGetCurrentUser();
+      console.log('[ICM] Current user:', user?.Alias, 'Id:', user?.Id);
+      this.icmCurrentUser = user;
+      this.icmListView.setCurrentUser(user);
+      await this.loadIcmQueries();
+    } catch (error) {
+      console.error('Failed to get ICM current user:', error);
+      Toast.error('Failed to connect to ICM. Ensure you are signed into Edge.');
+    }
+  }
+
+  private async refreshIcmIncidents() {
+    this.icmListView.setLoading(true);
+
+    try {
+      const view = this.icmListView.getActiveView();
+      const queryId = this.icmListView.getActiveQueryId();
+      let filter: string | undefined;
+
+      if ((view === 'favorite' || view === 'saved' || view === 'shared') && queryId) {
+        // Find the query criteria and compile it to OData
+        filter = this.findAndCompileIcmQuery(view, queryId);
+        if (!filter) {
+          this.icmListView.setIncidents([]);
+          this.icmListView.setSubtitle('Could not compile query criteria');
+          return;
+        }
+      } else if (view === 'myIncidents' && this.icmCurrentUser) {
+        filter = `ContactAlias eq '${this.icmCurrentUser.Alias}' and State ne 'Resolved'`;
+      } else if (view === 'myTeams' && this.icmCurrentUser?.Teams) {
+        const teamIds = Object.keys(this.icmCurrentUser.Teams);
+        if (teamIds.length > 0) {
+          const teamFilter = teamIds.map(id => `OwningTeamId eq ${id}`).join(' or ');
+          filter = `(${teamFilter}) and State ne 'Resolved'`;
+        } else {
+          filter = "State ne 'Resolved'";
+        }
+      } else if (view === 'myServices' && this.icmCurrentUser?.Teams) {
+        const serviceIds = new Set<number>();
+        for (const team of Object.values(this.icmCurrentUser.Teams)) {
+          if (team.ServiceId) serviceIds.add(team.ServiceId);
+        }
+        if (serviceIds.size > 0) {
+          const svcFilter = Array.from(serviceIds).map(id => `OwningServiceId eq ${id}`).join(' or ');
+          filter = `(${svcFilter}) and State ne 'Resolved'`;
+        } else {
+          filter = "State ne 'Resolved'";
+        }
+      } else if (view === 'myTracked' && this.icmCurrentUser) {
+        // Tracked incidents: ones where user is in the tracking list (approximation via ContactAlias or HitCount)
+        filter = `ContactAlias eq '${this.icmCurrentUser.Alias}'`;
+      } else if (view === 'myRestricted' && this.icmCurrentUser) {
+        filter = `ContactAlias eq '${this.icmCurrentUser.Alias}' and IsNoise eq false`;
+      } else {
+        // 'active' - all active
+        filter = "State ne 'Resolved'";
+      }
+
+      const result = await window.electronAPI.icmQueryIncidents(filter, 100, undefined, undefined, 'CreatedDate desc');
+      const incidents: IcmIncidentListItem[] = result || [];
+      this.icmListView.setIncidents(incidents);
+      this.icmListView.setSubtitle(`${incidents.length} incident${incidents.length !== 1 ? 's' : ''}`);
+    } catch (error) {
+      console.error('Failed to load ICM incidents:', error);
+      this.icmListView.setIncidents([]);
+      this.icmListView.setSubtitle('Failed to load incidents');
+      Toast.error('Failed to load ICM incidents');
+    }
+  }
+
+  private findAndCompileIcmQuery(view: 'favorite' | 'saved' | 'shared', queryId: string): string | undefined {
+    let criteria: string | null = null;
+
+    if (view === 'favorite') {
+      const fq = this.icmFavoriteQueries.find(q => String(q.Query.QueryId) === queryId);
+      criteria = fq?.Query?.Criteria || null;
+    } else if (view === 'shared') {
+      for (const group of this.icmSharedQueryGroups) {
+        const sq = group.queries.find(q => String(q.QueryId) === queryId);
+        if (sq) { criteria = sq.Criteria; break; }
+      }
+    } else {
+      const sq = this.icmSavedQueries.find(q => String(q.QueryId) === queryId);
+      criteria = sq?.Criteria || null;
+    }
+
+    if (!criteria) return undefined;
+    return compileIcmCriteria(criteria);
+  }
+
+  // Cached query data for compilation lookup
+  private icmFavoriteQueries: IcmFavoriteQuery[] = [];
+  private icmSavedQueries: IcmQuery[] = [];
+  private icmSharedQueryGroups: IcmSharedQueryGroup[] = [];
+
+  private async loadIcmQueries() {
+    if (!this.icmCurrentUser) return;
+
+    const userId = this.icmCurrentUser.Id;
+    console.log('[ICM] Loading queries for user ID:', userId);
+
+    // Load favorites
+    try {
+      const favorites = await window.electronAPI.icmGetFavoriteQueries(userId);
+      console.log('[ICM] Loaded favorites:', favorites?.length ?? 0);
+      this.icmFavoriteQueries = favorites || [];
+      this.icmListView.setFavoriteQueries(this.icmFavoriteQueries);
+    } catch (error) {
+      console.error('[ICM] Failed to load favorite queries:', error);
+    }
+
+    // Load saved queries
+    try {
+      const saved = await window.electronAPI.icmGetSavedQueries(userId);
+      console.log('[ICM] Loaded saved queries:', saved?.length ?? 0);
+      this.icmSavedQueries = saved || [];
+      this.icmListView.setSavedQueries(this.icmSavedQueries);
+    } catch (error) {
+      console.error('[ICM] Failed to load saved queries:', error);
+    }
+
+    // Load shared queries per unique service (non-blocking)
+    this.loadIcmSharedQueries();
+  }
+
+  private async loadIcmSharedQueries() {
+    if (!this.icmCurrentUser) return;
+
+    try {
+      const allShared = await window.electronAPI.icmGetSharedQueries(this.icmCurrentUser.Id);
+      console.log('[ICM] Loaded shared queries:', allShared?.length ?? 0);
+
+      if (!allShared || allShared.length === 0) {
+        this.icmSharedQueryGroups = [];
+        this.icmListView.setSharedQueries([]);
+        return;
+      }
+
+      // Build service name lookup from user's teams
+      const serviceNames = new Map<number, string>();
+      if (this.icmCurrentUser.Teams) {
+        for (const team of Object.values(this.icmCurrentUser.Teams)) {
+          if (team.ServiceId && team.ServiceName) {
+            serviceNames.set(team.ServiceId, team.ServiceName);
+          }
+        }
+      }
+
+      // Group queries by TenantId (service)
+      const groupMap = new Map<number, IcmQuery[]>();
+      for (const q of allShared) {
+        const sid = q.TenantId || 0;
+        if (!groupMap.has(sid)) groupMap.set(sid, []);
+        groupMap.get(sid)!.push(q);
+      }
+
+      const groups: IcmSharedQueryGroup[] = [];
+      for (const [serviceId, queries] of groupMap) {
+        const serviceName = serviceNames.get(serviceId) || `Service ${serviceId}`;
+        groups.push({ serviceId, serviceName, queries });
+      }
+
+      groups.sort((a, b) => a.serviceName.localeCompare(b.serviceName));
+      this.icmSharedQueryGroups = groups;
+      this.icmListView.setSharedQueries(groups);
+      console.log('[ICM] Shared query groups:', groups.length);
+    } catch (error) {
+      console.warn('[ICM] Failed to load shared queries:', error);
+    }
+  }
+
+  private async openIcmIncidentTab(incident: IcmIncidentListItem) {
+    const tabId = `icm-${incident.Id}`;
+
+    // Check if tab already exists
+    const existingTab = this.icmTabs.find(t => t.id === tabId);
+    if (existingTab) {
+      this.switchIcmTab(tabId);
+      return;
+    }
+
+    // Create new tab
+    const tab: IcmTab = {
+      id: tabId,
+      type: 'detail',
+      label: `#${incident.Id}`,
+      closeable: true,
+      incidentId: incident.Id,
+    };
+
+    this.icmTabs.push(tab);
+
+    // Create tab panel container
+    const container = document.getElementById('icmTabPanelsContainer')!;
+    const panel = document.createElement('div');
+    panel.id = `icmPanel-${tabId}`;
+    panel.className = 'tab-panel icm-detail-panel';
+    container.appendChild(panel);
+
+    // Create detail view
+    const detailView = new IcmIncidentDetailView(panel);
+    detailView.onOpenInBrowser((url) => window.electronAPI.openExternal(url));
+    detailView.onRefreshRequest(async () => {
+      try {
+        const refreshed = await window.electronAPI.icmGetIncident(incident.Id);
+        detailView.setIncident(refreshed);
+      } catch (error) {
+        console.error('Failed to refresh incident:', error);
+      }
+    });
+    detailView.onAction(async (action, incidentId) => {
+      try {
+        switch (action) {
+          case 'acknowledge':
+            await window.electronAPI.icmAcknowledge(incidentId);
+            break;
+          case 'mitigate':
+            await window.electronAPI.icmMitigate(incidentId);
+            break;
+          case 'resolve':
+            await window.electronAPI.icmResolve(incidentId);
+            break;
+        }
+        // Refresh the incident after action
+        const refreshed = await window.electronAPI.icmGetIncident(incidentId);
+        detailView.setIncident(refreshed);
+        Toast.success(`Incident ${incidentId} ${action}d`);
+        this.refreshIcmIncidents();
+      } catch (error) {
+        console.error(`Failed to ${action} incident:`, error);
+        Toast.error(`Failed to ${action} incident: ${(error as Error).message}`);
+      }
+    });
+    detailView.onAddDiscussion(async (incidentId, text) => {
+      await window.electronAPI.icmAddDiscussion(incidentId, text);
+    });
+    this.icmDetailViews.set(tabId, detailView);
+
+    // Load full incident data
+    detailView.setLoading(true);
+    try {
+      const fullIncident = await window.electronAPI.icmGetIncident(incident.Id);
+      detailView.setIncident(fullIncident);
+    } catch (error) {
+      console.error('Failed to load incident:', error);
+      Toast.error('Failed to load incident details');
+    }
+
+    this.switchIcmTab(tabId);
+    this.updateIcmTabBar();
+  }
+
+  private async openIcmIncidentById(id: number) {
+    try {
+      const incident = await window.electronAPI.icmGetIncident(id);
+      // Convert to list item shape for the tab open
+      const listItem: IcmIncidentListItem = {
+        Id: incident.Id,
+        Severity: incident.Severity,
+        State: incident.State,
+        Title: incident.Title,
+        CreatedDate: incident.CreatedDate,
+        OwningTenantName: incident.OwningTenantName,
+        OwningTeamName: incident.OwningTeamName,
+        OwningServiceId: incident.OwningServiceId,
+        OwningTeamId: incident.OwningTeamId,
+        ContactAlias: incident.ContactAlias,
+        NotificationStatus: incident.NotificationStatus,
+        HitCount: incident.HitCount,
+        ChildCount: incident.ChildCount,
+        ParentId: incident.ParentId,
+        IsCustomerImpacting: incident.IsCustomerImpacting,
+        IsNoise: incident.IsNoise,
+        IsOutage: incident.IsOutage,
+        ExternalLinksCount: incident.ExternalLinksCount,
+        AcknowledgeBy: incident.AcknowledgeBy,
+        ImpactStartTime: incident.ImpactStartTime,
+      };
+      this.openIcmIncidentTab(listItem);
+    } catch (error) {
+      console.error('Failed to load incident:', error);
+      Toast.error('Failed to load incident');
+    }
+  }
+
+  private switchIcmTab(tabId: string) {
+    this.activeIcmTabId = tabId;
+
+    // Show/hide panels
+    const listPanel = document.getElementById('icmListPanel');
+    if (listPanel) {
+      listPanel.classList.toggle('active', tabId === 'list');
+      listPanel.style.display = tabId === 'list' ? '' : 'none';
+    }
+
+    this.icmDetailViews.forEach((_, id) => {
+      const panel = document.getElementById(`icmPanel-${id}`);
+      if (panel) {
+        panel.classList.toggle('active', id === tabId);
+        panel.style.display = id === tabId ? '' : 'none';
+      }
+    });
+
+    // Explicitly show the active detail panel
+    const activePanel = document.getElementById(`icmPanel-${tabId}`);
+    if (activePanel) {
+      activePanel.classList.add('active');
+      activePanel.style.display = '';
+    }
+
+    this.updateIcmTabBar();
+  }
+
+  private closeIcmTab(tabId: string) {
+    const index = this.icmTabs.findIndex(t => t.id === tabId);
+    if (index === -1) return;
+
+    // Remove tab
+    this.icmTabs.splice(index, 1);
+
+    // Remove detail view
+    this.icmDetailViews.delete(tabId);
+
+    // Remove panel
+    const panel = document.getElementById(`icmPanel-${tabId}`);
+    panel?.remove();
+
+    // Switch to another tab if we closed the active one
+    if (this.activeIcmTabId === tabId) {
+      const newTab = this.icmTabs[Math.max(0, index - 1)];
+      if (newTab) {
+        this.switchIcmTab(newTab.id);
+      }
+    }
+
+    this.updateIcmTabBar();
+  }
+
+  private updateIcmTabBar() {
+    const tabs: Tab[] = this.icmTabs.map(t => ({
+      id: t.id,
+      label: t.label,
+      closeable: t.closeable,
+      icon: t.type === 'list' ? getIcon(AlertTriangle, 14) : undefined,
+    }));
+
+    if (this.icmTabs.length > 1) {
+      this.renderIcmTabs(tabs);
+    } else {
+      this.hideIcmTabs();
+    }
+  }
+
+  private renderIcmTabs(tabs: Tab[]) {
+    const container = document.getElementById('icmSectionContent');
+    if (!container) return;
+
+    let tabBar = container.querySelector('.icm-tab-bar') as HTMLElement;
+    if (!tabBar) {
+      tabBar = document.createElement('div');
+      tabBar.className = 'icm-tab-bar';
+      container.insertBefore(tabBar, container.firstChild);
+    }
+
+    tabBar.innerHTML = tabs.map(tab => `
+      <button class="icm-tab-btn ${tab.id === this.activeIcmTabId ? 'active' : ''}" data-tab-id="${tab.id}">
+        ${tab.icon || ''}
+        <span>${tab.label}</span>
+        ${tab.closeable ? `<span class="icm-tab-close" data-tab-id="${tab.id}">&times;</span>` : ''}
+      </button>
+    `).join('');
+
+    // Attach event listeners
+    tabBar.querySelectorAll('.icm-tab-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        if (target.classList.contains('icm-tab-close')) {
+          e.stopPropagation();
+          const tabId = target.dataset.tabId!;
+          this.closeIcmTab(tabId);
+        } else {
+          const tabId = (btn as HTMLElement).dataset.tabId!;
+          this.switchIcmTab(tabId);
+        }
+      });
+    });
+  }
+
+  private hideIcmTabs() {
+    const container = document.getElementById('icmSectionContent');
+    if (!container) return;
+
+    const tabBar = container.querySelector('.icm-tab-bar');
+    tabBar?.remove();
   }
 }
 

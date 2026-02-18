@@ -1,0 +1,239 @@
+[
+  {
+    "timestamp": "2026-02-08T23:22:31.852Z",
+    "method": "GET",
+    "url": "https://portal.microsofticm.com/imp/v3/incidents/search/advanced",
+    "requestHeaders": {
+      "upgrade-insecure-requests": "1",
+      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0",
+      "sec-ch-ua": "\"Microsoft Edge\";v=\"143\", \"Chromium\";v=\"143\", \"Not A(Brand\";v=\"24\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"Windows\""
+    },
+    "requestPostData": null,
+    "responseStatus": 302,
+    "responseHeaders": {
+      "cache-control": "no-cache, no-store",
+      "content-length": "0",
+      "date": "Sun, 08 Feb 2026 23:22:31 GMT",
+      "expires": "-1",
+      "location": "https://portal.microsofticm.com/sso2/?ReturnUrl=https%3A%2F%2Fportal.microsofticm.com%2Fimp%2Fv3%2Fincidents%2Fsearch%2Fadvanced",
+      "pragma": "no-cache",
+      "server": "Microsoft-IIS/10.0",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "x-activityid": "5f026368-f702-4b5d-a55b-36a66c3aa851",
+      "x-content-type-options": "nosniff",
+      "x-powered-by": "ASP.NET"
+    },
+    "responseBody": null
+  },
+  {
+    "timestamp": "2026-02-08T23:22:31.862Z",
+    "method": "GET",
+    "url": "https://portal.microsofticm.com/sso2/?ReturnUrl=https%3A%2F%2Fportal.microsofticm.com%2Fimp%2Fv3%2Fincidents%2Fsearch%2Fadvanced",
+    "requestHeaders": {
+      "upgrade-insecure-requests": "1",
+      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0",
+      "sec-ch-ua": "\"Microsoft Edge\";v=\"143\", \"Chromium\";v=\"143\", \"Not A(Brand\";v=\"24\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"Windows\""
+    },
+    "requestPostData": null,
+    "responseStatus": 302,
+    "responseHeaders": {
+      "content-length": "0",
+      "date": "Sun, 08 Feb 2026 23:22:31 GMT",
+      "location": "/sso2/IdentityProviderSelection.html?ReturnUrl=https%3A%2F%2Fportal.microsofticm.com%2Fimp%2Fv3%2Fincidents%2Fsearch%2Fadvanced&activeIdentityProviders=IcMdSTS,EntraID-OIDC,IcMdSTSMooncake",
+      "server": "Microsoft-IIS/10.0",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "x-powered-by": "ASP.NET"
+    },
+    "responseBody": null
+  },
+  {
+    "timestamp": "2026-02-08T23:22:31.870Z",
+    "method": "GET",
+    "url": "https://portal.microsofticm.com/sso2/IdentityProviderSelection.html?ReturnUrl=https%3A%2F%2Fportal.microsofticm.com%2Fimp%2Fv3%2Fincidents%2Fsearch%2Fadvanced&activeIdentityProviders=IcMdSTS,EntraID-OIDC,IcMdSTSMooncake",
+    "requestHeaders": {
+      "upgrade-insecure-requests": "1",
+      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0",
+      "sec-ch-ua": "\"Microsoft Edge\";v=\"143\", \"Chromium\";v=\"143\", \"Not A(Brand\";v=\"24\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"Windows\""
+    },
+    "requestPostData": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "accept-ranges": "bytes",
+      "content-encoding": "gzip",
+      "content-length": "2028",
+      "content-type": "text/html",
+      "date": "Sun, 08 Feb 2026 23:22:31 GMT",
+      "etag": "\"0e3193f1292dc1:0\"",
+      "last-modified": "Fri, 30 Jan 2026 17:59:58 GMT",
+      "server": "Microsoft-IIS/10.0",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "vary": "Accept-Encoding",
+      "x-powered-by": "ASP.NET"
+    },
+    "responseBody": "<!DOCTYPE html>\r\n\r\n<html xmlns=\"http://www.w3.org/1999/xhtml\" lang=\"en\">\r\n\r\n<head>\r\n    <title>Identity Provider Selection - IcM</title>\r\n    <meta charset=\"utf-8\">\r\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\r\n    <link rel=\"shortcut icon\" type=\"image/x-icon\" href=\"https://icmcdn.akamaized.net/imp/v3/shell/platform/assets/images/favicon.ico\">\r\n    <script type=\"text/javascript\">\r\n        window.addEventListener(\"load\", function () {\r\n            const path = window.location.pathname;\r\n            const baseUrl = path.substring(0, Math.max(path.lastIndexOf(\"/\"), path.lastIndexOf(\"\\\\\")));\r\n            const urlParams = new URLSearchParams(window.location.search);\r\n            const signInButton = document.getElementById('signInButton');\r\n            const identityProviderRadioElements = document.querySelectorAll('input[name=\"identityProvider\"]');\r\n\r\n            // Register the event listener for the radio buttons of each identity provider\r\n            identityProviderRadioElements.forEach(radio => {\r\n                // When the radio button is selected, update the sign in link/button\r\n                radio.addEventListener('change', function () {\r\n                    const urlParams = new URLSearchParams(window.location.search);\r\n                    urlParams.set('identityProvider', this.value);\r\n                    signInButton.href = `${baseUrl}?${urlParams}`;\r\n                });\r\n            });\r\n           \r\n            // List of valid identity providers\r\n            const validIdentityProviderNames = Array.from(identityProviderRadioElements).map(radio => radio.value.toLowerCase());\r\n\r\n            // Parse the activeIdentityProviders query parameter\r\n            let activeIdentityProviders = urlParams.get('activeIdentityProviders')?.split(',').map(provider => provider.toLowerCase().trim());\r\n\r\n            // Validate the list of active identity providers and fallback to a default list if necessary\r\n            if (activeIdentityProviders == null || // Query parameter was not provided\r\n                activeIdentityProviders.length < 2 || // Query parameter is empty or contains only one provider. If only 1 provider is active, the backend should've automatically redirected to it.\r\n                activeIdentityProviders.some(provider => !validIdentityProviderNames.includes(provider))) // Some providers in list are not valid\r\n            {\r\n                activeIdentityProviders = [\"AzureActiveDirectory\", \"IcMdSTS\", \"IcMdSTSMooncake\"].map(provider => provider.toLowerCase());\r\n            }\r\n\r\n            // Hide the radio buttons that are not included in the activeIdentityProvider query parameter\r\n            identityProviderRadioElements.forEach(radio => {\r\n                if (!activeIdentityProviders.includes(radio.value.toLowerCase())) {\r\n                    radio.parentElement.style.display = 'none';\r\n                }\r\n            });\r\n            \r\n            // Try to pre-select one of the primary providers \r\n            for (let primaryProvider of ['AzureActiveDirectory', 'EntraID-OIDC']) {\r\n                if (activeIdentityProviders.includes(primaryProvider.toLowerCase())) {\r\n                    const radioButton = document.querySelector(`input[name=\"identityProvider\"][value=\"${primaryProvider}\"]`);\r\n                    \r\n                    // Using the click() method to trigger the change event and update the sign in link/button\r\n                    radioButton?.click();\r\n                    \r\n                    break;\r\n                }\r\n            }\r\n        });\r\n    </script>\r\n    <link rel=\"stylesheet\" type=\"text/css\" href=\"assets/IdentityProviderSelection.css\" />\r\n</head>\r\n\r\n<body class=\"ms-Fabric\">\r\n    <div id=\"outerContainer\">\r\n        <img class=\"hideOnMobile\" src=\"assets/lockKeyShield.svg\" alt=\"Authentication Logo\">\r\n        <img class=\"hideOnMobile\" src=\"assets/verticalDivider.svg\" alt=\"Vertical Divider\">\r\n        <div id=\"providerListContainer\">\r\n            <h1>Authentication Required</h1>\r\n            <p>Select an identity provider below. For details on authenticating to IcM, <a href=\"https://aka.ms/icmguide/loggingin\" target=\"_blank\">visit our documentation</a>.</p>\r\n            <label class=\"providerContainer\">\r\n                <input type=\"radio\" name=\"identityProvider\" value=\"AzureActiveDirectory\" autocomplete=\"off\" />\r\n                <div class=\"providerLabel\">\r\n                    <span class=\"headingRow\">\r\n                        <span class=\"heading\">Microsoft Entra ID</span>\r\n                    </span>\r\n                    <span class=\"subheading\">\r\n                        <img class=\"icon\" focusable=\"false\" src=\"assets/infoIcon.svg\" alt=\"Warning icon\">\r\n                        Formerly known as Azure Active Directory (AAD)\r\n                    </span>\r\n                    <span class=\"details\">\r\n                        Sign in with your Microsoft Entra account (e.g. @microsoft.com, @linkedin.biz).\r\n                    </span>\r\n                </div>\r\n            </label>\r\n            <label class=\"providerContainer\">\r\n                <input type=\"radio\" name=\"identityProvider\" value=\"EntraID-OIDC\" autocomplete=\"off\" />\r\n                <div class=\"providerLabel\">\r\n                    <span class=\"headingRow\">\r\n                        <span class=\"heading\">Microsoft Entra ID</span>\r\n                    </span>\r\n                    <span class=\"subheading\">\r\n                        <img class=\"icon\" focusable=\"false\" src=\"assets/infoIcon.svg\" alt=\"Warning icon\">\r\n                        Formerly known as Azure Active Directory (AAD)\r\n                    </span>\r\n                    <span class=\"details\">\r\n                        Sign in with your Microsoft Entra account (e.g. @microsoft.com, @linkedin.biz).\r\n                    </span>\r\n                </div>\r\n            </label>\r\n            <label class=\"providerContainer\">\r\n                <input type=\"radio\" name=\"identityProvider\" value=\"IcMdSTS\" autocomplete=\"off\" />\r\n                <div class=\"providerLabel\">\r\n                    <span class=\"headingRow\">\r\n                        <span class=\"heading\">Datacenter Security Token Service (dSTS)</span>\r\n                    </span>\r\n                    <span class=\"subheading warning\">\r\n                        <img class=\"icon\" focusable=\"false\" src=\"assets/warningIcon.svg\" alt=\"Warning icon\">\r\n                        Only accessible from SAW, Microsoft campus or via AzureVPN. <a href=\"https://aka.ms/icmguide/loggingin\" target=\"_blank\">Learn more</a>\r\n                    </span>\r\n                    <span class=\"details\">\r\n                        This service includes the following providers: @ame.gbl, @pme.gbl, @gme.gbl, @usme.gbl, @msftgreen, @torus, ANME-ADFE-Federation, DCME-ADFS-Federation.\r\n                    </span>\r\n                </div>\r\n            </label>\r\n            <label class=\"providerContainer\">\r\n                <input type=\"radio\" name=\"identityProvider\" value=\"IcMdSTSMooncake\" autocomplete=\"off\" />\r\n                <div class=\"providerLabel\">\r\n                    <span class=\"headingRow\">\r\n                        <span class=\"heading\">Datacenter Security Token Service (dSTS) - China</span>\r\n                    </span>\r\n                    <span class=\"details\">\r\n                        This service should be used for the @cme.gbl identity provider.\r\n                    </span>\r\n                </div>\r\n            </label>\r\n            <div><a id=\"signInButton\">Sign in</a></div>\r\n        </div>\r\n    </div>\r\n</body>\r\n</html>\r\n"
+  },
+  {
+    "timestamp": "2026-02-08T23:24:37.164Z",
+    "method": "GET",
+    "url": "https://portal.microsofticm.com/imp/v3/incidents/dashboard",
+    "requestHeaders": {
+      "upgrade-insecure-requests": "1",
+      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0",
+      "sec-ch-ua": "\"Microsoft Edge\";v=\"143\", \"Chromium\";v=\"143\", \"Not A(Brand\";v=\"24\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"Windows\""
+    },
+    "requestPostData": null,
+    "responseStatus": 302,
+    "responseHeaders": {
+      "cache-control": "no-cache, no-store",
+      "content-length": "0",
+      "date": "Sun, 08 Feb 2026 23:24:36 GMT",
+      "expires": "-1",
+      "location": "https://portal.microsofticm.com/sso2/?ReturnUrl=https%3A%2F%2Fportal.microsofticm.com%2Fimp%2Fv3%2Fincidents%2Fdashboard",
+      "pragma": "no-cache",
+      "server": "Microsoft-IIS/10.0",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "x-activityid": "3cfc9ed6-4428-4aa0-91b2-7d2952b284e5",
+      "x-content-type-options": "nosniff",
+      "x-powered-by": "ASP.NET"
+    },
+    "responseBody": null
+  },
+  {
+    "timestamp": "2026-02-08T23:24:37.174Z",
+    "method": "GET",
+    "url": "https://portal.microsofticm.com/sso2/?ReturnUrl=https%3A%2F%2Fportal.microsofticm.com%2Fimp%2Fv3%2Fincidents%2Fdashboard",
+    "requestHeaders": {
+      "upgrade-insecure-requests": "1",
+      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0",
+      "sec-ch-ua": "\"Microsoft Edge\";v=\"143\", \"Chromium\";v=\"143\", \"Not A(Brand\";v=\"24\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"Windows\""
+    },
+    "requestPostData": null,
+    "responseStatus": 302,
+    "responseHeaders": {
+      "content-length": "0",
+      "date": "Sun, 08 Feb 2026 23:24:36 GMT",
+      "location": "/sso2/IdentityProviderSelection.html?ReturnUrl=https%3A%2F%2Fportal.microsofticm.com%2Fimp%2Fv3%2Fincidents%2Fdashboard&activeIdentityProviders=IcMdSTS,EntraID-OIDC,IcMdSTSMooncake",
+      "server": "Microsoft-IIS/10.0",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "x-powered-by": "ASP.NET"
+    },
+    "responseBody": null
+  },
+  {
+    "timestamp": "2026-02-08T23:24:37.181Z",
+    "method": "GET",
+    "url": "https://portal.microsofticm.com/sso2/IdentityProviderSelection.html?ReturnUrl=https%3A%2F%2Fportal.microsofticm.com%2Fimp%2Fv3%2Fincidents%2Fdashboard&activeIdentityProviders=IcMdSTS,EntraID-OIDC,IcMdSTSMooncake",
+    "requestHeaders": {
+      "upgrade-insecure-requests": "1",
+      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0",
+      "sec-ch-ua": "\"Microsoft Edge\";v=\"143\", \"Chromium\";v=\"143\", \"Not A(Brand\";v=\"24\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"Windows\""
+    },
+    "requestPostData": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "accept-ranges": "bytes",
+      "content-encoding": "gzip",
+      "content-length": "2028",
+      "content-type": "text/html",
+      "date": "Sun, 08 Feb 2026 23:24:36 GMT",
+      "etag": "\"0e3193f1292dc1:0\"",
+      "last-modified": "Fri, 30 Jan 2026 17:59:58 GMT",
+      "server": "Microsoft-IIS/10.0",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "vary": "Accept-Encoding",
+      "x-powered-by": "ASP.NET"
+    },
+    "responseBody": "<!DOCTYPE html>\r\n\r\n<html xmlns=\"http://www.w3.org/1999/xhtml\" lang=\"en\">\r\n\r\n<head>\r\n    <title>Identity Provider Selection - IcM</title>\r\n    <meta charset=\"utf-8\">\r\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\r\n    <link rel=\"shortcut icon\" type=\"image/x-icon\" href=\"https://icmcdn.akamaized.net/imp/v3/shell/platform/assets/images/favicon.ico\">\r\n    <script type=\"text/javascript\">\r\n        window.addEventListener(\"load\", function () {\r\n            const path = window.location.pathname;\r\n            const baseUrl = path.substring(0, Math.max(path.lastIndexOf(\"/\"), path.lastIndexOf(\"\\\\\")));\r\n            const urlParams = new URLSearchParams(window.location.search);\r\n            const signInButton = document.getElementById('signInButton');\r\n            const identityProviderRadioElements = document.querySelectorAll('input[name=\"identityProvider\"]');\r\n\r\n            // Register the event listener for the radio buttons of each identity provider\r\n            identityProviderRadioElements.forEach(radio => {\r\n                // When the radio button is selected, update the sign in link/button\r\n                radio.addEventListener('change', function () {\r\n                    const urlParams = new URLSearchParams(window.location.search);\r\n                    urlParams.set('identityProvider', this.value);\r\n                    signInButton.href = `${baseUrl}?${urlParams}`;\r\n                });\r\n            });\r\n           \r\n            // List of valid identity providers\r\n            const validIdentityProviderNames = Array.from(identityProviderRadioElements).map(radio => radio.value.toLowerCase());\r\n\r\n            // Parse the activeIdentityProviders query parameter\r\n            let activeIdentityProviders = urlParams.get('activeIdentityProviders')?.split(',').map(provider => provider.toLowerCase().trim());\r\n\r\n            // Validate the list of active identity providers and fallback to a default list if necessary\r\n            if (activeIdentityProviders == null || // Query parameter was not provided\r\n                activeIdentityProviders.length < 2 || // Query parameter is empty or contains only one provider. If only 1 provider is active, the backend should've automatically redirected to it.\r\n                activeIdentityProviders.some(provider => !validIdentityProviderNames.includes(provider))) // Some providers in list are not valid\r\n            {\r\n                activeIdentityProviders = [\"AzureActiveDirectory\", \"IcMdSTS\", \"IcMdSTSMooncake\"].map(provider => provider.toLowerCase());\r\n            }\r\n\r\n            // Hide the radio buttons that are not included in the activeIdentityProvider query parameter\r\n            identityProviderRadioElements.forEach(radio => {\r\n                if (!activeIdentityProviders.includes(radio.value.toLowerCase())) {\r\n                    radio.parentElement.style.display = 'none';\r\n                }\r\n            });\r\n            \r\n            // Try to pre-select one of the primary providers \r\n            for (let primaryProvider of ['AzureActiveDirectory', 'EntraID-OIDC']) {\r\n                if (activeIdentityProviders.includes(primaryProvider.toLowerCase())) {\r\n                    const radioButton = document.querySelector(`input[name=\"identityProvider\"][value=\"${primaryProvider}\"]`);\r\n                    \r\n                    // Using the click() method to trigger the change event and update the sign in link/button\r\n                    radioButton?.click();\r\n                    \r\n                    break;\r\n                }\r\n            }\r\n        });\r\n    </script>\r\n    <link rel=\"stylesheet\" type=\"text/css\" href=\"assets/IdentityProviderSelection.css\" />\r\n</head>\r\n\r\n<body class=\"ms-Fabric\">\r\n    <div id=\"outerContainer\">\r\n        <img class=\"hideOnMobile\" src=\"assets/lockKeyShield.svg\" alt=\"Authentication Logo\">\r\n        <img class=\"hideOnMobile\" src=\"assets/verticalDivider.svg\" alt=\"Vertical Divider\">\r\n        <div id=\"providerListContainer\">\r\n            <h1>Authentication Required</h1>\r\n            <p>Select an identity provider below. For details on authenticating to IcM, <a href=\"https://aka.ms/icmguide/loggingin\" target=\"_blank\">visit our documentation</a>.</p>\r\n            <label class=\"providerContainer\">\r\n                <input type=\"radio\" name=\"identityProvider\" value=\"AzureActiveDirectory\" autocomplete=\"off\" />\r\n                <div class=\"providerLabel\">\r\n                    <span class=\"headingRow\">\r\n                        <span class=\"heading\">Microsoft Entra ID</span>\r\n                    </span>\r\n                    <span class=\"subheading\">\r\n                        <img class=\"icon\" focusable=\"false\" src=\"assets/infoIcon.svg\" alt=\"Warning icon\">\r\n                        Formerly known as Azure Active Directory (AAD)\r\n                    </span>\r\n                    <span class=\"details\">\r\n                        Sign in with your Microsoft Entra account (e.g. @microsoft.com, @linkedin.biz).\r\n                    </span>\r\n                </div>\r\n            </label>\r\n            <label class=\"providerContainer\">\r\n                <input type=\"radio\" name=\"identityProvider\" value=\"EntraID-OIDC\" autocomplete=\"off\" />\r\n                <div class=\"providerLabel\">\r\n                    <span class=\"headingRow\">\r\n                        <span class=\"heading\">Microsoft Entra ID</span>\r\n                    </span>\r\n                    <span class=\"subheading\">\r\n                        <img class=\"icon\" focusable=\"false\" src=\"assets/infoIcon.svg\" alt=\"Warning icon\">\r\n                        Formerly known as Azure Active Directory (AAD)\r\n                    </span>\r\n                    <span class=\"details\">\r\n                        Sign in with your Microsoft Entra account (e.g. @microsoft.com, @linkedin.biz).\r\n                    </span>\r\n                </div>\r\n            </label>\r\n            <label class=\"providerContainer\">\r\n                <input type=\"radio\" name=\"identityProvider\" value=\"IcMdSTS\" autocomplete=\"off\" />\r\n                <div class=\"providerLabel\">\r\n                    <span class=\"headingRow\">\r\n                        <span class=\"heading\">Datacenter Security Token Service (dSTS)</span>\r\n                    </span>\r\n                    <span class=\"subheading warning\">\r\n                        <img class=\"icon\" focusable=\"false\" src=\"assets/warningIcon.svg\" alt=\"Warning icon\">\r\n                        Only accessible from SAW, Microsoft campus or via AzureVPN. <a href=\"https://aka.ms/icmguide/loggingin\" target=\"_blank\">Learn more</a>\r\n                    </span>\r\n                    <span class=\"details\">\r\n                        This service includes the following providers: @ame.gbl, @pme.gbl, @gme.gbl, @usme.gbl, @msftgreen, @torus, ANME-ADFE-Federation, DCME-ADFS-Federation.\r\n                    </span>\r\n                </div>\r\n            </label>\r\n            <label class=\"providerContainer\">\r\n                <input type=\"radio\" name=\"identityProvider\" value=\"IcMdSTSMooncake\" autocomplete=\"off\" />\r\n                <div class=\"providerLabel\">\r\n                    <span class=\"headingRow\">\r\n                        <span class=\"heading\">Datacenter Security Token Service (dSTS) - China</span>\r\n                    </span>\r\n                    <span class=\"details\">\r\n                        This service should be used for the @cme.gbl identity provider.\r\n                    </span>\r\n                </div>\r\n            </label>\r\n            <div><a id=\"signInButton\">Sign in</a></div>\r\n        </div>\r\n    </div>\r\n</body>\r\n</html>\r\n"
+  },
+  {
+    "timestamp": "2026-02-08T23:24:42.395Z",
+    "method": "GET",
+    "url": "https://portal.microsofticm.com/imp/v3/incidents/search/basic",
+    "requestHeaders": {
+      "upgrade-insecure-requests": "1",
+      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0",
+      "sec-ch-ua": "\"Microsoft Edge\";v=\"143\", \"Chromium\";v=\"143\", \"Not A(Brand\";v=\"24\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"Windows\""
+    },
+    "requestPostData": null,
+    "responseStatus": 302,
+    "responseHeaders": {
+      "cache-control": "no-cache, no-store",
+      "content-length": "0",
+      "date": "Sun, 08 Feb 2026 23:24:42 GMT",
+      "expires": "-1",
+      "location": "https://portal.microsofticm.com/sso2/?ReturnUrl=https%3A%2F%2Fportal.microsofticm.com%2Fimp%2Fv3%2Fincidents%2Fsearch%2Fbasic",
+      "pragma": "no-cache",
+      "server": "Microsoft-IIS/10.0",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "x-activityid": "fa2e1b91-6466-4b2c-a506-46886ff0a5b3",
+      "x-content-type-options": "nosniff",
+      "x-powered-by": "ASP.NET"
+    },
+    "responseBody": null
+  },
+  {
+    "timestamp": "2026-02-08T23:24:42.406Z",
+    "method": "GET",
+    "url": "https://portal.microsofticm.com/sso2/?ReturnUrl=https%3A%2F%2Fportal.microsofticm.com%2Fimp%2Fv3%2Fincidents%2Fsearch%2Fbasic",
+    "requestHeaders": {
+      "upgrade-insecure-requests": "1",
+      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0",
+      "sec-ch-ua": "\"Microsoft Edge\";v=\"143\", \"Chromium\";v=\"143\", \"Not A(Brand\";v=\"24\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"Windows\""
+    },
+    "requestPostData": null,
+    "responseStatus": 302,
+    "responseHeaders": {
+      "content-length": "0",
+      "date": "Sun, 08 Feb 2026 23:24:42 GMT",
+      "location": "/sso2/IdentityProviderSelection.html?ReturnUrl=https%3A%2F%2Fportal.microsofticm.com%2Fimp%2Fv3%2Fincidents%2Fsearch%2Fbasic&activeIdentityProviders=IcMdSTS,EntraID-OIDC,IcMdSTSMooncake",
+      "server": "Microsoft-IIS/10.0",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "x-powered-by": "ASP.NET"
+    },
+    "responseBody": null
+  },
+  {
+    "timestamp": "2026-02-08T23:24:42.414Z",
+    "method": "GET",
+    "url": "https://portal.microsofticm.com/sso2/IdentityProviderSelection.html?ReturnUrl=https%3A%2F%2Fportal.microsofticm.com%2Fimp%2Fv3%2Fincidents%2Fsearch%2Fbasic&activeIdentityProviders=IcMdSTS,EntraID-OIDC,IcMdSTSMooncake",
+    "requestHeaders": {
+      "upgrade-insecure-requests": "1",
+      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0",
+      "sec-ch-ua": "\"Microsoft Edge\";v=\"143\", \"Chromium\";v=\"143\", \"Not A(Brand\";v=\"24\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"Windows\""
+    },
+    "requestPostData": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "accept-ranges": "bytes",
+      "content-encoding": "gzip",
+      "content-length": "2028",
+      "content-type": "text/html",
+      "date": "Sun, 08 Feb 2026 23:24:42 GMT",
+      "etag": "\"0e3193f1292dc1:0\"",
+      "last-modified": "Fri, 30 Jan 2026 17:59:58 GMT",
+      "server": "Microsoft-IIS/10.0",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "vary": "Accept-Encoding",
+      "x-powered-by": "ASP.NET"
+    },
+    "responseBody": "<!DOCTYPE html>\r\n\r\n<html xmlns=\"http://www.w3.org/1999/xhtml\" lang=\"en\">\r\n\r\n<head>\r\n    <title>Identity Provider Selection - IcM</title>\r\n    <meta charset=\"utf-8\">\r\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\r\n    <link rel=\"shortcut icon\" type=\"image/x-icon\" href=\"https://icmcdn.akamaized.net/imp/v3/shell/platform/assets/images/favicon.ico\">\r\n    <script type=\"text/javascript\">\r\n        window.addEventListener(\"load\", function () {\r\n            const path = window.location.pathname;\r\n            const baseUrl = path.substring(0, Math.max(path.lastIndexOf(\"/\"), path.lastIndexOf(\"\\\\\")));\r\n            const urlParams = new URLSearchParams(window.location.search);\r\n            const signInButton = document.getElementById('signInButton');\r\n            const identityProviderRadioElements = document.querySelectorAll('input[name=\"identityProvider\"]');\r\n\r\n            // Register the event listener for the radio buttons of each identity provider\r\n            identityProviderRadioElements.forEach(radio => {\r\n                // When the radio button is selected, update the sign in link/button\r\n                radio.addEventListener('change', function () {\r\n                    const urlParams = new URLSearchParams(window.location.search);\r\n                    urlParams.set('identityProvider', this.value);\r\n                    signInButton.href = `${baseUrl}?${urlParams}`;\r\n                });\r\n            });\r\n           \r\n            // List of valid identity providers\r\n            const validIdentityProviderNames = Array.from(identityProviderRadioElements).map(radio => radio.value.toLowerCase());\r\n\r\n            // Parse the activeIdentityProviders query parameter\r\n            let activeIdentityProviders = urlParams.get('activeIdentityProviders')?.split(',').map(provider => provider.toLowerCase().trim());\r\n\r\n            // Validate the list of active identity providers and fallback to a default list if necessary\r\n            if (activeIdentityProviders == null || // Query parameter was not provided\r\n                activeIdentityProviders.length < 2 || // Query parameter is empty or contains only one provider. If only 1 provider is active, the backend should've automatically redirected to it.\r\n                activeIdentityProviders.some(provider => !validIdentityProviderNames.includes(provider))) // Some providers in list are not valid\r\n            {\r\n                activeIdentityProviders = [\"AzureActiveDirectory\", \"IcMdSTS\", \"IcMdSTSMooncake\"].map(provider => provider.toLowerCase());\r\n            }\r\n\r\n            // Hide the radio buttons that are not included in the activeIdentityProvider query parameter\r\n            identityProviderRadioElements.forEach(radio => {\r\n                if (!activeIdentityProviders.includes(radio.value.toLowerCase())) {\r\n                    radio.parentElement.style.display = 'none';\r\n                }\r\n            });\r\n            \r\n            // Try to pre-select one of the primary providers \r\n            for (let primaryProvider of ['AzureActiveDirectory', 'EntraID-OIDC']) {\r\n                if (activeIdentityProviders.includes(primaryProvider.toLowerCase())) {\r\n                    const radioButton = document.querySelector(`input[name=\"identityProvider\"][value=\"${primaryProvider}\"]`);\r\n                    \r\n                    // Using the click() method to trigger the change event and update the sign in link/button\r\n                    radioButton?.click();\r\n                    \r\n                    break;\r\n                }\r\n            }\r\n        });\r\n    </script>\r\n    <link rel=\"stylesheet\" type=\"text/css\" href=\"assets/IdentityProviderSelection.css\" />\r\n</head>\r\n\r\n<body class=\"ms-Fabric\">\r\n    <div id=\"outerContainer\">\r\n        <img class=\"hideOnMobile\" src=\"assets/lockKeyShield.svg\" alt=\"Authentication Logo\">\r\n        <img class=\"hideOnMobile\" src=\"assets/verticalDivider.svg\" alt=\"Vertical Divider\">\r\n        <div id=\"providerListContainer\">\r\n            <h1>Authentication Required</h1>\r\n            <p>Select an identity provider below. For details on authenticating to IcM, <a href=\"https://aka.ms/icmguide/loggingin\" target=\"_blank\">visit our documentation</a>.</p>\r\n            <label class=\"providerContainer\">\r\n                <input type=\"radio\" name=\"identityProvider\" value=\"AzureActiveDirectory\" autocomplete=\"off\" />\r\n                <div class=\"providerLabel\">\r\n                    <span class=\"headingRow\">\r\n                        <span class=\"heading\">Microsoft Entra ID</span>\r\n                    </span>\r\n                    <span class=\"subheading\">\r\n                        <img class=\"icon\" focusable=\"false\" src=\"assets/infoIcon.svg\" alt=\"Warning icon\">\r\n                        Formerly known as Azure Active Directory (AAD)\r\n                    </span>\r\n                    <span class=\"details\">\r\n                        Sign in with your Microsoft Entra account (e.g. @microsoft.com, @linkedin.biz).\r\n                    </span>\r\n                </div>\r\n            </label>\r\n            <label class=\"providerContainer\">\r\n                <input type=\"radio\" name=\"identityProvider\" value=\"EntraID-OIDC\" autocomplete=\"off\" />\r\n                <div class=\"providerLabel\">\r\n                    <span class=\"headingRow\">\r\n                        <span class=\"heading\">Microsoft Entra ID</span>\r\n                    </span>\r\n                    <span class=\"subheading\">\r\n                        <img class=\"icon\" focusable=\"false\" src=\"assets/infoIcon.svg\" alt=\"Warning icon\">\r\n                        Formerly known as Azure Active Directory (AAD)\r\n                    </span>\r\n                    <span class=\"details\">\r\n                        Sign in with your Microsoft Entra account (e.g. @microsoft.com, @linkedin.biz).\r\n                    </span>\r\n                </div>\r\n            </label>\r\n            <label class=\"providerContainer\">\r\n                <input type=\"radio\" name=\"identityProvider\" value=\"IcMdSTS\" autocomplete=\"off\" />\r\n                <div class=\"providerLabel\">\r\n                    <span class=\"headingRow\">\r\n                        <span class=\"heading\">Datacenter Security Token Service (dSTS)</span>\r\n                    </span>\r\n                    <span class=\"subheading warning\">\r\n                        <img class=\"icon\" focusable=\"false\" src=\"assets/warningIcon.svg\" alt=\"Warning icon\">\r\n                        Only accessible from SAW, Microsoft campus or via AzureVPN. <a href=\"https://aka.ms/icmguide/loggingin\" target=\"_blank\">Learn more</a>\r\n                    </span>\r\n                    <span class=\"details\">\r\n                        This service includes the following providers: @ame.gbl, @pme.gbl, @gme.gbl, @usme.gbl, @msftgreen, @torus, ANME-ADFE-Federation, DCME-ADFS-Federation.\r\n                    </span>\r\n                </div>\r\n            </label>\r\n            <label class=\"providerContainer\">\r\n                <input type=\"radio\" name=\"identityProvider\" value=\"IcMdSTSMooncake\" autocomplete=\"off\" />\r\n                <div class=\"providerLabel\">\r\n                    <span class=\"headingRow\">\r\n                        <span class=\"heading\">Datacenter Security Token Service (dSTS) - China</span>\r\n                    </span>\r\n                    <span class=\"details\">\r\n                        This service should be used for the @cme.gbl identity provider.\r\n                    </span>\r\n                </div>\r\n            </label>\r\n            <div><a id=\"signInButton\">Sign in</a></div>\r\n        </div>\r\n    </div>\r\n</body>\r\n</html>\r\n"
+  }
+]

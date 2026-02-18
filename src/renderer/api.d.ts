@@ -446,6 +446,39 @@ export interface ElectronAPI {
   onPluginsReloaded: (callback: (event: any) => void) => () => void;
   onPluginStateChanged: (callback: (event: any) => void) => () => void;
   onPluginNavigate: (callback: (event: { pluginId: string; section: string }) => void) => () => void;
+
+  // ICM Auth methods
+  icmAcquireToken: () => Promise<string>;
+  icmHasValidToken: () => Promise<boolean>;
+
+  // ICM API methods
+  icmGetToken: () => Promise<string>;
+  icmGetCurrentUser: () => Promise<any>;
+  icmGetPermissions: () => Promise<any>;
+  icmResolveContacts: (emails: string[]) => Promise<any[]>;
+  icmQueryIncidents: (filter?: string, top?: number, select?: string, expand?: string, orderby?: string) => Promise<any>;
+  icmGetIncidentCount: (filter: string) => Promise<number>;
+  icmGetIncident: (id: number) => Promise<any>;
+  icmGetIncidentBridges: (id: number) => Promise<any[]>;
+  icmAcknowledge: (id: number) => Promise<void>;
+  icmTransfer: (id: number, teamId: number) => Promise<void>;
+  icmMitigate: (id: number) => Promise<void>;
+  icmResolve: (id: number) => Promise<void>;
+  icmGetDiscussion: (incidentId: number) => Promise<any[]>;
+  icmAddDiscussion: (incidentId: number, text: string) => Promise<void>;
+  icmGetFavoriteQueries: (ownerId: number, ownerType?: string) => Promise<any[]>;
+  icmGetSavedQueries: (contactId: number) => Promise<any[]>;
+  icmGetSharedQueries: (contactId: number) => Promise<any[]>;
+  icmGetTeams: (ids: number[]) => Promise<any[]>;
+  icmSearchTeams: (id: number) => Promise<any[]>;
+  icmSearchServices: (id: number) => Promise<any[]>;
+  icmGetAlertSources: (alertSourceId: string) => Promise<any>;
+  icmGetUserPreferences: (alias: string) => Promise<any>;
+  icmGetFeatureFlags: (scope: string, alias: string) => Promise<any>;
+  icmGetTeamsChannel: (incidentId: number) => Promise<any>;
+  icmGetBreakingNews: () => Promise<any[]>;
+  icmGetPropertyGroups: () => Promise<any[]>;
+  icmGetCloudInstances: () => Promise<any[]>;
 }
 
 declare global {

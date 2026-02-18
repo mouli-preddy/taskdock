@@ -9,6 +9,8 @@
 
 import { WebSocketServer, WebSocket } from 'ws';
 import { AdoApiClient } from '../src/main/ado-api.js';
+import { IcmApiClient } from '../src/main/icm-api.js';
+import { IcmAuthService } from '../src/main/icm-auth.js';
 import {
   getAIReviewService,
   disposeAIReviewService,
@@ -50,6 +52,8 @@ interface AppConfig {
 }
 
 const adoClient = new AdoApiClient();
+const icmAuthService = new IcmAuthService();
+const icmClient = new IcmApiClient(icmAuthService);
 
 // Helper to load settings from store file (for bridge-side operations)
 // This is temporary - settings are being migrated to Tauri storage
@@ -245,6 +249,20 @@ reviewExecutorService.warmupProviderCache().then(() => {
 }).catch((err) => {
   getLogger().warn('Backend', 'Failed to warm up provider cache', { error: err?.message });
 });
+
+// Auto-retry ICM calls on token errors (refresh + retry once)
+async function icmCall<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (e: any) {
+    const msg = e?.message || '';
+    if (msg.includes('401') || msg.includes('ICM_TOKEN_EXPIRED') || msg.includes('Unauthorized')) {
+      await icmAuthService.refreshToken();
+      return await fn();
+    }
+    throw e;
+  }
+}
 
 // Handle incoming RPC calls
 async function handleRpc(method: string, params: any[]): Promise<any> {
@@ -893,6 +911,68 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       return;
     case 'plugin:get-logs':
       return pluginEngine.getExecutionLogs(params[0]);
+
+    // ICM Auth
+    case 'icm:acquire-token':
+      return icmAuthService.acquireToken();
+    case 'icm:has-valid-token':
+      return icmAuthService.hasValidToken();
+
+    // ICM API (wrapped with auto-retry on token errors)
+    case 'icm:get-token':
+      return icmClient.getToken();
+    case 'icm:get-current-user':
+      return icmCall(() => icmClient.getCurrentUser());
+    case 'icm:get-permissions':
+      return icmCall(() => icmClient.getPermissions());
+    case 'icm:resolve-contacts':
+      return icmCall(() => icmClient.resolveContacts(params[0]));
+    case 'icm:query-incidents':
+      return icmCall(() => icmClient.queryIncidents(params[0], params[1], params[2], params[3], params[4]));
+    case 'icm:get-incident-count':
+      return icmCall(() => icmClient.getIncidentCount(params[0]));
+    case 'icm:get-incident':
+      return icmCall(() => icmClient.getIncident(params[0]));
+    case 'icm:get-incident-bridges':
+      return icmCall(() => icmClient.getIncidentBridges(params[0]));
+    case 'icm:acknowledge':
+      return icmCall(() => icmClient.acknowledgeIncident(params[0]));
+    case 'icm:transfer':
+      return icmCall(() => icmClient.transferIncident(params[0], params[1]));
+    case 'icm:mitigate':
+      return icmCall(() => icmClient.mitigateIncident(params[0]));
+    case 'icm:resolve':
+      return icmCall(() => icmClient.resolveIncident(params[0]));
+    case 'icm:get-discussion':
+      return icmCall(() => icmClient.getDiscussionEntries(params[0]));
+    case 'icm:add-discussion':
+      return icmCall(() => icmClient.addDiscussionEntry(params[0], params[1]));
+    case 'icm:get-favorite-queries':
+      return icmCall(() => icmClient.getFavoriteQueries(params[0], params[1]));
+    case 'icm:get-saved-queries':
+      return icmCall(() => icmClient.getContactQueries(params[0]));
+    case 'icm:get-shared-queries':
+      return icmCall(() => icmClient.getSharedQueries(params[0]));
+    case 'icm:get-teams':
+      return icmCall(() => icmClient.getTeams(params[0]));
+    case 'icm:search-teams':
+      return icmCall(() => icmClient.searchTeams(params[0]));
+    case 'icm:search-services':
+      return icmCall(() => icmClient.searchServices(params[0]));
+    case 'icm:get-alert-sources':
+      return icmCall(() => icmClient.getAlertSources(params[0]));
+    case 'icm:get-user-preferences':
+      return icmCall(() => icmClient.getUserPreferences(params[0]));
+    case 'icm:get-feature-flags':
+      return icmCall(() => icmClient.getFeatureFlags(params[0], params[1]));
+    case 'icm:get-teams-channel':
+      return icmCall(() => icmClient.getTeamsChannel(params[0]));
+    case 'icm:get-breaking-news':
+      return icmCall(() => icmClient.getBreakingNews());
+    case 'icm:get-property-groups':
+      return icmCall(() => icmClient.getPropertyGroups());
+    case 'icm:get-cloud-instances':
+      return icmCall(() => icmClient.getCloudInstances());
 
     default:
       throw new Error(`Unknown method: ${method}`);

@@ -1,6 +1,6 @@
-import { getIcon, GitPullRequest, LayoutGrid, Terminal, Settings, Info, Activity } from '../utils/icons.js';
+import { getIcon, GitPullRequest, LayoutGrid, Terminal, Settings, Info, Activity, AlertTriangle } from '../utils/icons.js';
 
-export type SectionId = 'review' | 'workItems' | 'terminals' | 'settings' | 'about' | string;
+export type SectionId = 'review' | 'workItems' | 'icm' | 'terminals' | 'settings' | 'about' | string;
 
 export interface SectionDef {
   id: SectionId;
@@ -23,6 +23,11 @@ const SECTIONS: SectionDef[] = [
     id: 'cfv',
     icon: getIcon(Activity, 20),
     label: 'Call Flow',
+  },
+  {
+    id: 'icm',
+    icon: getIcon(AlertTriangle, 20),
+    label: 'ICM',
   },
   {
     id: 'terminals',

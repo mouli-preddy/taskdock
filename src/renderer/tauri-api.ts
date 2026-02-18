@@ -606,6 +606,40 @@ export const tauriAPI = {
   onPluginsReloaded: (callback: () => void) => subscribe('plugin:plugins-reloaded', callback),
   onPluginStateChanged: (callback: (event: any) => void) => subscribe('plugin:state-changed', callback),
   onPluginNavigate: (callback: (event: any) => void) => subscribe('plugin:ui-navigate', callback),
+
+  // ICM Auth methods
+  icmAcquireToken: () => invoke('icm:acquire-token'),
+  icmHasValidToken: () => invoke('icm:has-valid-token'),
+
+  // ICM API methods
+  icmGetToken: () => invoke('icm:get-token'),
+  icmGetCurrentUser: () => invoke('icm:get-current-user'),
+  icmGetPermissions: () => invoke('icm:get-permissions'),
+  icmResolveContacts: (emails: string[]) => invoke('icm:resolve-contacts', emails),
+  icmQueryIncidents: (filter?: string, top?: number, select?: string, expand?: string, orderby?: string) =>
+    invoke('icm:query-incidents', filter, top, select, expand, orderby),
+  icmGetIncidentCount: (filter: string) => invoke('icm:get-incident-count', filter),
+  icmGetIncident: (id: number) => invoke('icm:get-incident', id),
+  icmGetIncidentBridges: (id: number) => invoke('icm:get-incident-bridges', id),
+  icmAcknowledge: (id: number) => invoke('icm:acknowledge', id),
+  icmTransfer: (id: number, teamId: number) => invoke('icm:transfer', id, teamId),
+  icmMitigate: (id: number) => invoke('icm:mitigate', id),
+  icmResolve: (id: number) => invoke('icm:resolve', id),
+  icmGetDiscussion: (incidentId: number) => invoke('icm:get-discussion', incidentId),
+  icmAddDiscussion: (incidentId: number, text: string) => invoke('icm:add-discussion', incidentId, text),
+  icmGetFavoriteQueries: (ownerId: number, ownerType?: string) => invoke('icm:get-favorite-queries', ownerId, ownerType),
+  icmGetSavedQueries: (contactId: number) => invoke('icm:get-saved-queries', contactId),
+  icmGetSharedQueries: (contactId: number) => invoke('icm:get-shared-queries', contactId),
+  icmGetTeams: (ids: number[]) => invoke('icm:get-teams', ids),
+  icmSearchTeams: (id: number) => invoke('icm:search-teams', id),
+  icmSearchServices: (id: number) => invoke('icm:search-services', id),
+  icmGetAlertSources: (alertSourceId: string) => invoke('icm:get-alert-sources', alertSourceId),
+  icmGetUserPreferences: (alias: string) => invoke('icm:get-user-preferences', alias),
+  icmGetFeatureFlags: (scope: string, alias: string) => invoke('icm:get-feature-flags', scope, alias),
+  icmGetTeamsChannel: (incidentId: number) => invoke('icm:get-teams-channel', incidentId),
+  icmGetBreakingNews: () => invoke('icm:get-breaking-news'),
+  icmGetPropertyGroups: () => invoke('icm:get-property-groups'),
+  icmGetCloudInstances: () => invoke('icm:get-cloud-instances'),
 };
 
 // Initialize connection when module loads
