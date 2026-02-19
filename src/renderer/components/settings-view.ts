@@ -32,6 +32,7 @@ export class SettingsView {
     this.loadPollingSettings();
     this.loadNotificationSettings();
     this.loadPlugins();
+    this.attachReloadAllHandler();
   }
 
   async loadPlugins(): Promise<void> {
@@ -52,10 +53,13 @@ export class SettingsView {
               <span class="plugin-settings-name">${escapeHtml(plugin.name)}</span>
               <span class="plugin-settings-version">v${escapeHtml(plugin.version)}</span>
             </div>
-            <label class="toggle-switch">
-              <input type="checkbox" class="plugin-toggle" data-plugin-id="${plugin.id}" ${plugin.enabled ? 'checked' : ''}>
-              <span class="toggle-slider"></span>
-            </label>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <button class="btn btn-secondary btn-sm plugin-reload-btn" data-plugin-id="${plugin.id}" title="Reload plugin">Reload</button>
+              <label class="toggle-switch">
+                <input type="checkbox" class="plugin-toggle" data-plugin-id="${plugin.id}" ${plugin.enabled ? 'checked' : ''}>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
           </div>
           ${plugin.description ? `<p class="plugin-settings-desc">${escapeHtml(plugin.description)}</p>` : ''}
           ${plugin.manifest?.config ? this.renderPluginConfigFields(plugin) : ''}
@@ -101,8 +105,48 @@ export class SettingsView {
           }
         });
       });
+      // Attach per-plugin reload handlers
+      container.querySelectorAll('.plugin-reload-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const el = e.currentTarget as HTMLButtonElement;
+          const pluginId = el.dataset.pluginId!;
+          el.disabled = true;
+          el.textContent = 'Reloading...';
+          try {
+            await window.electronAPI.pluginReload(pluginId);
+            // Toast is shown by onPluginReloaded event handler in app.ts
+            await this.loadPlugins(); // Refresh the settings list
+          } catch (err: any) {
+            Toast.error(err.message || `Failed to reload plugin "${pluginId}"`);
+          } finally {
+            el.disabled = false;
+            el.textContent = 'Reload';
+          }
+        });
+      });
     } catch (err) {
       console.error('Failed to load plugins:', err);
+    }
+  }
+
+  /** One-time handler for the static "Reload All" button (not inside the dynamic plugin list) */
+  private attachReloadAllHandler(): void {
+    const reloadAllBtn = this.container.querySelector('#reloadAllPluginsBtn') as HTMLButtonElement | null;
+    if (reloadAllBtn) {
+      reloadAllBtn.addEventListener('click', async () => {
+        reloadAllBtn.disabled = true;
+        reloadAllBtn.textContent = 'Reloading...';
+        try {
+          await window.electronAPI.pluginReloadAll();
+          // Toast is shown by onPluginsReloaded event handler in app.ts
+          await this.loadPlugins(); // Refresh the settings list
+        } catch (err: any) {
+          Toast.error(err.message || 'Failed to reload plugins');
+        } finally {
+          reloadAllBtn.disabled = false;
+          reloadAllBtn.textContent = 'Reload All';
+        }
+      });
     }
   }
 
@@ -467,7 +511,10 @@ export class SettingsView {
           </div>
 
           <div class="settings-section" id="pluginSettingsSection">
-            <h2 class="settings-section-title">Plugins</h2>
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <h2 class="settings-section-title" style="margin: 0;">Plugins</h2>
+              <button type="button" class="btn btn-secondary btn-sm" id="reloadAllPluginsBtn">Reload All</button>
+            </div>
             <p class="settings-section-description">Manage installed plugins. Plugins are loaded from ~/.taskdock/plugins/</p>
             <div id="pluginSettingsList" class="plugin-settings-list">
               <p class="text-muted">Loading plugins...</p>

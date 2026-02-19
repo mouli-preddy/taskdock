@@ -424,6 +424,95 @@ class PRReviewApp {
   }
 
   private async initPlugins() {
+    // Load and render plugins
+    await this.loadPluginUI();
+
+    // Subscribe to plugin events (one-time, never re-subscribed)
+    window.electronAPI.onPluginUIUpdate((event: PluginUIUpdateEvent) => {
+      const renderer = this.pluginRenderers.get(event.pluginId);
+      if (renderer) renderer.updateComponent(event.componentId, event.data);
+    });
+
+    window.electronAPI.onPluginUIToast((event: PluginToastEvent) => {
+      switch (event.level) {
+        case 'success': Toast.success(event.message); break;
+        case 'error': Toast.error(event.message); break;
+        case 'warning': Toast.warning(event.message); break;
+        default: Toast.info(event.message);
+      }
+    });
+
+    window.electronAPI.onPluginUIInject((event: any) => {
+      // Handle dynamic injection of components into core tabs
+      console.log('Plugin UI inject:', event);
+    });
+
+    window.electronAPI.onPluginNavigate((event: { pluginId: string; section: string }) => {
+      this.switchSection(event.section as SectionId);
+    });
+
+    window.electronAPI.onPluginReloaded(async (event: { pluginId: string }) => {
+      const { pluginId } = event;
+      try {
+        // Remove old renderer/sidebar if exists
+        const oldRenderer = this.pluginRenderers.get(pluginId);
+        if (oldRenderer) {
+          this.sectionSidebar.removeSection(`plugin-${pluginId}`);
+          document.getElementById(`pluginSection-${pluginId}`)?.remove();
+          this.pluginRenderers.delete(pluginId);
+        }
+
+        // Re-fetch the updated plugin and re-render if it has UI
+        const plugin = await window.electronAPI.pluginGetPlugin(pluginId);
+        if (plugin?.enabled && plugin.ui) {
+          this.sectionSidebar.addSection({
+            id: `plugin-${plugin.id}`,
+            icon: getIconByName(plugin.ui.tab.icon, 20) || `<span class="plugin-icon-text">\uD83D\uDD0C</span>`,
+            label: plugin.ui.tab.label,
+          });
+
+          const container = document.createElement('div');
+          container.className = 'section-content hidden';
+          container.id = `pluginSection-${plugin.id}`;
+          container.innerHTML = '<div class="tab-panel active plugin-tab-content"></div>';
+          document.getElementById('pluginSectionContents')?.appendChild(container);
+
+          const renderer = new PluginTabRenderer(
+            container.querySelector('.plugin-tab-content')!,
+            plugin
+          );
+          renderer.onTrigger((triggerId, input) => {
+            window.electronAPI.pluginExecuteTrigger(plugin.id, triggerId, input);
+          });
+          renderer.render();
+          this.pluginRenderers.set(plugin.id, renderer);
+        }
+
+        // Rebuild hook buttons
+        const allPlugins: LoadedPlugin[] = await window.electronAPI.pluginGetPlugins();
+        this.pluginHookButtons = [];
+        this.renderPluginHooks(allPlugins.filter(p => p.enabled));
+        Toast.info(plugin ? `Plugin "${pluginId}" reloaded` : `Plugin "${pluginId}" removed`);
+      } catch (err: any) {
+        console.error('Failed to handle plugin reload:', err);
+      }
+    });
+
+    window.electronAPI.onPluginsReloaded(async () => {
+      // Remove existing plugin sections and re-render (without re-subscribing events)
+      for (const [pluginId] of this.pluginRenderers) {
+        this.sectionSidebar.removeSection(`plugin-${pluginId}`);
+        document.getElementById(`pluginSection-${pluginId}`)?.remove();
+      }
+      this.pluginRenderers.clear();
+      this.pluginHookButtons = [];
+      await this.loadPluginUI();
+      Toast.info('All plugins reloaded');
+    });
+  }
+
+  /** Load plugins from backend and render their UI. Re-entrant safe (no event subscriptions). */
+  private async loadPluginUI() {
     try {
       const plugins: LoadedPlugin[] = await window.electronAPI.pluginGetPlugins();
 
@@ -458,43 +547,8 @@ class PRReviewApp {
 
       // Collect hooks from all enabled plugins and render them
       this.renderPluginHooks(plugins.filter(p => p.enabled));
-
-      // Subscribe to plugin events
-      window.electronAPI.onPluginUIUpdate((event: PluginUIUpdateEvent) => {
-        const renderer = this.pluginRenderers.get(event.pluginId);
-        if (renderer) renderer.updateComponent(event.componentId, event.data);
-      });
-
-      window.electronAPI.onPluginUIToast((event: PluginToastEvent) => {
-        switch (event.level) {
-          case 'success': Toast.success(event.message); break;
-          case 'error': Toast.error(event.message); break;
-          case 'warning': Toast.warning(event.message); break;
-          default: Toast.info(event.message);
-        }
-      });
-
-      window.electronAPI.onPluginUIInject((event: any) => {
-        // Handle dynamic injection of components into core tabs
-        console.log('Plugin UI inject:', event);
-      });
-
-      window.electronAPI.onPluginNavigate((event: { pluginId: string; section: string }) => {
-        this.switchSection(event.section as SectionId);
-      });
-
-      window.electronAPI.onPluginsReloaded(() => {
-        // Remove existing plugin sections and re-init
-        for (const [pluginId] of this.pluginRenderers) {
-          this.sectionSidebar.removeSection(`plugin-${pluginId}`);
-          document.getElementById(`pluginSection-${pluginId}`)?.remove();
-        }
-        this.pluginRenderers.clear();
-        this.pluginHookButtons = [];
-        this.initPlugins();
-      });
     } catch (err) {
-      console.error('Failed to initialize plugins:', err);
+      console.error('Failed to load plugins:', err);
     }
   }
 

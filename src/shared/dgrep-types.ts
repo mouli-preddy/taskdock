@@ -157,11 +157,11 @@ export interface StartSearchRequest {
   endTime: string;   // ISO 8601
   identityColumns: Record<string, string[]>;
   queryID: string;
-  queryType: number; // 1 = KQL
-  query: string;     // server-side KQL
+  queryType: number; // 0 = MQL, 1 = KQL (no server filter), 2 = KQL (with server filter)
+  query: string;     // server-side KQL query (requires queryType 2)
   searchCriteria: null;
   maxResults: number;
-  shimMode: string;  // "Dgrep" — required by Geneva portal API
+  shimMode: string;
 }
 
 export interface SearchStatusResponse {

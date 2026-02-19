@@ -208,6 +208,8 @@ export class DGrepClient {
 
     const maxResults = params.maxResults || DGREP_CONSTANTS.DEFAULT_MAX_RESULTS;
 
+    const serverQuery = params.serverQuery?.trim() || '';
+
     const body: StartSearchRequest = {
       endpoint: params.endpoint,
       namespaces: params.namespaces,
@@ -216,8 +218,8 @@ export class DGrepClient {
       endTime: params.endTime,
       identityColumns: params.identityColumns || {},
       queryID: queryId,
-      queryType: 1,
-      query: params.serverQuery || '',
+      queryType: serverQuery ? 2 : 1, // 2 = KQL with server filter, 1 = no server filter
+      query: serverQuery,
       searchCriteria: null,
       maxResults,
       shimMode: 'Dgrep',
@@ -228,6 +230,8 @@ export class DGrepClient {
       eventNames: params.eventNames,
       startTime: params.startTime,
       endTime: params.endTime,
+      serverQuery: serverQuery || '(none)',
+      queryType: body.queryType,
       maxResults,
     });
 

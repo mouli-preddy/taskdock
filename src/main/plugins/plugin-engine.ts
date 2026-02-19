@@ -23,6 +23,7 @@ export class PluginEngine extends EventEmitter {
   private executionLogs: Map<string, PluginExecutionLog[]> = new Map();
   private hookRegistry: Map<string, { pluginId: string; triggerId: string; workflow: string }[]> = new Map();
   private fileWatcher: fs.FSWatcher | null = null;
+  private _reloadTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
   constructor() {
     super();
@@ -177,58 +178,139 @@ export class PluginEngine extends EventEmitter {
     }
   }
 
+  /** Reload a single plugin by ID. Cancels running workflows, reloads from disk, restarts schedulers. */
+  reloadPlugin(pluginId: string): LoadedPlugin | null {
+    const logger = getLogger();
+    logger.info('PluginEngine', `Reloading plugin: ${pluginId}`);
+
+    // Cancel running workflows for this plugin
+    this.runner.cancelPlugin(pluginId);
+
+    // Stop schedulers
+    this.scheduler.stopPlugin(pluginId);
+
+    // Reload from disk
+    let reloaded: LoadedPlugin | null;
+    try {
+      reloaded = this.loader.reloadPlugin(pluginId);
+    } catch (err: any) {
+      logger.error('PluginEngine', `Failed to reload plugin: ${pluginId}`, { error: err.message });
+      this.buildHookRegistry();
+      this.emit('plugin:reloaded', { pluginId });
+      return null;
+    }
+
+    if (!reloaded) {
+      logger.warn('PluginEngine', `Plugin not found after reload: ${pluginId}`);
+      this.executionLogs.delete(pluginId);
+      this.buildHookRegistry();
+      this.emit('plugin:reloaded', { pluginId });
+      return null;
+    }
+
+    // Restart schedulers if enabled
+    if (reloaded.enabled) {
+      this.scheduler.startPlugin(reloaded);
+    }
+
+    // Rebuild hooks and notify
+    this.buildHookRegistry();
+    // If the plugin ID changed (manifest edited), emit a full reload so frontend discovers the new ID
+    if (reloaded.id !== pluginId) {
+      this.emit('plugins:reloaded', {});
+    } else {
+      this.emit('plugin:reloaded', { pluginId });
+    }
+    logger.info('PluginEngine', `Reloaded plugin: ${reloaded.id}`);
+    return reloaded;
+  }
+
+  /** Reload all plugins. Detects additions AND removals. */
+  reloadAllPlugins(): LoadedPlugin[] {
+    const logger = getLogger();
+    logger.info('PluginEngine', 'Reloading all plugins');
+
+    // Cancel all running workflows
+    this.runner.cancelAll();
+
+    // Stop all schedulers
+    this.scheduler.stopAll();
+
+    // Snapshot old plugin IDs for removal detection
+    const oldIds = new Set(this.loader.getAllPlugins().map(p => p.id));
+
+    // Reload from disk
+    const plugins = this.loader.loadAll();
+    const newIds = new Set(plugins.map(p => p.id));
+
+    // Clean up execution logs for removed plugins
+    for (const oldId of oldIds) {
+      if (!newIds.has(oldId)) {
+        this.executionLogs.delete(oldId);
+        logger.info('PluginEngine', `Plugin removed: ${oldId}`);
+      }
+    }
+
+    // Restart schedulers for enabled plugins
+    for (const p of plugins) {
+      if (p.enabled) this.scheduler.startPlugin(p);
+    }
+
+    // Rebuild hooks and notify
+    this.buildHookRegistry();
+    this.emit('plugins:reloaded', {});
+    return plugins;
+  }
+
   /** Hot-reload: watch plugins directory for changes */
   private startFileWatcher(): void {
     const pluginsDir = this.loader.getPluginsDir();
     try {
-      this.fileWatcher = fs.watch(pluginsDir, { recursive: true }, (eventType, filename) => {
+      this.fileWatcher = fs.watch(pluginsDir, { recursive: true }, (_eventType, filename) => {
         if (!filename) return;
-        // Debounce: wait 500ms before reloading
-        if (this._reloadTimeout) clearTimeout(this._reloadTimeout);
-        this._reloadTimeout = setTimeout(() => {
-          this.handleFileChange(filename);
-        }, 500);
+        const parts = filename.split(path.sep);
+        if (parts.length === 0 || parts[0].startsWith('_')) return;
+
+        const pluginDirName = parts[0];
+
+        // Per-plugin debounce
+        const existing = this._reloadTimers.get(pluginDirName);
+        if (existing) clearTimeout(existing);
+
+        this._reloadTimers.set(pluginDirName, setTimeout(() => {
+          this._reloadTimers.delete(pluginDirName);
+          this.handleFileChange(pluginDirName);
+        }, 500));
       });
     } catch (err: any) {
       getLogger().warn('PluginEngine', 'Could not start file watcher', { error: err.message });
     }
   }
 
-  private _reloadTimeout: ReturnType<typeof setTimeout> | null = null;
-
-  private handleFileChange(filename: string): void {
+  private handleFileChange(pluginDirName: string): void {
     const logger = getLogger();
-    // Extract plugin folder name from the path
-    const parts = filename.split(path.sep);
-    if (parts.length === 0 || parts[0].startsWith('_')) return;
-
-    const pluginDirName = parts[0];
     logger.info('PluginEngine', `File change detected in plugin: ${pluginDirName}`);
 
-    // Find the plugin by directory name
-    const plugins = this.loader.getAllPlugins();
-    const existing = plugins.find(p => path.basename(p.path) === pluginDirName);
+    try {
+      // Find the plugin by directory name
+      const plugins = this.loader.getAllPlugins();
+      const existing = plugins.find(p => path.basename(p.path) === pluginDirName);
 
-    if (existing) {
-      // Reload existing plugin
-      this.scheduler.stopPlugin(existing.id);
-      const reloaded = this.loader.reloadPlugin(existing.id);
-      if (reloaded?.enabled) {
-        this.scheduler.startPlugin(reloaded);
+      if (existing) {
+        // Check if the directory was deleted — if so, reload all to detect removal
+        if (!fs.existsSync(existing.path)) {
+          logger.info('PluginEngine', `Plugin directory deleted: ${pluginDirName}`);
+          this.reloadAllPlugins();
+          return;
+        }
+        this.reloadPlugin(existing.id);
+      } else {
+        // New plugin detected — reload all
+        this.reloadAllPlugins();
+        logger.info('PluginEngine', 'Reloaded all plugins (new plugin detected)');
       }
-      this.buildHookRegistry();
-      this.emit('plugin:reloaded', { pluginId: existing.id });
-      logger.info('PluginEngine', `Reloaded plugin: ${existing.id}`);
-    } else {
-      // New plugin - reload all
-      this.scheduler.stopAll();
-      const allPlugins = this.loader.loadAll();
-      for (const p of allPlugins) {
-        if (p.enabled) this.scheduler.startPlugin(p);
-      }
-      this.buildHookRegistry();
-      this.emit('plugins:reloaded', {});
-      logger.info('PluginEngine', 'Reloaded all plugins (new plugin detected)');
+    } catch (err: any) {
+      logger.error('PluginEngine', `Failed to handle file change for plugin: ${pluginDirName}`, { error: err.message });
     }
   }
 
@@ -298,13 +380,15 @@ export class PluginEngine extends EventEmitter {
 
   dispose(): void {
     this.scheduler.stopAll();
+    this.runner.cancelAll();
     if (this.fileWatcher) {
       this.fileWatcher.close();
       this.fileWatcher = null;
     }
-    if (this._reloadTimeout) {
-      clearTimeout(this._reloadTimeout);
+    for (const timer of this._reloadTimers.values()) {
+      clearTimeout(timer);
     }
+    this._reloadTimers.clear();
     if (this._copilotClient) {
       this._copilotClient.stop().catch(() => {});
       this._copilotClient = null;

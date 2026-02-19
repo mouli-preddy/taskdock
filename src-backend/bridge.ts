@@ -920,6 +920,10 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       return;
     case 'plugin:get-logs':
       return pluginEngine.getExecutionLogs(params[0]);
+    case 'plugin:reload':
+      return pluginEngine.reloadPlugin(params[0]);
+    case 'plugin:reload-all':
+      return pluginEngine.reloadAllPlugins();
 
     // ICM Auth
     case 'icm:acquire-token':

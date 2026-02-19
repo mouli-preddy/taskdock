@@ -163,6 +163,24 @@ export class PluginScriptRunner {
     }
   }
 
+  /** Cancel all running workflows for a specific plugin */
+  cancelPlugin(pluginId: string): void {
+    for (const [execId, proc] of this.runningProcesses) {
+      if (execId.startsWith(pluginId + ':')) {
+        proc.abort.abort();
+        this.runningProcesses.delete(execId);
+      }
+    }
+  }
+
+  /** Cancel all running workflows */
+  cancelAll(): void {
+    for (const [, proc] of this.runningProcesses) {
+      proc.abort.abort();
+    }
+    this.runningProcesses.clear();
+  }
+
   private handleScriptMessage(pluginId: string, line: string, log: PluginExecutionLog): void {
     if (!line.startsWith('__PLUGIN_MSG__:')) return;
     try {

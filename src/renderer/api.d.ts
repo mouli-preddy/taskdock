@@ -435,6 +435,8 @@ export interface ElectronAPI {
   pluginSetEnabled: (pluginId: string, enabled: boolean) => Promise<void>;
   pluginSaveConfig: (pluginId: string, config: Record<string, any>) => Promise<void>;
   pluginGetLogs: (pluginId: string) => Promise<any[]>;
+  pluginReload: (pluginId: string) => Promise<any>;
+  pluginReloadAll: () => Promise<any[]>;
 
   // Plugin Event listeners
   onPluginUIUpdate: (callback: (event: any) => void) => () => void;
@@ -443,7 +445,7 @@ export interface ElectronAPI {
   onPluginLog: (callback: (event: any) => void) => () => void;
   onPluginExecutionComplete: (callback: (event: any) => void) => () => void;
   onPluginReloaded: (callback: (event: any) => void) => () => void;
-  onPluginsReloaded: (callback: (event: any) => void) => () => void;
+  onPluginsReloaded: (callback: () => void) => () => void;
   onPluginStateChanged: (callback: (event: any) => void) => () => void;
   onPluginNavigate: (callback: (event: { pluginId: string; section: string }) => void) => () => void;
 

@@ -598,6 +598,10 @@ export const tauriAPI = {
     invoke('plugin:save-config', pluginId, config),
   pluginGetLogs: (pluginId: string) =>
     invoke('plugin:get-logs', pluginId),
+  pluginReload: (pluginId: string) =>
+    invoke('plugin:reload', pluginId),
+  pluginReloadAll: () =>
+    invoke('plugin:reload-all'),
 
   // Plugin event listeners
   onPluginUIUpdate: (callback: (event: any) => void) => subscribe('plugin:ui-update', callback),

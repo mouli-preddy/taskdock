@@ -91,7 +91,7 @@ export class PluginLoader {
     };
   }
 
-  /** Reload a single plugin by ID */
+  /** Reload a single plugin by ID. Removes the plugin from the map if its directory no longer exists. */
   reloadPlugin(pluginId: string): LoadedPlugin | null {
     const existing = this.plugins.get(pluginId);
     if (!existing) return null;
@@ -100,6 +100,12 @@ export class PluginLoader {
     const plugin = this.loadPlugin(existing.path, savedConfig);
     if (plugin) {
       this.plugins.set(plugin.id, plugin);
+      // If the plugin ID changed (manifest edited), remove the old entry
+      if (plugin.id !== pluginId) {
+        this.plugins.delete(pluginId);
+      }
+    } else {
+      this.plugins.delete(pluginId);
     }
     return plugin;
   }
