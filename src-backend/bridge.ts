@@ -413,9 +413,10 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
     // App Settings
     case 'app:get-settings': {
       const storeData = loadStoreData();
+      const appConfig = loadConfig();
       return {
-        organization: storeData.organization,
-        project: storeData.project,
+        organization: storeData.organization || appConfig?.ado?.organization || '',
+        project: storeData.project || appConfig?.ado?.project || '',
         theme: storeData.theme,
         diffViewMode: storeData.diffViewMode,
         sidebarCollapsed: storeData.sidebarCollapsed,
