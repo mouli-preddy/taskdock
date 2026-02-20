@@ -35,6 +35,8 @@ export interface CreateTerminalOptions {
 export interface LinkedRepository {
   path: string;
   originUrl: string;
+  /** Optional human-readable description of what this repository contains */
+  description?: string;
 }
 
 export interface MonitoredRepository {

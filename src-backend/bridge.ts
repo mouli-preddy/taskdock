@@ -630,6 +630,16 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       return;
 
     // Git
+    case 'app:get-linked-repositories': {
+      const settings = loadStoreData().consoleReview;
+      return (settings?.linkedRepositories || []).map((repo: any) => ({
+        path: repo.path,
+        originUrl: repo.originUrl,
+        description: repo.description || '',
+      }));
+    }
+
+    // Git
     case 'git:find-repo': {
       const settings = loadStoreData().consoleReview;
       const worktreeService = getWorktreeService(settings?.linkedRepositories || []);

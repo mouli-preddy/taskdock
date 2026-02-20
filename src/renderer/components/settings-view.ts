@@ -760,6 +760,9 @@ export class SettingsView {
           <span class="repo-path">${escapeHtml(repo.path)}</span>
           <span class="repo-normalized">${escapeHtml(repo.normalized)}</span>
           <span class="repo-origin">${escapeHtml(repo.originUrl)}</span>
+          <input type="text" class="repo-description-input" data-index="${index}"
+            placeholder="Description (e.g., Backend API service, Frontend SPA...)"
+            value="${escapeHtml(repo.description || '')}">
         </div>
         <button type="button" class="btn btn-icon btn-danger-subtle remove-repo-btn" data-index="${index}" title="Remove">
           ${getIcon(X, 14)}
@@ -773,6 +776,15 @@ export class SettingsView {
         const index = parseInt((e.currentTarget as HTMLElement).dataset.index || '0');
         this.consoleReviewSettings.linkedRepositories.splice(index, 1);
         this.renderLinkedReposList();
+      });
+    });
+
+    // Attach description change listeners
+    container.querySelectorAll('.repo-description-input').forEach(input => {
+      input.addEventListener('input', (e) => {
+        const el = e.target as HTMLInputElement;
+        const index = parseInt(el.dataset.index || '0');
+        this.consoleReviewSettings.linkedRepositories[index].description = el.value.trim() || undefined;
       });
     });
   }

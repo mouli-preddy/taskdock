@@ -268,6 +268,20 @@
   text-overflow: ellipsis;
 }
 
+.repo-description-input {
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-2);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  width: 100%;
+}
+
+.repo-description-input::placeholder {
+  color: var(--text-tertiary);
+}
+
 .remove-repo-btn {
   flex-shrink: 0;
 }
