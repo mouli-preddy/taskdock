@@ -71,6 +71,7 @@ export class WorkItemDetailView {
 
   setWorkItem(item: WorkItem) {
     this.workItem = item;
+    this.loading = false;
     this.editMode = false;
     this.editedFields = {};
     this.render();

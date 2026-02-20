@@ -1350,15 +1350,8 @@ class PRReviewApp {
       // Plugin sections have no tab bar
       this.reviewTabBar.setTabs([]);
     } else {
-      // Default: show settings tabs for other sections (workItems, terminals)
-      const tabs: Tab[] = this.settingsTabs.map(t => ({
-        id: t.id,
-        label: t.label,
-        closeable: t.closeable,
-        icon: getIcon(Settings, 14),
-      }));
-      this.reviewTabBar.setTabs(tabs);
-      this.reviewTabBar.setActive(this.activeSettingsTabId);
+      // Work items, terminals, and other sections use their own inline tabs - hide the main tab bar
+      this.reviewTabBar.setTabs([]);
     }
   }
 
@@ -2041,7 +2034,19 @@ class PRReviewApp {
 
   // First launch flow
   private async checkFirstLaunch() {
-    const isConfigured = await window.electronAPI.isConfigured();
+    let isConfigured = false;
+    try {
+      isConfigured = await window.electronAPI.isConfigured();
+    } catch {
+      // Tauri native invoke may not be available (e.g. running in browser)
+      // Fall back to checking via bridge settings
+      try {
+        const settings = await window.electronAPI.getSettings() as Record<string, unknown> | null;
+        if (settings?.organization && settings?.project) {
+          isConfigured = true;
+        }
+      } catch { /* not configured */ }
+    }
 
     // Load saved diff view mode preference
     try {
@@ -2059,13 +2064,24 @@ class PRReviewApp {
       document.getElementById('setupModalBackdrop')?.classList.remove('hidden');
     } else {
       // Load config and initialize
-      const config = await window.electronAPI.loadConfig();
-      if (config) {
-        this.organization = config.ado.organization;
-        this.project = config.ado.project;
-        this.settingsView.setSettings(config.ado);
-        await this.loadPRLists();
+      try {
+        const config = await window.electronAPI.loadConfig();
+        if (config) {
+          this.organization = config.ado.organization;
+          this.project = config.ado.project;
+          this.settingsView.setSettings(config.ado);
+        }
+      } catch {
+        // Tauri native invoke may not be available, fall back to bridge settings
+        try {
+          const settings = await window.electronAPI.getSettings() as Record<string, unknown> | null;
+          if (settings?.organization && settings?.project) {
+            this.organization = settings.organization as string;
+            this.project = settings.project as string;
+          }
+        } catch { /* unable to load settings */ }
       }
+      await this.loadPRLists();
     }
   }
 
@@ -4704,6 +4720,8 @@ After this, respond with a simple text response to greet the user and ask them w
       this.workItemsListView.setWorkItems([]);
       this.workItemsListView.setSubtitle('Failed to load work items');
       Toast.error('Failed to load work items');
+    } finally {
+      this.workItemsListView.setLoading(false);
     }
   }
 
@@ -5239,6 +5257,7 @@ After this, respond with a simple text response to greet the user and ask them w
       }
     } catch (error) {
       console.error('Failed to load work item:', error);
+      detailView.setLoading(false);
       Toast.error('Failed to load work item');
     }
 
@@ -5269,19 +5288,12 @@ After this, respond with a simple text response to greet the user and ask them w
     }
 
     this.workItemDetailViews.forEach((_, id) => {
-      const panel = document.getElementById(`workItemPanel-wi-${id.replace('wi-', '')}`);
+      const panel = document.getElementById(`workItemPanel-${id}`);
       if (panel) {
         panel.classList.toggle('active', id === tabId);
         panel.style.display = id === tabId ? '' : 'none';
       }
     });
-
-    // Explicitly show the active detail panel
-    const activePanel = document.getElementById(`workItemPanel-${tabId}`);
-    if (activePanel) {
-      activePanel.classList.add('active');
-      activePanel.style.display = '';
-    }
 
     this.updateWorkItemsTabBar();
   }
@@ -5343,7 +5355,7 @@ After this, respond with a simple text response to greet the user and ask them w
     tabBar.innerHTML = tabs.map(tab => `
       <button class="workitems-tab-btn ${tab.id === this.activeWorkItemsTabId ? 'active' : ''}" data-tab-id="${tab.id}">
         ${tab.icon || ''}
-        <span>${tab.label}</span>
+        <span class="workitems-tab-title">${tab.label}</span>
         ${tab.closeable ? `<span class="workitems-tab-close" data-tab-id="${tab.id}">&times;</span>` : ''}
       </button>
     `).join('');
