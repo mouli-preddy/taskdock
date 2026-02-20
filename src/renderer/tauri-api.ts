@@ -614,6 +614,8 @@ export const tauriAPI = {
   onPluginsReloaded: (callback: () => void) => subscribe('plugin:plugins-reloaded', callback),
   onPluginStateChanged: (callback: (event: any) => void) => subscribe('plugin:state-changed', callback),
   onPluginNavigate: (callback: (event: any) => void) => subscribe('plugin:ui-navigate', callback),
+  onTriggerPRReview: (callback: (event: { org: string; project: string; prId: number }) => void) => subscribe('app:trigger-pr-review', callback),
+  onAutoReviewStarted: (callback: (event: { org: string; project: string; prId: number; sessionId: string; displayName: string }) => void) => subscribe('app:auto-review-started', callback),
 
   // ICM Auth methods
   icmAcquireToken: () => invoke('icm:acquire-token'),

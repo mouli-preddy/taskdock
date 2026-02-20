@@ -456,6 +456,37 @@ class PRReviewApp {
       this.switchSection(event.section as SectionId);
     });
 
+    window.electronAPI.onTriggerPRReview(async (event: { org: string; project: string; prId: number }) => {
+      this.switchSection('review');
+      await this.openPRByUrl(event.org, event.project, event.prId);
+    });
+
+    window.electronAPI.onAutoReviewStarted((event: { org: string; project: string; prId: number; sessionId: string; displayName: string }) => {
+      // Find the PR tab state and wire up the AI review session
+      for (const [tabId, state] of this.prTabStates) {
+        if (state.prId === event.prId && state.org === event.org && state.project === event.project) {
+          state.aiSessionId = event.sessionId;
+          state.aiReviewInProgress = true;
+
+          this.aiCommentsPanel.addTab({
+            sessionId: event.sessionId,
+            displayName: event.displayName,
+            status: 'preparing',
+            isSaved: false,
+          });
+          this.aiCommentsPanel.clear();
+          this.aiCommentsPanel.showProgress('Running AI review...');
+
+          // Open AI comments panel if this is the active tab
+          if (this.activeReviewTabId === tabId) {
+            document.getElementById(`reviewScreen-${tabId}`)?.classList.add('ai-comments-open');
+            this.updatePanelButtonState('toggleAICommentsBtn', true);
+          }
+          break;
+        }
+      }
+    });
+
     window.electronAPI.onPluginReloaded(async (event: { pluginId: string }) => {
       const { pluginId } = event;
       try {

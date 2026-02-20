@@ -629,6 +629,106 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       reviewContextService.cleanupWorktree(params[0].mainRepoPath, params[0].worktreePath);
       return;
 
+    case 'app:trigger-pr-review': {
+      const [trigOrg, trigProj, trigPrId] = params;
+
+      // Tell frontend to open the PR tab immediately
+      broadcast('app:trigger-pr-review', { org: trigOrg, project: trigProj, prId: trigPrId });
+
+      // Run the full review pipeline in the background (non-blocking)
+      // so the RPC returns immediately and doesn't timeout
+      (async () => {
+        try {
+          // 1. Load PR
+          const trigPr = await adoClient.getPullRequest(trigOrg, trigProj, trigPrId) as any;
+          const trigRepoId = trigPr.repository?.id;
+
+          // 2. Load threads & iterations
+          const [trigThreads, trigIterations] = await Promise.all([
+            adoClient.getThreads(trigOrg, trigProj, trigRepoId, trigPrId) as Promise<any[]>,
+            adoClient.getIterations(trigOrg, trigProj, trigRepoId, trigPrId) as Promise<any[]>,
+          ]);
+
+          // 3. Load file changes from latest iteration
+          const trigLatestIter = trigIterations[trigIterations.length - 1]?.id;
+          const trigChanges = trigLatestIter
+            ? await adoClient.getIterationChanges(trigOrg, trigProj, trigRepoId, trigPrId, trigLatestIter) as any[]
+            : [];
+
+          // 4. Prepare PR context (backend fetches file contents to disk)
+          const trigSettings = loadStoreData().consoleReview;
+          const trigPrContext = {
+            prId: trigPrId,
+            title: trigPr.title,
+            description: trigPr.description || '',
+            sourceBranch: trigPr.sourceRefName?.replace('refs/heads/', '') || '',
+            targetBranch: trigPr.targetRefName?.replace('refs/heads/', '') || 'main',
+            repository: trigPr.repository?.name || '',
+            org: trigOrg,
+            project: trigProj,
+          };
+          const trigFileMetadata = trigChanges.map((c: any) => ({
+            path: c.item?.path || c.originalPath || '',
+            changeType: c.changeType,
+            objectId: c.item?.objectId,
+            originalObjectId: c.item?.originalObjectId,
+            originalPath: c.originalPath,
+            threads: [],
+          })).filter((f: any) => f.path);
+
+          const trigLastCommitId = trigIterations[trigIterations.length - 1]?.sourceRefCommit?.commitId || '';
+          const trigFetcher = {
+            getFileContent: (objectId: string) =>
+              adoClient.getFileContent(trigOrg, trigProj, trigRepoId, objectId),
+          };
+          const trigContextResult = await reviewContextService.ensurePRContextWithFetch(
+            trigPrContext,
+            trigFileMetadata,
+            trigThreads,
+            { linkedRepositories: trigSettings?.linkedRepositories || [], whenRepoFound: 'tempOnly' },
+            trigLastCommitId,
+            trigRepoId,
+            trigFetcher
+          );
+
+          // 5. Start AI review with default provider
+          const trigProvider = trigSettings?.analyzeComments?.provider || 'claude-sdk';
+          const trigRequest = {
+            prId: trigPrId,
+            provider: trigProvider,
+            depth: 'standard',
+            focusAreas: ['security', 'performance', 'bugs', 'style'],
+            generateWalkthrough: false,
+            showTerminal: false,
+            displayName: 'Auto Review',
+            generatedFilePatterns: trigSettings?.generatedFilePatterns || [],
+            enableWorkIQ: trigSettings?.enableWorkIQ ?? true,
+          };
+          const trigContentsMap = new Map<string, { original: string | null; modified: string | null }>();
+          const trigSessionId = await aiService.startReview(
+            trigPrContext, trigFileMetadata, trigThreads, trigRequest as any,
+            trigSettings, trigContentsMap, trigContextResult.prContextKey
+          );
+          sessionContextMap.set(trigSessionId, { organization: trigOrg, project: trigProj, prId: trigPrId });
+          pluginEngine.emitAppEvent('review:started', { sessionId: trigSessionId });
+
+          // Tell frontend to wire up the AI panel for this session
+          broadcast('app:auto-review-started', {
+            org: trigOrg,
+            project: trigProj,
+            prId: trigPrId,
+            sessionId: trigSessionId,
+            displayName: 'Auto Review',
+          });
+          console.log(`[Bridge] Auto review started for PR #${trigPrId}, session: ${trigSessionId}`);
+        } catch (err: any) {
+          console.error(`[Bridge] Auto review failed for PR #${trigPrId}:`, err?.message);
+        }
+      })();
+
+      return { triggered: true };
+    }
+
     // Git
     case 'app:get-linked-repositories': {
       const settings = loadStoreData().consoleReview;
