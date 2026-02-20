@@ -4,12 +4,9 @@
  * Handles token management, search execution, and metadata queries.
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
-import { spawn } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
 import { getLogger } from '../services/logger-service.js';
+import { loadCachedGenevaTokens, acquireGenevaTokens } from '../geneva-token-service.js';
 import type {
   DGrepTokens,
   StartSearchRequest,
@@ -22,13 +19,6 @@ import type {
 import { LOG_CONFIGS, DGREP_CONSTANTS } from '../../shared/dgrep-types.js';
 
 const LOG_CATEGORY = 'DGrepClient';
-
-const CACHE_DIR = path.join(
-  process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'),
-  'BrainBot'
-);
-const CACHE_FILE = path.join(CACHE_DIR, 'geneva_tokens.json');
-const GATHER_SCRIPT = path.join('C:', 'git', 'scripts', 'gather-geneva-secrets.py');
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -72,57 +62,13 @@ export class DGrepClient {
   }
 
   private loadCachedTokens(): DGrepTokens | null {
-    try {
-      if (!fs.existsSync(CACHE_FILE)) return null;
-
-      const data = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf-8'));
-      if (
-        data.cookie &&
-        data.cookie.length > DGREP_CONSTANTS.MIN_COOKIE_LENGTH &&
-        data.csrf
-      ) {
-        return { cookie: data.cookie, csrf: data.csrf };
-      }
-    } catch {
-      // Ignore parse errors
-    }
-    return null;
+    return loadCachedGenevaTokens();
   }
 
-  private gatherTokens(): Promise<DGrepTokens> {
+  private async gatherTokens(): Promise<DGrepTokens> {
     const logger = getLogger();
-    return new Promise((resolve, reject) => {
-      if (!fs.existsSync(GATHER_SCRIPT)) {
-        reject(new Error(`gather-geneva-secrets.py not found at ${GATHER_SCRIPT}`));
-        return;
-      }
-
-      const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
-      logger.info(LOG_CATEGORY, 'Spawning token gather script', { script: GATHER_SCRIPT });
-
-      const proc = spawn(pythonCmd, [GATHER_SCRIPT, '--non-interactive', '--output', CACHE_FILE], {
-        stdio: 'inherit',
-      });
-
-      proc.on('close', (code) => {
-        if (code !== 0) {
-          reject(new Error(`Token gather script exited with code ${code}`));
-          return;
-        }
-
-        const cached = this.loadCachedTokens();
-        if (!cached) {
-          reject(new Error('Failed to load tokens after gather'));
-          return;
-        }
-
-        resolve(cached);
-      });
-
-      proc.on('error', (err) => {
-        reject(new Error(`Failed to spawn Python process: ${err.message}`));
-      });
-    });
+    logger.info(LOG_CATEGORY, 'Acquiring Geneva tokens via Playwright');
+    return acquireGenevaTokens();
   }
 
   async refreshTokens(): Promise<void> {

@@ -1,5 +1,5 @@
 import { join } from 'path';
-import { mkdtempSync, mkdirSync, copyFileSync, rmSync, existsSync } from 'fs';
+import { mkdtempSync, mkdirSync, copyFileSync, rmSync, existsSync, readdirSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 
 const PORTAL_HOST = 'https://portal.microsofticm.com';
@@ -115,8 +115,8 @@ export class IcmAuthService {
       // Copy essential profile files
       copyEdgeProfile(edgeUserData, tempProfile);
 
-      // Dynamically import playwright to keep it lazy
-      const { chromium } = await import('playwright');
+      // Dynamically import playwright-core to keep it lazy
+      const { chromium } = await import('playwright-core');
 
       let capturedBearer: string | null = null;
       let capturedCookie: string | null = null;
@@ -263,13 +263,42 @@ function getEdgeUserDataDir(): string {
   return join(process.env.HOME || '', '.config', 'microsoft-edge');
 }
 
+/**
+ * Find the Edge profile directory with a @microsoft.com account, falling back to "Default".
+ */
+function findCorporateProfileDir(edgeUserData: string): string {
+  try {
+    const entries = readdirSync(edgeUserData, { withFileTypes: true });
+    const profileDirs = entries
+      .filter(e => e.isDirectory() && (e.name === 'Default' || /^Profile \d+$/.test(e.name)))
+      .map(e => e.name);
+
+    for (const dirName of profileDirs) {
+      try {
+        const raw = readFileSync(join(edgeUserData, dirName, 'Preferences'), 'utf-8');
+        const prefs = JSON.parse(raw);
+        const accounts = prefs?.account_info;
+        if (Array.isArray(accounts) && accounts.some((a: any) => a.email?.endsWith('@microsoft.com'))) {
+          return dirName;
+        }
+      } catch {
+        // Skip unreadable profiles
+      }
+    }
+  } catch {
+    // Edge User Data dir not readable
+  }
+  return 'Default';
+}
+
 function copyEdgeProfile(edgeUserData: string, tempProfile: string): void {
-  const srcDefault = join(edgeUserData, 'Default');
+  const sourceProfileDir = findCorporateProfileDir(edgeUserData);
+  const srcDir = join(edgeUserData, sourceProfileDir);
   const dstDefault = join(tempProfile, 'Default');
   mkdirSync(dstDefault, { recursive: true });
 
   for (const file of PROFILE_FILES) {
-    const src = join(srcDefault, file);
+    const src = join(srcDir, file);
     const dst = join(dstDefault, file);
     if (existsSync(src)) {
       mkdirSync(join(dst, '..'), { recursive: true });

@@ -19,7 +19,7 @@ import { DGrepSearchableSelect } from './dgrep-searchable-select.js';
 import { DGrepResultsTable } from './dgrep-results-table.js';
 import { parseDGrepUrl, buildDGrepUrl } from './dgrep-url-parser.js';
 import { KqlEditor } from './kql-editor.js';
-import { getIcon, Search, X, Download, RefreshCw } from '../utils/icons.js';
+import { getIcon, Search, X, Download, RefreshCw, Zap } from '../utils/icons.js';
 
 const ENDPOINT_NAMES = Object.keys(DGREP_ENDPOINT_URLS) as DGrepEndpointName[];
 const LOG_IDS = Object.keys(LOG_CONFIGS) as LogId[];
@@ -48,7 +48,13 @@ export class DGrepSearchView {
   private eventsLoading = false;
   private bufferedEvents: Array<{ type: string; event: any }> = [];
 
+  // Token state
+  private tokenStatus: { hasToken: boolean; valid: boolean } = { hasToken: false, valid: false };
+  private acquiringToken = false;
+
   // Callbacks
+  private onCheckTokenStatusCallback: (() => Promise<{ hasToken: boolean; valid: boolean }>) | null = null;
+  private onAcquireTokensCallback: (() => Promise<{ success: boolean; error?: string }>) | null = null;
   private onSearchCallback: ((params: QueryOptions) => Promise<string>) | null = null;
   private onSearchByLogIdCallback: ((logId: LogId, startTime: string, endTime: string, options: any) => Promise<string>) | null = null;
   private onCancelCallback: ((sessionId: string) => void) | null = null;
@@ -63,10 +69,14 @@ export class DGrepSearchView {
     this.container = document.getElementById(containerId)!;
     this.render();
     this.attachEventListeners();
+    // Show "no token" bar immediately — checkTokenStatus() will update it
+    this.renderTokenBar();
   }
 
   // ==================== Callback setters ====================
 
+  onCheckTokenStatus(cb: () => Promise<{ hasToken: boolean; valid: boolean }>): void { this.onCheckTokenStatusCallback = cb; }
+  onAcquireTokens(cb: () => Promise<{ success: boolean; error?: string }>): void { this.onAcquireTokensCallback = cb; }
   onSearch(cb: (params: QueryOptions) => Promise<string>): void { this.onSearchCallback = cb; }
   onSearchByLogId(cb: (logId: LogId, startTime: string, endTime: string, options: any) => Promise<string>): void { this.onSearchByLogIdCallback = cb; }
   onCancel(cb: (sessionId: string) => void): void { this.onCancelCallback = cb; }
@@ -76,6 +86,17 @@ export class DGrepSearchView {
   onGetResults(cb: (sessionId: string) => Promise<{ columns: string[]; rows: Record<string, any>[] } | undefined>): void { this.onGetResultsCallback = cb; }
   onGetResultsPage(cb: (sessionId: string, offset: number, limit: number) => Promise<{ columns: string[]; rows: Record<string, any>[]; totalCount: number } | undefined>): void { this.onGetResultsPageCallback = cb; }
   onRunClientQuery(cb: (sessionId: string, clientQuery: string) => Promise<void>): void { this.onRunClientQueryCallback = cb; }
+
+  /** Check and display token status. Call when the DGrep tab becomes visible. */
+  async checkTokenStatus(): Promise<void> {
+    if (!this.onCheckTokenStatusCallback) return;
+    try {
+      this.tokenStatus = await this.onCheckTokenStatusCallback();
+    } catch {
+      this.tokenStatus = { hasToken: false, valid: false };
+    }
+    this.renderTokenBar();
+  }
 
   // ==================== Public methods ====================
 
@@ -230,6 +251,7 @@ export class DGrepSearchView {
 
   private render(): void {
     this.container.innerHTML = `
+      <div class="dgrep-token-bar" id="dgrepTokenBar"></div>
       <div class="dgrep-container">
         <div class="dgrep-query-panel" id="dgrepQueryPanel">
           <div class="dgrep-panel-header">
@@ -413,6 +435,68 @@ export class DGrepSearchView {
 
     // Set default time to now
     this.setTimeToNow();
+  }
+
+  private renderTokenBar(): void {
+    const bar = this.container.querySelector('#dgrepTokenBar') as HTMLElement;
+    if (!bar) return;
+
+    if (this.acquiringToken) {
+      bar.style.display = '';
+      bar.innerHTML = `
+        <div class="dgrep-token-status acquiring">
+          <div class="loading-spinner small"></div>
+          <span>Acquiring Geneva tokens...</span>
+        </div>`;
+      return;
+    }
+
+    if (this.tokenStatus.hasToken && this.tokenStatus.valid) {
+      bar.style.display = 'none';
+      return;
+    }
+
+    const message = this.tokenStatus.hasToken
+      ? 'Geneva tokens expired. Please login again.'
+      : 'No Geneva tokens found. Login required to use DGrep.';
+
+    bar.style.display = '';
+    bar.innerHTML = `
+      <div class="dgrep-token-status no-token">
+        <span>${message}</span>
+        <button class="btn btn-primary btn-small" id="dgrepLoginBtn">${getIcon(Zap, 14)} Login</button>
+      </div>`;
+
+    bar.querySelector('#dgrepLoginBtn')?.addEventListener('click', () => this.handleAcquireTokens());
+  }
+
+  private async handleAcquireTokens(): Promise<void> {
+    if (!this.onAcquireTokensCallback || this.acquiringToken) return;
+    this.acquiringToken = true;
+    this.renderTokenBar();
+
+    try {
+      const result = await this.onAcquireTokensCallback();
+      if (result.success) {
+        this.tokenStatus = { hasToken: true, valid: true };
+      } else {
+        // Show error briefly then re-render
+        const bar = this.container.querySelector('#dgrepTokenBar') as HTMLElement;
+        if (bar) {
+          bar.innerHTML = `
+            <div class="dgrep-token-status error">
+              <span>Login failed: ${result.error || 'Unknown error'}</span>
+              <button class="btn btn-primary btn-small" id="dgrepRetryLoginBtn">${getIcon(Zap, 14)} Retry</button>
+            </div>`;
+          bar.querySelector('#dgrepRetryLoginBtn')?.addEventListener('click', () => this.handleAcquireTokens());
+        }
+      }
+    } catch (err: any) {
+      this.tokenStatus = { hasToken: false, valid: false };
+    } finally {
+      this.acquiringToken = false;
+      this.renderTokenBar();
+    }
   }
 
   private attachEventListeners(): void {

@@ -12,8 +12,6 @@ export interface TokenAcquisitionProgress {
 
 // Map backend status codes to user-friendly messages
 const STATUS_MESSAGES: Record<string, string> = {
-  'checking-profile': 'Checking Edge profile...',
-  'copying-profile': 'Setting up Edge profile...',
   'launching-browser': 'Launching Edge (headless)...',
   'navigating': 'Navigating to CFV portal...',
   'waiting-for-auth': 'Complete login in the browser window...',
@@ -26,6 +24,12 @@ const STATUS_MESSAGES: Record<string, string> = {
   'cancelled': 'Cancelled',
 };
 
+export interface EdgeProfileInfo {
+  dirName: string;
+  displayName: string;
+  email: string;
+}
+
 export class CfvHomeView {
   private container: HTMLElement;
   private calls: CfvCallSummary[] = [];
@@ -36,13 +40,15 @@ export class CfvHomeView {
   private fetching = false;
   private showManualToken = false;
   private acquiring = false;
+  private edgeProfiles: EdgeProfileInfo[] = [];
+  private selectedProfile = 'Default';
 
   private onFetchCallCallback: ((callId: string) => void) | null = null;
   private onOpenCallCallback: ((callId: string) => void) | null = null;
   private onSetTokenCallback: ((token: string) => void) | null = null;
   private onDeleteCallCallback: ((callId: string) => void) | null = null;
   private onRefreshCallback: (() => void) | null = null;
-  private onAcquireTokenCallback: (() => void) | null = null;
+  private onAcquireTokenCallback: ((options?: { forceVisible?: boolean; edgeProfile?: string }) => void) | null = null;
   private onCancelAcquireTokenCallback: (() => void) | null = null;
 
   constructor(containerId: string) {
@@ -70,8 +76,17 @@ export class CfvHomeView {
     this.onRefreshCallback = callback;
   }
 
-  onAcquireToken(callback: () => void) {
+  onAcquireToken(callback: (options?: { forceVisible?: boolean; edgeProfile?: string }) => void) {
     this.onAcquireTokenCallback = callback;
+  }
+
+  setEdgeProfiles(profiles: EdgeProfileInfo[]) {
+    this.edgeProfiles = profiles;
+    this.renderProfileSelect();
+  }
+
+  getSelectedProfile(): string {
+    return this.selectedProfile;
   }
 
   onCancelAcquireToken(callback: () => void) {
@@ -128,6 +143,7 @@ export class CfvHomeView {
         ${showSpinner ? '<div class="loading-spinner small"></div>' : ''}
         <span class="cfv-token-acquisition-msg">${escapeHtml(message)}</span>
         ${showCancel ? `<button class="btn btn-secondary btn-small" id="cfvCancelAcquireBtn">${getIcon(X, 12)} Cancel</button>` : ''}
+        ${isError ? `<button class="btn btn-primary btn-small" id="cfvRetryVisibleBtn">${getIcon(Zap, 12)} Retry with browser</button>` : ''}
       </div>
     `;
 
@@ -137,8 +153,14 @@ export class CfvHomeView {
       });
     }
 
-    // Auto-hide on completion after a brief delay
-    if (isDone) {
+    if (isError) {
+      area.querySelector('#cfvRetryVisibleBtn')?.addEventListener('click', () => {
+        this.onAcquireTokenCallback?.({ forceVisible: true, edgeProfile: this.selectedProfile });
+      });
+    }
+
+    // Auto-hide on completion after a brief delay (but not on error — user needs to see the retry button)
+    if (isDone && !isError) {
       setTimeout(() => {
         this.setTokenAcquisitionProgress(null);
       }, 2000);
@@ -169,6 +191,9 @@ export class CfvHomeView {
             <div class="cfv-token-dot" id="cfvTokenDot"></div>
             <span id="cfvTokenLabel">No token</span>
           </div>
+          <select class="cfv-profile-select" id="cfvProfileSelect" title="Edge profile to use for login">
+            <option value="Default">Default</option>
+          </select>
           <button class="btn btn-primary btn-small" id="cfvAutoLoginBtn">
             ${getIcon(Zap, 14)}
             Auto Login
@@ -212,8 +237,12 @@ export class CfvHomeView {
       this.onRefreshCallback?.();
     });
 
+    this.container.querySelector('#cfvProfileSelect')?.addEventListener('change', (e) => {
+      this.selectedProfile = (e.target as HTMLSelectElement).value;
+    });
+
     this.container.querySelector('#cfvAutoLoginBtn')?.addEventListener('click', () => {
-      this.onAcquireTokenCallback?.();
+      this.onAcquireTokenCallback?.({ edgeProfile: this.selectedProfile });
     });
 
     this.container.querySelector('#cfvToggleManualBtn')?.addEventListener('click', () => {
@@ -275,6 +304,37 @@ export class CfvHomeView {
       label.textContent = 'Token expired';
     } else {
       label.textContent = 'No token';
+    }
+  }
+
+  private renderProfileSelect() {
+    const select = this.container.querySelector('#cfvProfileSelect') as HTMLSelectElement;
+    if (!select) return;
+
+    const prevValue = select.value;
+    select.innerHTML = this.edgeProfiles.length === 0
+      ? '<option value="Default">Default</option>'
+      : this.edgeProfiles.map(p => {
+          const label = p.email
+            ? `${escapeHtml(p.displayName)} — ${escapeHtml(p.email)}`
+            : `${escapeHtml(p.displayName)} (${escapeHtml(p.dirName)})`;
+          return `<option value="${escapeHtml(p.dirName)}">${label}</option>`;
+        }).join('');
+
+    // Auto-select the @microsoft.com profile, otherwise keep previous selection
+    const msProfile = this.edgeProfiles.find(p => p.email.endsWith('@microsoft.com'));
+    if (msProfile && prevValue === 'Default') {
+      // First load: prefer the microsoft.com profile
+      select.value = msProfile.dirName;
+      this.selectedProfile = msProfile.dirName;
+    } else if (this.edgeProfiles.some(p => p.dirName === prevValue)) {
+      select.value = prevValue;
+      this.selectedProfile = prevValue;
+    } else if (msProfile) {
+      select.value = msProfile.dirName;
+      this.selectedProfile = msProfile.dirName;
+    } else if (this.edgeProfiles.length > 0) {
+      this.selectedProfile = this.edgeProfiles[0].dirName;
     }
   }
 

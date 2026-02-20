@@ -17,13 +17,45 @@
 
 #dgrepSectionContent .tab-panel.active {
   display: flex;
+  flex-direction: column;
+}
+
+/* Token bar */
+.dgrep-token-bar {
+  flex-shrink: 0;
+}
+
+
+.dgrep-token-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.dgrep-token-status.no-token {
+  background: var(--bg-secondary);
+  color: var(--warning, #e5a100);
+}
+
+.dgrep-token-status.acquiring {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+.dgrep-token-status.error {
+  background: var(--bg-secondary);
+  color: var(--error);
 }
 
 /* Main container — two-panel layout */
 .dgrep-container {
   display: flex;
   flex-direction: row;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
 }
 

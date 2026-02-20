@@ -865,6 +865,8 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
     case 'cfv:cancel-token-acquisition':
       cfvService.cancelTokenAcquisition();
       return;
+    case 'cfv:list-edge-profiles':
+      return cfvService.listEdgeProfiles();
     case 'cfv:check-playwright':
       return cfvService.checkPlaywrightAvailability();
 
@@ -989,6 +991,10 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       return icmCall(() => icmClient.getCloudInstances());
 
     // DGrep API
+    case 'dgrep:check-token-status':
+      return dgrepService.getTokenStatus();
+    case 'dgrep:acquire-tokens':
+      return dgrepService.acquireTokens();
     case 'dgrep:search-by-log-id':
       return dgrepService.startSearchByLogId(
         params[0] as LogId,

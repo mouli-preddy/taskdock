@@ -66,6 +66,22 @@
   background: var(--error);
 }
 
+.cfv-profile-select {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  max-width: 200px;
+  cursor: pointer;
+}
+
+.cfv-profile-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .cfv-token-input {
   flex: 1;
   padding: var(--space-1) var(--space-2);

@@ -3,7 +3,7 @@ import { readdir, readFile, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { CfvClient } from './cfv-client.js';
 import { CfvTokenService } from './cfv-token-service.js';
-import type { AcquireTokenOptions, TokenProgress } from './cfv-token-service.js';
+import type { AcquireTokenOptions, EdgeProfile, TokenProgress } from './cfv-token-service.js';
 import type { CfvClientOptions, FetchProgress, FetchResult, CallFlowData, CallDetailsData } from './cfv-types.js';
 import type { CfvCallSummary } from '../../shared/cfv-types.js';
 
@@ -182,12 +182,17 @@ export class CfvService extends EventEmitter {
       await this.setToken(token);
       this.emit('token-result', { success: true, tokenLength: token.length });
     } else {
-      this.emit('token-result', { success: false, error: 'Token acquisition failed' });
+      this.emit('token-result', { success: false, error: 'Could not acquire token' });
     }
   }
 
   cancelTokenAcquisition(): void {
     this.tokenService?.cancel();
+  }
+
+  async listEdgeProfiles(): Promise<EdgeProfile[]> {
+    const svc = new CfvTokenService();
+    return svc.listEdgeProfiles();
   }
 
   async checkPlaywrightAvailability(): Promise<{ available: boolean; reason?: string }> {

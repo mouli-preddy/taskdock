@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { copyFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 export type TokenProgressStatus =
@@ -24,11 +24,22 @@ export interface TokenProgress {
   error?: string;
 }
 
+export interface EdgeProfile {
+  /** Directory name, e.g. "Default", "Profile 1" */
+  dirName: string;
+  /** User-facing display name from Preferences */
+  displayName: string;
+  /** Primary account email if signed in */
+  email: string;
+}
+
 export interface AcquireTokenOptions {
   /** Skip headless attempt and go straight to visible browser */
   forceVisible?: boolean;
   /** Timeout in ms for each browser attempt (default: 60000) */
   timeout?: number;
+  /** Edge profile directory name to use (e.g. "Default", "Profile 1"). Falls back to "Default". */
+  edgeProfile?: string;
 }
 
 const LOCALAPPDATA = process.env.LOCALAPPDATA || join(process.env.HOME || '', 'AppData', 'Local');
@@ -62,6 +73,35 @@ export class CfvTokenService extends EventEmitter {
   private browserContext: any = null;
   private cancelled = false;
 
+  /** List available Edge profiles by reading Preferences files */
+  async listEdgeProfiles(): Promise<EdgeProfile[]> {
+    const profiles: EdgeProfile[] = [];
+    try {
+      const entries = await readdir(EDGE_USER_DATA_DIR, { withFileTypes: true });
+      const profileDirs = entries
+        .filter(e => e.isDirectory() && (e.name === 'Default' || /^Profile \d+$/.test(e.name)))
+        .map(e => e.name);
+
+      for (const dirName of profileDirs) {
+        const prefPath = join(EDGE_USER_DATA_DIR, dirName, 'Preferences');
+        try {
+          const raw = await readFile(prefPath, 'utf-8');
+          const prefs = JSON.parse(raw);
+          const displayName = prefs?.profile?.name || dirName;
+          const accounts = prefs?.account_info;
+          const email = (Array.isArray(accounts) && accounts.length > 0 && accounts[0].email) || '';
+          profiles.push({ dirName, displayName, email });
+        } catch {
+          // Preferences file missing or unreadable — still list it
+          profiles.push({ dirName, displayName: dirName, email: '' });
+        }
+      }
+    } catch {
+      // Edge User Data dir not found
+    }
+    return profiles;
+  }
+
   /** Check if playwright-core is importable and Edge is installed */
   async checkAvailability(): Promise<{ available: boolean; reason?: string }> {
     try {
@@ -82,30 +122,44 @@ export class CfvTokenService extends EventEmitter {
     return { available: true };
   }
 
+  /** Find the Edge profile with a @microsoft.com account, falling back to "Default" */
+  private async findCorporateProfile(): Promise<string> {
+    const profiles = await this.listEdgeProfiles();
+    const msProfile = profiles.find(p => p.email.endsWith('@microsoft.com'));
+    return msProfile?.dirName || 'Default';
+  }
+
   /** Main entry point: acquire a token via Playwright */
   async acquireToken(options?: AcquireTokenOptions): Promise<string | null> {
     this.cancelled = false;
     const timeout = options?.timeout ?? 60000;
+    const edgeProfile = options?.edgeProfile || await this.findCorporateProfile();
 
     try {
-      // Phase 1: Ensure profile exists
-      this.emitProgress({ status: 'checking-profile', message: 'Checking Edge profile...' });
-      await this.ensureProfile();
+      // Phase 1: Ensure profile exists (always re-copy to pick up fresh cookies)
+      this.emitProgress({ status: 'checking-profile', message: `Setting up from Edge profile "${edgeProfile}"...` });
+      await this.ensureProfile(edgeProfile);
 
       if (this.cancelled) return null;
 
       // Phase 2: Try headless first (unless forceVisible)
       if (!options?.forceVisible) {
-        this.emitProgress({ status: 'launching-browser', message: 'Launching Edge (headless)...', headless: true });
-        const token = await this.gatherToken(true, timeout);
+        try {
+          this.emitProgress({ status: 'launching-browser', message: 'Launching Edge (headless)...', headless: true });
+          const token = await this.gatherToken(true, timeout);
 
-        if (this.cancelled) return null;
+          if (this.cancelled) return null;
 
-        if (token) {
-          this.emitProgress({ status: 'token-captured', message: 'Token captured!', tokenLength: token.length });
-          await this.saveToken(token);
-          this.emitProgress({ status: 'complete', message: 'Token acquired successfully', tokenLength: token.length });
-          return token;
+          if (token) {
+            this.emitProgress({ status: 'token-captured', message: 'Token captured!', tokenLength: token.length });
+            await this.saveToken(token);
+            this.emitProgress({ status: 'complete', message: 'Token acquired successfully', tokenLength: token.length });
+            return token;
+          }
+        } catch (headlessErr: any) {
+          // Headless threw an exception — close browser before falling through to visible
+          await this.closeBrowser();
+          if (this.cancelled) return null;
         }
 
         // Headless failed
@@ -150,25 +204,17 @@ export class CfvTokenService extends EventEmitter {
   // Profile management
   // ---------------------------------------------------------------------------
 
-  private async ensureProfile(): Promise<void> {
+  private async ensureProfile(sourceProfile: string): Promise<void> {
     const defaultDir = join(PROFILE_DIR, 'Default');
 
-    try {
-      await stat(defaultDir);
-      // Profile exists
-      return;
-    } catch {
-      // Need to create profile
-    }
+    this.emitProgress({ status: 'copying-profile', message: `Copying cookies from "${sourceProfile}"...` });
 
-    this.emitProgress({ status: 'copying-profile', message: 'Setting up Edge profile...' });
-
-    const srcDefault = join(EDGE_USER_DATA_DIR, 'Default');
+    const srcProfileDir = join(EDGE_USER_DATA_DIR, sourceProfile);
     await mkdir(defaultDir, { recursive: true });
 
-    // Copy essential files
+    // Copy essential files from the selected Edge profile
     for (const file of PROFILE_FILES) {
-      const src = join(srcDefault, file);
+      const src = join(srcProfileDir, file);
       const dst = join(defaultDir, file);
       try {
         await mkdir(join(dst, '..'), { recursive: true });

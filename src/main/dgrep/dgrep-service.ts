@@ -7,6 +7,7 @@
 import { EventEmitter } from 'events';
 import { v4 as uuidv4 } from 'uuid';
 import { DGrepClient } from './dgrep-client.js';
+import { loadCachedGenevaTokens, acquireGenevaTokens } from '../geneva-token-service.js';
 import { getLogger } from '../services/logger-service.js';
 import type {
   DGrepSearchSession,
@@ -44,6 +45,41 @@ export class DGrepService extends EventEmitter {
     if (!this.initialized) {
       await this.client.initialize();
       this.initialized = true;
+    }
+  }
+
+  // ==================== Token Management ====================
+
+  async getTokenStatus(): Promise<{ hasToken: boolean; valid: boolean }> {
+    const cached = loadCachedGenevaTokens();
+    if (!cached) return { hasToken: false, valid: false };
+
+    // Validate by making a lightweight API call
+    try {
+      const response = await fetch(
+        'https://portal.microsoftgeneva.com/user-api/v1/hint/monitoringAccountConfig',
+        {
+          headers: {
+            'Cookie': cached.cookie,
+            'Csrftoken': cached.csrf,
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+        }
+      );
+      const valid = response.ok;
+      return { hasToken: true, valid };
+    } catch {
+      return { hasToken: true, valid: false };
+    }
+  }
+
+  async acquireTokens(): Promise<{ success: boolean; error?: string }> {
+    try {
+      await acquireGenevaTokens();
+      this.initialized = false; // Force re-init with new tokens
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err?.message || String(err) };
     }
   }
 

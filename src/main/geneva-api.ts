@@ -1,7 +1,5 @@
-import { execSync } from 'child_process';
-import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
 import { randomUUID } from 'crypto';
+import { loadCachedGenevaTokens, acquireGenevaTokens } from './geneva-token-service.js';
 import type {
   GenevaDashboard,
   GenevaDashboardTreeEntry,
@@ -14,75 +12,40 @@ import type {
 } from '../shared/geneva-types.js';
 
 const PORTAL_BASE_URL = 'https://portal.microsoftgeneva.com';
-const GATHER_SCRIPT_PATH = 'C:\\git\\scripts\\gather-geneva-secrets.py';
-
-function getTokenCachePath(): string {
-  const localAppData = process.env.LOCALAPPDATA || join(process.env.USERPROFILE || '', 'AppData', 'Local');
-  return join(localAppData, 'BrainBot', 'geneva_tokens.json');
-}
 
 export class GenevaApiClient {
   private tokenCache: GenevaTokens | null = null;
 
   /**
-   * Load tokens from the cache file at %LOCALAPPDATA%\BrainBot\geneva_tokens.json
+   * Load tokens from cache or acquire fresh ones via Playwright
    */
   private getTokens(): GenevaTokens {
     if (this.tokenCache) {
       return this.tokenCache;
     }
 
-    const cachePath = getTokenCachePath();
-    if (!existsSync(cachePath)) {
-      throw new Error(
-        `Geneva tokens not found at ${cachePath}. Run gather-geneva-secrets.py first.`
-      );
+    const cached = loadCachedGenevaTokens();
+    if (cached) {
+      this.tokenCache = cached;
+      return cached;
     }
 
-    const raw = readFileSync(cachePath, 'utf-8');
-    const tokens: GenevaTokens = JSON.parse(raw);
+    throw new Error('No cached Geneva tokens. Call refreshTokens() first.');
+  }
 
-    if (!tokens.cookie || tokens.cookie.length < 50 || !tokens.csrf) {
-      throw new Error(
-        `Geneva tokens at ${cachePath} are invalid (cookie too short or CSRF missing). Run gather-geneva-secrets.py to refresh.`
-      );
-    }
-
+  /**
+   * Refresh tokens via Playwright + Edge browser automation
+   */
+  async refreshTokens(): Promise<GenevaTokens> {
+    const tokens = await acquireGenevaTokens();
     this.tokenCache = tokens;
     return tokens;
   }
 
   /**
-   * Refresh tokens by spawning the gather-geneva-secrets.py script
-   */
-  refreshTokens(): GenevaTokens {
-    const cachePath = getTokenCachePath();
-
-    if (!existsSync(GATHER_SCRIPT_PATH)) {
-      throw new Error(
-        `Token refresh script not found at ${GATHER_SCRIPT_PATH}`
-      );
-    }
-
-    try {
-      execSync(
-        `uv run "${GATHER_SCRIPT_PATH}" --non-interactive --output "${cachePath}"`,
-        { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 120000 }
-      );
-    } catch (error: any) {
-      throw new Error(
-        `Failed to refresh Geneva tokens: ${error.message || String(error)}`
-      );
-    }
-
-    this.tokenCache = null;
-    return this.getTokens();
-  }
-
-  /**
    * Get tokens, auto-refreshing if the cache is missing or invalid
    */
-  private ensureTokens(): GenevaTokens {
+  private async ensureTokens(): Promise<GenevaTokens> {
     try {
       return this.getTokens();
     } catch {
@@ -90,8 +53,8 @@ export class GenevaApiClient {
     }
   }
 
-  private getHeaders(): Record<string, string> {
-    const tokens = this.ensureTokens();
+  private async getHeaders(): Promise<Record<string, string>> {
+    const tokens = await this.ensureTokens();
     return {
       'Cookie': tokens.cookie,
       'Csrftoken': tokens.csrf,
@@ -109,7 +72,7 @@ export class GenevaApiClient {
   }
 
   private async request<T>(url: string, options: RequestInit = {}): Promise<T> {
-    const headers = this.getHeaders();
+    const headers = await this.getHeaders();
 
     const response = await fetch(url, {
       ...options,

@@ -404,8 +404,9 @@ export interface ElectronAPI {
   cfvGetCallDetails: (callId: string) => Promise<any>;
   cfvGetRawFile: (callId: string, filename: string) => Promise<string | null>;
   cfvDeleteCall: (callId: string) => Promise<void>;
-  cfvAcquireToken: (options?: { forceVisible?: boolean; timeout?: number }) => Promise<void>;
+  cfvAcquireToken: (options?: { forceVisible?: boolean; timeout?: number; edgeProfile?: string }) => Promise<void>;
   cfvCancelTokenAcquisition: () => Promise<void>;
+  cfvListEdgeProfiles: () => Promise<Array<{ dirName: string; displayName: string; email: string }>>;
   cfvCheckPlaywright: () => Promise<{ available: boolean; reason?: string }>;
   onCfvProgress: (callback: (event: any) => void) => () => void;
   onCfvTokenProgress: (callback: (event: { status: string; message: string; headless?: boolean; tokenLength?: number; error?: string }) => void) => () => void;
@@ -483,6 +484,8 @@ export interface ElectronAPI {
   icmGetCloudInstances: () => Promise<any[]>;
 
   // DGrep API
+  dgrepCheckTokenStatus: () => Promise<{ hasToken: boolean; valid: boolean }>;
+  dgrepAcquireTokens: () => Promise<{ success: boolean; error?: string }>;
   dgrepSearchByLogId: (logId: string, startTime: string, endTime: string, options?: any) => Promise<string>;
   dgrepSearch: (params: any) => Promise<string>;
   dgrepCancelSearch: (sessionId: string) => Promise<void>;

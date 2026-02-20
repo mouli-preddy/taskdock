@@ -563,8 +563,9 @@ export const tauriAPI = {
   cfvGetCallDetails: (callId: string) => invoke('cfv:get-call-details', callId),
   cfvGetRawFile: (callId: string, filename: string) => invoke('cfv:get-raw-file', callId, filename),
   cfvDeleteCall: (callId: string) => invoke('cfv:delete-call', callId),
-  cfvAcquireToken: (options?: { forceVisible?: boolean; timeout?: number }) => invoke('cfv:acquire-token', options),
+  cfvAcquireToken: (options?: { forceVisible?: boolean; timeout?: number; edgeProfile?: string }) => invoke('cfv:acquire-token', options),
   cfvCancelTokenAcquisition: () => invoke('cfv:cancel-token-acquisition'),
+  cfvListEdgeProfiles: () => invoke('cfv:list-edge-profiles'),
   cfvCheckPlaywright: () => invoke('cfv:check-playwright'),
   onCfvProgress: (callback: (event: any) => void) => subscribe('cfv:progress', callback),
   onCfvTokenProgress: (callback: (event: any) => void) => subscribe('cfv:token-progress', callback),
@@ -649,6 +650,8 @@ export const tauriAPI = {
   icmGetCloudInstances: () => invoke('icm:get-cloud-instances'),
 
   // DGrep API
+  dgrepCheckTokenStatus: () => invoke('dgrep:check-token-status'),
+  dgrepAcquireTokens: () => invoke('dgrep:acquire-tokens'),
   dgrepSearchByLogId: (logId: string, startTime: string, endTime: string, options?: any) =>
     invoke('dgrep:search-by-log-id', logId, startTime, endTime, options),
   dgrepSearch: (params: any) =>

@@ -335,6 +335,12 @@ class PRReviewApp {
 
     // Initialize DGrep search view
     this.dgrepSearchView = new DGrepSearchView('dgrepSearchPanel');
+    this.dgrepSearchView.onCheckTokenStatus(async () => {
+      return window.electronAPI.dgrepCheckTokenStatus();
+    });
+    this.dgrepSearchView.onAcquireTokens(async () => {
+      return window.electronAPI.dgrepAcquireTokens();
+    });
     this.dgrepSearchView.onSearch(async (params) => {
       return window.electronAPI.dgrepSearch(params);
     });
@@ -370,7 +376,7 @@ class PRReviewApp {
     this.cfvHomeView.onSetToken((token) => this.cfvSetToken(token));
     this.cfvHomeView.onDeleteCall((callId) => this.cfvDeleteCall(callId));
     this.cfvHomeView.onRefresh(() => this.cfvRefreshHome());
-    this.cfvHomeView.onAcquireToken(() => this.cfvAcquireToken());
+    this.cfvHomeView.onAcquireToken((options) => this.cfvAcquireToken(options));
     this.cfvHomeView.onCancelAcquireToken(() => this.cfvCancelTokenAcquisition());
 
     // Listen for CFV progress events
@@ -386,11 +392,10 @@ class PRReviewApp {
     window.electronAPI.onCfvTokenResult((event) => {
       if (event.success) {
         Toast.success('Token acquired');
+        this.cfvHomeView.setTokenAcquisitionProgress(null);
         this.cfvRefreshHome();
-      } else {
-        Toast.error('Token acquisition failed: ' + (event.error || 'Unknown error'));
       }
-      this.cfvHomeView.setTokenAcquisitionProgress(null);
+      // On failure, don't clear the acquisition progress — it shows the error with a retry button
     });
 
     // Initialize ICM views
@@ -1305,6 +1310,11 @@ class PRReviewApp {
     // Load CFV data when switching to CFV section
     if (section === 'cfv') {
       this.cfvRefreshHome();
+    }
+
+    // Check DGrep token status when switching to DGrep section
+    if (section === 'dgrep') {
+      this.dgrepSearchView.checkTokenStatus();
     }
 
     // Load ICM incidents when switching to ICM section
@@ -4957,12 +4967,14 @@ After this, respond with a simple text response to greet the user and ask them w
 
   private async cfvRefreshHome() {
     try {
-      const [tokenStatus, calls] = await Promise.all([
+      const [tokenStatus, calls, profiles] = await Promise.all([
         window.electronAPI.cfvGetTokenStatus(),
         window.electronAPI.cfvListCachedCalls(),
+        window.electronAPI.cfvListEdgeProfiles(),
       ]);
       this.cfvHomeView.setTokenStatus(tokenStatus);
       this.cfvHomeView.setCalls(calls);
+      this.cfvHomeView.setEdgeProfiles(profiles);
       this.cfvHomeView.setSubtitle(`${calls.length} cached call${calls.length !== 1 ? 's' : ''}`);
     } catch (error) {
       console.error('Failed to refresh CFV home:', error);
@@ -4981,9 +4993,9 @@ After this, respond with a simple text response to greet the user and ask them w
     }
   }
 
-  private async cfvAcquireToken() {
+  private async cfvAcquireToken(options?: { forceVisible?: boolean; edgeProfile?: string }) {
     try {
-      await window.electronAPI.cfvAcquireToken();
+      await window.electronAPI.cfvAcquireToken(options);
       // Results come via cfv:token-progress and cfv:token-result events
     } catch (error) {
       Toast.error('Failed to start token acquisition: ' + (error as Error).message);
