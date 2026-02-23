@@ -524,18 +524,18 @@ export interface ElectronAPI {
   dgrepDeleteQuery: (queryId: string) => Promise<void>;
 
   // DGrep AI API
-  dgrepAISummarizeLogs: (sessionId: string, columns: string[], rows: any[], patterns?: string[]) => Promise<void>;
+  dgrepAISummarizeLogs: (sessionId: string, columns: string[], rows: any[], patterns: any[], metadata: { endpoint: string; namespace: string; events: string[]; startTime: string; endTime: string; totalRows: number }) => Promise<void>;
   dgrepAINLToKQL: (prompt: string, columns: string[], sampleRows: any[]) => Promise<import('../shared/dgrep-ai-types.js').DGrepNLToKQLResult>;
-  dgrepAIAnalyzeRootCause: (sessionId: string, targetRow: any, contextRows: any[], columns: string[], searchParams?: any) => Promise<void>;
+  dgrepAIAnalyzeRootCause: (sessionId: string, targetRow: any, targetIndex: number, contextRows: any[], columns: string[], metadata: { endpoint: string; namespace: string; events: string[]; startTime: string; endTime: string; totalRows: number }) => Promise<void>;
   dgrepAIDetectAnomalies: (sessionId: string, columns: string[], rows: any[]) => Promise<import('../shared/dgrep-ai-types.js').DGrepAnomalyResult | null>;
   dgrepAIChatCreate: (sessionId: string, columns: string[], rows: any[]) => Promise<string>;
   dgrepAIChatSend: (chatSessionId: string, message: string) => Promise<void>;
   dgrepAIChatDestroy: (chatSessionId: string) => Promise<void>;
 
   // DGrep AI event listeners
-  onDgrepAISummaryDelta: (callback: (event: { sessionId: string; delta: string }) => void) => () => void;
+  onDgrepAISummaryProgress: (callback: (event: { sessionId: string; text: string }) => void) => () => void;
   onDgrepAISummaryComplete: (callback: (event: { sessionId: string; summary?: import('../shared/dgrep-ai-types.js').DGrepAISummary; raw?: string; error?: string }) => void) => () => void;
-  onDgrepAIRCADelta: (callback: (event: { sessionId: string; delta: string; toolCall?: string }) => void) => () => void;
+  onDgrepAIRCAProgress: (callback: (event: { sessionId: string; text: string }) => void) => () => void;
   onDgrepAIRCAComplete: (callback: (event: { sessionId: string; analysis?: import('../shared/dgrep-ai-types.js').DGrepRootCauseAnalysis; raw?: string; error?: string }) => void) => () => void;
   onDgrepAIChatEvent: (callback: (event: import('../shared/dgrep-ai-types.js').DGrepChatEvent) => void) => () => void;
 }

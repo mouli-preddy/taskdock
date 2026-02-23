@@ -686,6 +686,44 @@ export const tauriAPI = {
   onDgrepComplete: (callback: (event: any) => void) => subscribe('dgrep:complete', callback),
   onDgrepError: (callback: (event: any) => void) => subscribe('dgrep:error', callback),
   onDgrepIntermediateResults: (callback: (event: any) => void) => subscribe('dgrep:intermediate-results', callback),
+  onDgrepLiveTailData: (callback: (event: any) => void) => subscribe('dgrep:live-tail-data', callback),
+
+  // DGrep extra methods
+  dgrepGetSurroundingDocs: (sessionId: string, rowIndex: number, count: number) =>
+    invoke('dgrep-ai:get-surrounding-docs', sessionId, rowIndex, count),
+  dgrepStartLiveTail: (sessionId: string, intervalMs?: number) =>
+    invoke('dgrep:live-tail-start', sessionId, intervalMs),
+  dgrepStopLiveTail: (sessionId: string) =>
+    invoke('dgrep:live-tail-stop', sessionId),
+  dgrepSaveQuery: (query: any) =>
+    invoke('dgrep:save-query', query),
+  dgrepLoadQueries: () =>
+    invoke('dgrep:load-queries'),
+  dgrepDeleteQuery: (queryId: string) =>
+    invoke('dgrep:delete-query', queryId),
+
+  // DGrep AI API
+  dgrepAISummarizeLogs: (sessionId: string, columns: string[], rows: any[], patterns: any[], metadata: any) =>
+    invoke('dgrep-ai:summarize-logs', sessionId, columns, rows, patterns, metadata),
+  dgrepAINLToKQL: (prompt: string, columns: string[], sampleRows: any[]) =>
+    invoke('dgrep-ai:nl-to-kql', prompt, columns, sampleRows),
+  dgrepAIAnalyzeRootCause: (sessionId: string, targetRow: any, targetIndex: number, contextRows: any[], columns: string[], metadata: any) =>
+    invoke('dgrep-ai:analyze-root-cause', sessionId, targetRow, targetIndex, contextRows, columns, metadata),
+  dgrepAIDetectAnomalies: (sessionId: string, columns: string[], rows: any[]) =>
+    invoke('dgrep-ai:detect-anomalies', sessionId, columns, rows),
+  dgrepAIChatCreate: (sessionId: string, columns: string[], rows: any[]) =>
+    invoke('dgrep-ai:chat-create', sessionId, columns, rows),
+  dgrepAIChatSend: (chatSessionId: string, message: string) =>
+    invoke('dgrep-ai:chat-send', chatSessionId, message),
+  dgrepAIChatDestroy: (chatSessionId: string) =>
+    invoke('dgrep-ai:chat-destroy', chatSessionId),
+
+  // DGrep AI event listeners
+  onDgrepAISummaryProgress: (callback: (event: any) => void) => subscribe('dgrep:ai:summary-progress', callback),
+  onDgrepAISummaryComplete: (callback: (event: any) => void) => subscribe('dgrep:ai:summary-complete', callback),
+  onDgrepAIRCAProgress: (callback: (event: any) => void) => subscribe('dgrep:ai:rca-progress', callback),
+  onDgrepAIRCAComplete: (callback: (event: any) => void) => subscribe('dgrep:ai:rca-complete', callback),
+  onDgrepAIChatEvent: (callback: (event: any) => void) => subscribe('dgrep:ai:chat-event', callback),
 };
 
 // Initialize connection when module loads
