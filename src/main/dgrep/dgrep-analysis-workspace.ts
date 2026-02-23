@@ -16,7 +16,6 @@ export interface AnalysisWorkspace {
   basePath: string;
   dataPath: string;
   queryToolPath: string;
-  patternsPath: string;
   metadataPath: string;
   summaryOutputPath: string;
   rcaOutputPath: string;
@@ -36,27 +35,24 @@ export function createAnalysisWorkspace(
   sessionId: string,
   columns: string[],
   rows: Record<string, any>[],
-  patterns: any[],
+  _patterns: any[],
   metadata: AnalysisMetadata
 ): AnalysisWorkspace {
   const basePath = path.join(DGREP_ANALYSIS_DIR, sessionId);
   fs.mkdirSync(basePath, { recursive: true });
 
-  // Write CSV
+  // Write CSV with _row column prepended
   const dataPath = path.join(basePath, 'data.csv');
-  const header = columns.map(c => csvEscape(c)).join(',');
-  const csvRows = rows.map(row =>
-    columns.map(c => csvEscape(String(row[c] ?? ''))).join(',')
+  const allCols = ['_row', ...columns];
+  const header = allCols.map(c => csvEscape(c)).join(',');
+  const csvRows = rows.map((row, i) =>
+    [String(i), ...columns.map(c => csvEscape(String(row[c] ?? '')))].join(',')
   );
   fs.writeFileSync(dataPath, [header, ...csvRows].join('\n'), 'utf-8');
 
   // Write query tool
   const queryToolPath = path.join(basePath, 'query-logs.mjs');
   fs.writeFileSync(queryToolPath, getQueryToolSource(), 'utf-8');
-
-  // Write patterns
-  const patternsPath = path.join(basePath, 'patterns.json');
-  fs.writeFileSync(patternsPath, JSON.stringify(patterns, null, 2), 'utf-8');
 
   // Write metadata
   const metadataPath = path.join(basePath, 'metadata.json');
@@ -66,7 +62,6 @@ export function createAnalysisWorkspace(
     basePath,
     dataPath,
     queryToolPath,
-    patternsPath,
     metadataPath,
     summaryOutputPath: path.join(basePath, 'summary-output.json'),
     rcaOutputPath: path.join(basePath, 'rca-output.json'),
@@ -83,9 +78,8 @@ Analyze ${meta.totalRows} rows of service logs from ${meta.namespace} (${meta.ev
 Time range: ${meta.startTime} to ${meta.endTime}.
 
 ## Files in ${workspace.basePath}
-- \`data.csv\` — The log data. **Do NOT read this file end-to-end.** Use the query tool below.
+- \`data.csv\` — The log data with a \`_row\` column for line numbers. **Do NOT read this file end-to-end.** Use the query tool.
 - \`query-logs.mjs\` — CSV-aware search tool. Use this to explore the data.
-- \`patterns.json\` — Pre-detected message patterns by frequency (may miss low-count issues).
 - \`metadata.json\` — Query parameters.
 ${sourceRepoPath ? `
 ## Source Code
@@ -160,9 +154,8 @@ export function buildRCAPrompt(
 Investigate a specific log entry and trace what caused it.
 
 ## Files in ${workspace.basePath}
-- \`data.csv\` — Full log data. Use the query tool, not sequential reading.
+- \`data.csv\` — Full log data with \`_row\` column for line numbers. Use the query tool, not sequential reading.
 - \`query-logs.mjs\` — CSV-aware search tool.
-- \`patterns.json\` — Detected patterns.
 - \`metadata.json\` — Query context.
 ${sourceRepoPath ? `
 ## Source Code

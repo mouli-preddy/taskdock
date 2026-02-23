@@ -213,7 +213,7 @@ export class DGrepAIService extends EventEmitter {
   private buildCopilotInlinePrompt(
     columns: string[],
     rows: Record<string, any>[],
-    patterns: any[],
+    _patterns: any[],
     metadata: AnalysisMetadata,
     _taskType: string
   ): string {
