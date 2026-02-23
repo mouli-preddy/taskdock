@@ -428,6 +428,7 @@
   padding: var(--space-1) var(--space-3);
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-secondary);
+  flex-shrink: 0;
 }
 
 .dgrep-results-info {
@@ -438,6 +439,23 @@
 .dgrep-results-actions {
   display: flex;
   gap: var(--space-1);
+  align-items: center;
+}
+
+.dgrep-preset-btn {
+  font-size: 10px !important;
+  padding: 2px 6px !important;
+  opacity: 0.8;
+}
+
+.dgrep-preset-btn:hover {
+  opacity: 1;
+}
+
+.dgrep-preset-btn.active {
+  background: var(--accent-blue);
+  color: #fff;
+  opacity: 1;
 }
 
 /* Column picker */
@@ -449,22 +467,58 @@
   position: absolute;
   right: 0;
   top: 100%;
-  width: 220px;
-  max-height: 300px;
-  overflow-y: auto;
+  width: 260px;
+  max-height: 400px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   z-index: 100;
+  display: flex;
+  flex-direction: column;
+}
+
+.dgrep-column-search-row {
   padding: var(--space-1);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.dgrep-column-search {
+  width: 100%;
+  padding: 4px 8px;
+  font-size: 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  outline: none;
+  box-sizing: border-box;
+}
+
+.dgrep-column-search:focus {
+  border-color: var(--accent-blue);
+}
+
+.dgrep-column-bulk-actions {
+  display: flex;
+  gap: var(--space-1);
+  padding: 2px var(--space-1);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.dgrep-column-list {
+  overflow-y: auto;
+  padding: var(--space-1);
+  max-height: 300px;
 }
 
 .dgrep-column-option {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 6px;
+  padding: 3px 6px;
   font-size: 12px;
   color: var(--text-primary);
   cursor: pointer;
@@ -479,12 +533,13 @@
 .dgrep-table-scroll {
   flex: 1;
   overflow: auto;
+  min-height: 0;
 }
 
 .dgrep-table {
-  width: 100%;
   border-collapse: collapse;
   font-size: 12px;
+  table-layout: fixed;
 }
 
 .dgrep-th {
@@ -497,9 +552,18 @@
   font-size: 11px;
   color: var(--text-secondary);
   border-bottom: 2px solid var(--border-color);
-  cursor: pointer;
-  white-space: nowrap;
   user-select: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  z-index: 2;
+}
+
+.dgrep-th-label {
+  cursor: pointer;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dgrep-th:hover {
@@ -511,20 +575,82 @@
   color: var(--accent-blue);
 }
 
+/* Column resize handle */
+.dgrep-resize-handle {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  z-index: 3;
+}
+
+.dgrep-resize-handle:hover {
+  background: var(--accent-blue);
+  opacity: 0.5;
+}
+
+.dgrep-th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-tertiary);
+  padding: 6px 8px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--text-secondary);
+  border-bottom: 2px solid var(--border-color);
+  user-select: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  z-index: 2;
+  position: relative;
+}
+
 .dgrep-td {
-  padding: 4px 8px;
+  padding: 3px 8px;
   border-bottom: 1px solid var(--border-color-muted);
   color: var(--text-primary);
-  max-width: 400px;
-  word-break: break-word;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
-.dgrep-cell-clickable {
+/* Row hover and selection */
+.dgrep-row {
   cursor: pointer;
+  transition: background 0.1s;
 }
 
-.dgrep-cell-clickable:hover {
+.dgrep-row:hover {
   background: var(--bg-hover);
+}
+
+.dgrep-row-selected {
+  background: color-mix(in srgb, var(--accent-blue) 15%, transparent) !important;
+}
+
+.dgrep-row-selected:hover {
+  background: color-mix(in srgb, var(--accent-blue) 20%, transparent) !important;
+}
+
+/* Zebra striping */
+.dgrep-row-alt {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* Severity row colors */
+.dgrep-row-error {
+  border-left: 3px solid #f85149;
+}
+
+.dgrep-row-warning {
+  border-left: 3px solid #e5a100;
 }
 
 .dgrep-empty-row {
@@ -534,22 +660,201 @@
   padding: var(--space-4);
 }
 
+/* ==================== Detail Panel ==================== */
+.dgrep-detail-panel {
+  flex-shrink: 0;
+  border-top: 2px solid var(--accent-blue);
+  background: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Detail panel resize handle - bottom dock (horizontal bar at top) */
+.dgrep-detail-resize-handle-h {
+  height: 4px;
+  cursor: ns-resize;
+  background: transparent;
+  position: relative;
+  flex-shrink: 0;
+}
+.dgrep-detail-resize-handle-h:hover,
+.dgrep-detail-resize-handle-h:active {
+  background: var(--accent-blue);
+  opacity: 0.5;
+}
+
+/* Detail panel resize handle - right dock (vertical bar on left) */
+.dgrep-detail-resize-handle-v {
+  width: 4px;
+  cursor: ew-resize;
+  background: transparent;
+  position: relative;
+  flex-shrink: 0;
+}
+.dgrep-detail-resize-handle-v:hover,
+.dgrep-detail-resize-handle-v:active {
+  background: var(--accent-blue);
+  opacity: 0.5;
+}
+
+/* Right-docked detail panel */
+.dgrep-detail-panel.docked-right {
+  border-left: 2px solid var(--accent-blue);
+  border-top: none;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Right-dock field layout: label above value */
+.dgrep-detail-field {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-color-muted);
+}
+.dgrep-detail-field-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+.dgrep-detail-field-value {
+  font-size: 11px;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  color: var(--text-primary);
+  word-break: break-all;
+  white-space: pre-wrap;
+  user-select: text;
+  cursor: pointer;
+}
+.dgrep-detail-field-value:hover {
+  background: var(--bg-hover);
+}
+
+/* Dock toggle button */
+.dgrep-detail-dock-btn {
+  font-size: 11px !important;
+  padding: 1px 6px !important;
+  display: flex;
+  align-items: center;
+}
+
+.dgrep-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-1) var(--space-3);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.dgrep-detail-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-blue);
+}
+
+.dgrep-detail-close {
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 4px;
+}
+
+.dgrep-detail-content {
+  overflow-y: auto;
+  padding: var(--space-2) var(--space-3);
+  flex: 1;
+  min-height: 0;
+}
+
+.dgrep-detail-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.dgrep-detail-row:hover {
+  background: var(--bg-hover);
+}
+
+.dgrep-detail-key {
+  padding: 3px 12px 3px 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  vertical-align: top;
+  width: 160px;
+  border-bottom: 1px solid var(--border-color-muted);
+}
+
+.dgrep-detail-value {
+  padding: 3px 0;
+  font-size: 11px;
+  color: var(--text-primary);
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  word-break: break-all;
+  white-space: pre-wrap;
+  border-bottom: 1px solid var(--border-color-muted);
+  user-select: text;
+  cursor: pointer;
+}
+
+.dgrep-detail-value:hover {
+  background: var(--bg-hover);
+}
+
+/* Copy flash animation */
+.dgrep-cell-copied {
+  background: color-mix(in srgb, var(--accent-blue) 30%, transparent) !important;
+  transition: background 0.15s;
+}
+
+/* "Copied!" tooltip hint */
+.dgrep-copied-hint {
+  position: fixed;
+  background: var(--success);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+  z-index: 9999;
+  animation: dgrep-copied-fade 1s ease forwards;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+@keyframes dgrep-copied-fade {
+  0% { opacity: 1; transform: translateY(0); }
+  70% { opacity: 1; transform: translateY(-8px); }
+  100% { opacity: 0; transform: translateY(-16px); }
+}
+
+/* Focusable table for keyboard nav */
+.dgrep-results-table-container:focus {
+  outline: none;
+}
+
 /* Pagination */
 .dgrep-pagination {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-1) var(--space-3);
   border-top: 1px solid var(--border-color);
   background: var(--bg-secondary);
+  flex-shrink: 0;
 }
 
 .dgrep-page-info {
   font-size: 12px;
   color: var(--text-secondary);
-  min-width: 100px;
+  min-width: 200px;
   text-align: center;
+  white-space: nowrap;
 }
 
 /* ==================== Searchable Select ==================== */
@@ -655,4 +960,2215 @@
 .btn-ghost:hover {
   color: var(--text-primary);
   background: var(--bg-hover);
+}
+
+/* ==================== Search Highlight ==================== */
+.dgrep-highlight {
+  background: #e5a100;
+  color: #000;
+  padding: 0 1px;
+  border-radius: 2px;
+}
+
+/* ==================== Wrap Toggle ==================== */
+.dgrep-wrap-btn.active {
+  background: var(--accent-blue);
+  color: #fff;
+}
+
+.dgrep-td-wrap {
+  white-space: pre-wrap !important;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* ==================== Sticky First Column ==================== */
+.dgrep-th:first-child,
+.dgrep-td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+}
+
+.dgrep-th:first-child {
+  z-index: 3;
+  background: var(--bg-tertiary);
+}
+
+.dgrep-td:first-child {
+  background: inherit;
+}
+
+/* ==================== Pattern Detection ==================== */
+.dgrep-pattern-picker {
+  position: relative;
+}
+
+.dgrep-patterns-btn.active {
+  background: var(--accent-blue);
+  color: #fff;
+}
+
+.dgrep-pattern-dropdown {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  width: 700px;
+  max-height: 400px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+}
+
+.dgrep-pattern-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.dgrep-pattern-list {
+  overflow-y: auto;
+  padding: var(--space-1);
+}
+
+.dgrep-pattern-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  color: var(--text-primary);
+}
+
+.dgrep-pattern-item:hover {
+  background: var(--bg-hover);
+}
+
+.dgrep-pattern-item.active {
+  background: color-mix(in srgb, var(--accent-blue) 15%, transparent);
+  border-left: 2px solid var(--accent-blue);
+}
+
+.dgrep-pattern-count {
+  font-weight: 700;
+  color: var(--accent-blue);
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  min-width: 50px;
+  flex-shrink: 0;
+}
+
+.dgrep-pattern-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  max-width: 500px;
+}
+
+.dgrep-pattern-sparkline {
+  flex-shrink: 0;
+  font-size: 10px;
+  letter-spacing: 0;
+  color: var(--accent-blue);
+  opacity: 0.8;
+}
+
+/* ==================== Active Filters Bar ==================== */
+.dgrep-active-filters-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 4px var(--space-3);
+  border-bottom: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--accent-blue) 5%, var(--bg-secondary));
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.dgrep-active-filters-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.dgrep-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 2px 8px;
+  background: color-mix(in srgb, var(--accent-blue) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-blue) 30%, transparent);
+  border-radius: 12px;
+  font-size: 11px;
+  color: var(--text-primary);
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+}
+
+.dgrep-filter-chip-pattern {
+  background: color-mix(in srgb, #e5a100 15%, transparent);
+  border-color: color-mix(in srgb, #e5a100 30%, transparent);
+}
+
+.dgrep-filter-chip-remove {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  border-radius: 50%;
+}
+
+.dgrep-filter-chip-remove:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* ==================== Time Histogram ==================== */
+.dgrep-histogram-container {
+  height: 80px;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+  position: relative;
+  background: var(--bg-primary);
+}
+
+.dgrep-histogram-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.dgrep-histogram-tooltip {
+  position: absolute;
+  background: rgba(13, 17, 23, 0.95);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-size: 11px;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  color: var(--text-primary);
+  pointer-events: none;
+  z-index: 10;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  line-height: 1.5;
+}
+
+.dgrep-histogram-selection {
+  position: absolute;
+  background: rgba(31, 111, 235, 0.2);
+  border: 1px solid var(--accent-blue);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.dgrep-histogram-empty {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding-top: 30px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+/* ==================== Severity Minimap ==================== */
+.dgrep-minimap-container {
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-color);
+}
+
+.dgrep-minimap-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.dgrep-minimap-viewport {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 1px;
+  cursor: grab;
+  min-height: 4px;
+}
+
+.dgrep-minimap-viewport:active {
+  cursor: grabbing;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* ==================== NL-to-KQL Input ==================== */
+.dgrep-nl-wrapper {
+  margin-bottom: var(--space-2);
+}
+
+.dgrep-nl-input-container {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.dgrep-nl-input-container.dgrep-nl-disabled {
+  opacity: 0.5;
+}
+
+.dgrep-nl-toggle {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.dgrep-nl-input-wrapper {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.dgrep-nl-icon {
+  position: absolute;
+  left: 6px;
+  display: flex;
+  align-items: center;
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+.dgrep-nl-input {
+  width: 100%;
+  padding: 5px 8px 5px 26px;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  outline: none;
+  box-sizing: border-box;
+}
+
+.dgrep-nl-input:focus {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 1px var(--accent-blue);
+}
+
+.dgrep-nl-input::placeholder {
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+.dgrep-nl-submit {
+  flex-shrink: 0;
+  font-size: 11px !important;
+  padding: 4px 8px !important;
+}
+
+.dgrep-nl-explanation {
+  font-size: 10px;
+  color: var(--text-secondary);
+  padding: 2px 4px;
+  margin-top: 2px;
+  line-height: 1.4;
+  font-style: italic;
+}
+
+.dgrep-nl-explanation.dgrep-nl-error {
+  color: var(--danger-color, #f85149);
+}
+
+/* ==================== Command Palette ==================== */
+.dgrep-palette-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 20vh;
+}
+
+.dgrep-palette-modal {
+  width: 500px;
+  max-height: 400px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg, 8px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.dgrep-palette-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.dgrep-palette-search-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  color: var(--text-tertiary);
+}
+
+.dgrep-palette-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.dgrep-palette-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.dgrep-palette-list {
+  overflow-y: auto;
+  max-height: 320px;
+  padding: 4px 0;
+}
+
+.dgrep-palette-category-header {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 6px 12px 2px;
+}
+
+.dgrep-palette-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.dgrep-palette-item.selected {
+  background: var(--bg-hover);
+}
+
+.dgrep-palette-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  color: var(--text-secondary);
+}
+
+.dgrep-palette-title {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.dgrep-palette-shortcut {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  margin-left: auto;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  background: var(--bg-tertiary);
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+}
+
+.dgrep-palette-empty {
+  padding: 16px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* ==================== Saved Queries ==================== */
+.dgrep-saved-queries {
+  position: relative;
+  display: inline-block;
+}
+
+.dgrep-saved-btn {
+  font-size: 11px !important;
+  padding: 4px 8px !important;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dgrep-saved-badge {
+  background: var(--accent-blue);
+  color: #fff;
+  font-size: 9px;
+  padding: 0 4px;
+  border-radius: 8px;
+  min-width: 14px;
+  text-align: center;
+  line-height: 14px;
+}
+
+.dgrep-saved-dropdown {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  width: 280px;
+  max-height: 350px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md, 6px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+  overflow-y: auto;
+}
+
+.dgrep-saved-save-row {
+  padding: var(--space-2);
+  display: flex;
+  gap: 4px;
+}
+
+.dgrep-saved-name-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.dgrep-saved-divider {
+  height: 1px;
+  background: var(--border-color);
+}
+
+.dgrep-saved-empty {
+  padding: var(--space-3);
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.dgrep-saved-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.dgrep-saved-item:hover {
+  background: var(--bg-hover);
+}
+
+.dgrep-saved-name {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dgrep-saved-time {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.dgrep-saved-delete {
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.dgrep-saved-item:hover .dgrep-saved-delete {
+  opacity: 1;
+}
+
+/* ==================== Faceted Sidebar ==================== */
+.dgrep-faceted-sidebar {
+  width: 260px;
+  min-width: 200px;
+  border-left: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.dgrep-faceted-sidebar.hidden {
+  display: none;
+}
+
+.dgrep-facet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.dgrep-facet-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.dgrep-facet-sections {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.dgrep-facet-close-btn {
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 4px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  border-radius: 2px;
+}
+
+.dgrep-facet-close-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.dgrep-facet-section {
+  border-bottom: 1px solid var(--border-color-muted);
+}
+
+.dgrep-facet-section-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px var(--space-3);
+  cursor: pointer;
+  user-select: none;
+}
+
+.dgrep-facet-section-header:hover {
+  background: var(--bg-hover);
+}
+
+.dgrep-facet-toggle {
+  font-size: 9px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  width: 10px;
+}
+
+.dgrep-facet-col-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.dgrep-facet-col-count {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.dgrep-facet-entries {
+  padding: 2px var(--space-3) 6px;
+}
+
+.dgrep-facet-entries.collapsed {
+  display: none;
+}
+
+.dgrep-facet-entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  position: relative;
+}
+
+.dgrep-facet-entry:hover {
+  background: var(--bg-hover);
+}
+
+.dgrep-facet-bar-bg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.dgrep-facet-bar {
+  height: 100%;
+  background: color-mix(in srgb, var(--accent-blue) 12%, transparent);
+  border-radius: var(--radius-sm);
+}
+
+.dgrep-facet-val {
+  font-size: 11px;
+  color: var(--text-primary);
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  position: relative;
+  z-index: 1;
+}
+
+.dgrep-facet-cnt {
+  font-size: 10px;
+  color: var(--accent-blue);
+  font-weight: 600;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.dgrep-facet-empty {
+  padding: var(--space-4);
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* ==================== Column Filter Dropdown ==================== */
+.dgrep-colfilter-dropdown {
+  width: 260px;
+  max-height: 380px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.dgrep-colfilter-header {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.dgrep-colfilter-search {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.dgrep-colfilter-search-input {
+  width: 100%;
+  padding: 4px 8px;
+  font-size: 12px;
+  box-sizing: border-box;
+}
+
+.dgrep-colfilter-bulk {
+  display: flex;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.dgrep-colfilter-list {
+  overflow-y: auto;
+  padding: var(--space-1);
+  flex: 1;
+  max-height: 220px;
+}
+
+.dgrep-colfilter-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  font-size: 11px;
+  color: var(--text-primary);
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.dgrep-colfilter-item:hover {
+  background: var(--bg-hover);
+}
+
+.dgrep-colfilter-val {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+}
+
+.dgrep-colfilter-count {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.dgrep-colfilter-empty {
+  padding: var(--space-3);
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.dgrep-colfilter-actions {
+  display: flex;
+  gap: var(--space-1);
+  justify-content: flex-end;
+  padding: var(--space-2);
+  border-top: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+/* Column filter icon in th */
+.dgrep-th-filter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  color: var(--text-tertiary);
+  border-radius: 2px;
+  flex-shrink: 0;
+  vertical-align: middle;
+  font-size: 10px;
+  margin-left: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.dgrep-th:hover .dgrep-th-filter,
+.dgrep-vscroll-th:hover .dgrep-th-filter {
+  opacity: 1;
+}
+
+.dgrep-th-filter:hover {
+  color: var(--accent-blue);
+  background: var(--bg-hover);
+}
+
+.dgrep-th-filter.active {
+  opacity: 1;
+  color: var(--accent-blue);
+}
+
+/* ==================== Context Viewer ==================== */
+.dgrep-context-viewer {
+  border-top: 1px solid var(--border-color);
+}
+
+.dgrep-context-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-1) var(--space-3);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.dgrep-context-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-blue);
+}
+
+.dgrep-context-close {
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 4px;
+}
+
+.dgrep-context-timeline {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: var(--space-1) 0;
+}
+
+.dgrep-context-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: 2px var(--space-3);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.dgrep-context-row:hover {
+  background: var(--bg-hover);
+}
+
+.dgrep-context-target {
+  background: color-mix(in srgb, var(--accent-blue) 15%, transparent) !important;
+  border-left: 3px solid var(--accent-blue);
+}
+
+.dgrep-context-time {
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  min-width: 90px;
+}
+
+.dgrep-context-sev {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  min-width: 50px;
+}
+
+.dgrep-context-msg {
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.dgrep-context-btn {
+  margin-left: var(--space-2);
+}
+
+/* ==================== JSON Viewer ==================== */
+.dgrep-json-viewer {
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.dgrep-json-toolbar {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.dgrep-json-tree {
+  padding: var(--space-2) var(--space-3);
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.dgrep-json-node {
+  margin-left: 0;
+}
+
+.dgrep-json-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 1px 0;
+  border-radius: 2px;
+}
+
+.dgrep-json-header:hover {
+  background: var(--bg-hover);
+}
+
+.dgrep-json-toggle {
+  font-size: 9px;
+  color: var(--text-secondary);
+  width: 12px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.dgrep-json-bracket {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.dgrep-json-children {
+  /* no extra margin since entries have padding-left */
+}
+
+.dgrep-json-children.collapsed {
+  display: none;
+}
+
+.dgrep-json-entry {
+  display: flex;
+  align-items: baseline;
+  gap: 0;
+  padding: 1px 0;
+}
+
+.dgrep-json-key {
+  color: #e6edf3;
+  flex-shrink: 0;
+}
+
+.dgrep-json-val {
+  word-break: break-all;
+}
+
+.dgrep-json-string {
+  color: #3fb950;
+}
+
+.dgrep-json-number {
+  color: #58a6ff;
+}
+
+.dgrep-json-boolean {
+  color: #8957e5;
+}
+
+.dgrep-json-null {
+  color: #6e7681;
+}
+
+.dgrep-json-copy-node {
+  opacity: 0;
+  transition: opacity 0.15s;
+  font-size: 10px !important;
+  padding: 0 4px !important;
+}
+
+.dgrep-json-header:hover .dgrep-json-copy-node {
+  opacity: 1;
+}
+
+/* Detail panel view toggle */
+.dgrep-detail-view-toggle {
+  display: flex;
+  gap: 2px;
+  margin-left: var(--space-2);
+}
+
+.dgrep-detail-view-btn {
+  font-size: 11px !important;
+  padding: 1px 8px !important;
+  border-radius: 3px !important;
+}
+
+.dgrep-detail-view-btn.active {
+  background: var(--accent-blue);
+  color: #fff;
+}
+
+/* Facets toggle button */
+.dgrep-facets-btn.active {
+  background: var(--accent-blue);
+  color: #fff;
+}
+
+/* ==================== AI Summary Panel ==================== */
+.dgrep-ai-summary {
+  flex-shrink: 0;
+  border-top: 2px solid var(--accent-blue);
+  background: var(--bg-secondary);
+}
+
+.dgrep-ai-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-1) var(--space-3);
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  user-select: none;
+}
+
+.dgrep-ai-summary-header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.dgrep-ai-summary-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-blue);
+}
+
+.dgrep-ai-summary-content {
+  padding: var(--space-2) var(--space-3);
+  overflow-y: auto;
+  max-height: 300px;
+}
+
+.dgrep-ai-summary-empty {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-style: italic;
+  text-align: center;
+  padding: var(--space-2) 0;
+}
+
+.dgrep-ai-summary-error {
+  font-size: 12px;
+  color: var(--danger-color, #f85149);
+  padding: var(--space-2) 0;
+}
+
+/* Error breakdown bar */
+.dgrep-ai-summary-bar-section {
+  margin-bottom: var(--space-2);
+}
+
+.dgrep-ai-summary-bar-label,
+.dgrep-ai-summary-patterns-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--space-1);
+}
+
+.dgrep-ai-summary-bar {
+  display: block;
+  width: 100%;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.dgrep-ai-summary-bar rect {
+  transition: opacity 0.15s;
+  cursor: pointer;
+}
+
+.dgrep-ai-summary-bar rect:hover {
+  opacity: 1 !important;
+}
+
+.dgrep-ai-summary-bar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.dgrep-ai-summary-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dgrep-ai-summary-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* Top patterns */
+.dgrep-ai-summary-patterns {
+  margin-bottom: var(--space-2);
+}
+
+.dgrep-ai-summary-pattern-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px 0;
+  font-size: 11px;
+}
+
+.dgrep-ai-summary-pattern-count {
+  font-weight: 700;
+  color: var(--accent-blue);
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  min-width: 50px;
+  flex-shrink: 0;
+}
+
+.dgrep-ai-summary-pattern-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  color: var(--text-primary);
+}
+
+.dgrep-ai-summary-pattern-trend {
+  flex-shrink: 0;
+  font-size: 10px;
+}
+
+.dgrep-ai-summary-pattern-trend.trend-up {
+  color: #f85149;
+}
+
+.dgrep-ai-summary-pattern-trend.trend-down {
+  color: #3fb950;
+}
+
+.dgrep-ai-summary-pattern-trend.trend-stable {
+  color: var(--text-secondary);
+}
+
+.dgrep-ai-summary-pattern-pct {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+  min-width: 40px;
+  text-align: right;
+}
+
+/* Narrative */
+.dgrep-ai-summary-narrative {
+  font-size: 12px;
+  color: var(--text-primary);
+  line-height: 1.6;
+  margin-bottom: var(--space-2);
+}
+
+.dgrep-ai-summary-narrative p {
+  margin: 0 0 var(--space-1) 0;
+}
+
+.dgrep-ai-summary-narrative code {
+  background: var(--bg-tertiary);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.dgrep-ai-summary-narrative pre {
+  background: var(--bg-tertiary);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  margin: var(--space-1) 0;
+}
+
+.dgrep-ai-summary-narrative ul {
+  margin: var(--space-1) 0;
+  padding-left: 16px;
+}
+
+.dgrep-ai-summary-narrative li {
+  margin: 2px 0;
+}
+
+/* Stats footer */
+.dgrep-ai-summary-stats {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  padding-top: var(--space-1);
+  border-top: 1px solid var(--border-color-muted);
+}
+
+/* Loading animation */
+.dgrep-ai-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.dgrep-ai-loading-dots::after {
+  content: '';
+  animation: dgrep-dots 1.5s steps(4, end) infinite;
+}
+
+@keyframes dgrep-dots {
+  0% { content: ''; }
+  25% { content: '.'; }
+  50% { content: '..'; }
+  75% { content: '...'; }
+  100% { content: ''; }
+}
+
+/* ==================== RCA Panel ==================== */
+.dgrep-rca-panel {
+  flex-shrink: 0;
+  max-height: 50%;
+  border-top: 2px solid var(--accent-blue);
+  background: var(--bg-secondary);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.dgrep-rca-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-1) var(--space-3);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.dgrep-rca-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-blue);
+}
+
+.dgrep-rca-header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.dgrep-rca-confidence {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.dgrep-rca-severity {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--bg-tertiary);
+}
+
+.dgrep-rca-severity-critical { color: #f85149; }
+.dgrep-rca-severity-high { color: #f85149; }
+.dgrep-rca-severity-medium { color: #e5a100; }
+.dgrep-rca-severity-low { color: #3fb950; }
+
+.dgrep-rca-content {
+  overflow-y: auto;
+  padding: var(--space-2) var(--space-3);
+  flex: 1;
+}
+
+.dgrep-rca-error {
+  font-size: 12px;
+  color: var(--danger-color, #f85149);
+}
+
+/* RCA progress steps */
+.dgrep-rca-progress {
+  margin-bottom: var(--space-2);
+}
+
+.dgrep-rca-progress-step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding: 2px 0;
+}
+
+/* RCA narrative */
+.dgrep-rca-narrative {
+  font-size: 12px;
+  color: var(--text-primary);
+  line-height: 1.6;
+  margin-bottom: var(--space-2);
+}
+
+.dgrep-rca-narrative p {
+  margin: 0 0 var(--space-1) 0;
+}
+
+.dgrep-rca-narrative code {
+  background: var(--bg-tertiary);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.dgrep-rca-narrative pre {
+  background: var(--bg-tertiary);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  margin: var(--space-1) 0;
+}
+
+.dgrep-rca-narrative ul {
+  margin: var(--space-1) 0;
+  padding-left: 16px;
+}
+
+/* Section labels */
+.dgrep-rca-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+/* Evidence timeline */
+.dgrep-rca-timeline {
+  border-left: 2px solid var(--border-color);
+  margin-left: 6px;
+  padding-left: var(--space-3);
+}
+
+.dgrep-rca-evidence {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: 4px 0;
+  cursor: pointer;
+  position: relative;
+  border-radius: var(--radius-sm);
+}
+
+.dgrep-rca-evidence:hover {
+  background: var(--bg-hover);
+}
+
+.dgrep-rca-evidence-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 4px;
+  position: relative;
+  left: calc(-1 * var(--space-3) - 5px);
+  margin-right: calc(-8px - var(--space-3) + 3px);
+}
+
+.dgrep-rca-evidence-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dgrep-rca-evidence-time {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+}
+
+.dgrep-rca-evidence-desc {
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.dgrep-rca-evidence-relevance {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+}
+
+/* Linked rows */
+.dgrep-rca-linked-section {
+  margin-bottom: var(--space-2);
+}
+
+.dgrep-rca-linked-rows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.dgrep-rca-linked-row {
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 11px;
+  color: var(--accent-blue);
+  cursor: pointer;
+}
+
+.dgrep-rca-linked-row:hover {
+  text-decoration: underline;
+}
+
+/* Recommendation */
+.dgrep-rca-recommendation,
+.dgrep-rca-findings {
+  font-size: 12px;
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+.dgrep-rca-recommendation p,
+.dgrep-rca-findings p {
+  margin: 0 0 var(--space-1) 0;
+}
+
+/* ==================== Chat Panel ==================== */
+.dgrep-chat-panel {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 350px;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  z-index: 50;
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.2);
+}
+
+.dgrep-chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.dgrep-chat-header-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-blue);
+}
+
+.dgrep-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* Welcome */
+.dgrep-chat-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-2);
+  text-align: center;
+}
+
+.dgrep-chat-welcome-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.dgrep-chat-welcome-subtitle {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* Message bubbles */
+.dgrep-chat-msg-user {
+  align-self: flex-end;
+  background: var(--accent-blue);
+  color: #fff;
+  padding: var(--space-2) var(--space-3);
+  border-radius: 12px 12px 2px 12px;
+  font-size: 12px;
+  max-width: 85%;
+  word-break: break-word;
+  line-height: 1.5;
+}
+
+.dgrep-chat-msg-assistant {
+  align-self: flex-start;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  padding: var(--space-2) var(--space-3);
+  border-radius: 12px 12px 12px 2px;
+  font-size: 12px;
+  max-width: 85%;
+  word-break: break-word;
+  line-height: 1.6;
+}
+
+.dgrep-chat-msg-assistant p {
+  margin: 0 0 var(--space-1) 0;
+}
+
+.dgrep-chat-msg-assistant p:last-child {
+  margin-bottom: 0;
+}
+
+.dgrep-chat-msg-assistant code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.dgrep-chat-msg-assistant pre {
+  background: rgba(0, 0, 0, 0.2);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  margin: var(--space-1) 0;
+}
+
+.dgrep-chat-msg-assistant ul {
+  margin: var(--space-1) 0;
+  padding-left: 16px;
+}
+
+.dgrep-chat-msg-assistant.streaming::after {
+  content: '\25AE';
+  animation: dgrep-cursor-blink 0.8s step-end infinite;
+  margin-left: 1px;
+  color: var(--accent-blue);
+}
+
+@keyframes dgrep-cursor-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.dgrep-chat-msg-assistant.error {
+  color: var(--danger-color, #f85149);
+  background: color-mix(in srgb, #f85149 10%, var(--bg-tertiary));
+}
+
+/* Tool status */
+.dgrep-chat-tool-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding: 4px 0;
+}
+
+/* Input area */
+.dgrep-chat-input-area {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--border-color);
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+
+.dgrep-chat-input {
+  flex: 1;
+  resize: none;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  outline: none;
+  font-family: inherit;
+  max-height: 120px;
+  box-sizing: border-box;
+}
+
+.dgrep-chat-input:focus {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 1px var(--accent-blue);
+}
+
+.dgrep-chat-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.dgrep-chat-send-btn {
+  flex-shrink: 0;
+  padding: 6px 10px !important;
+}
+
+.dgrep-chat-send-btn:disabled {
+  opacity: 0.5;
+}
+
+/* Suggestion chips */
+.dgrep-chat-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.dgrep-chat-suggestion-chip {
+  background: color-mix(in srgb, var(--accent-blue) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-blue) 25%, transparent);
+  border-radius: 16px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.dgrep-chat-suggestion-chip:hover {
+  background: color-mix(in srgb, var(--accent-blue) 20%, transparent);
+  border-color: var(--accent-blue);
+}
+
+/* ==================== AI Suggestions Bar ==================== */
+.dgrep-ai-suggestions-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 4px var(--space-3);
+  border-bottom: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--accent-blue) 3%, var(--bg-secondary));
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.dgrep-ai-suggestions-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.dgrep-ai-suggestion-chip {
+  background: color-mix(in srgb, var(--accent-blue) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-blue) 20%, transparent);
+  border-radius: 12px;
+  padding: 2px 10px;
+  font-size: 11px;
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.dgrep-ai-suggestion-chip:hover {
+  background: color-mix(in srgb, var(--accent-blue) 20%, transparent);
+  border-color: var(--accent-blue);
+}
+
+/* ==================== Anomaly Row Glow ==================== */
+.dgrep-row-anomaly {
+  box-shadow: inset 0 0 8px rgba(255, 165, 0, 0.3);
+  position: relative;
+}
+
+.dgrep-row-anomaly::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 3px;
+  height: 100%;
+  background: #ff9800;
+}
+
+/* ==================== Spin Animation (for loading icons) ==================== */
+@keyframes dgrep-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: dgrep-spin 1s linear infinite;
+}
+
+/* ==================== Virtual Scroller ==================== */
+.dgrep-vscroll-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dgrep-vscroll-header {
+  display: flex;
+  flex-shrink: 0;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+.dgrep-vscroll-th {
+  display: flex;
+  align-items: center;
+  padding: 4px 6px;
+  position: relative;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  border-right: 1px solid var(--border-color-muted, rgba(255,255,255,0.06));
+}
+
+.dgrep-vscroll-th.sorted {
+  color: var(--accent-blue);
+}
+
+.dgrep-th-label {
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.dgrep-th-label:hover {
+  color: var(--text-primary);
+}
+
+.dgrep-resize-handle {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  cursor: col-resize;
+  z-index: 1;
+}
+
+.dgrep-resize-handle:hover {
+  background: var(--accent-blue);
+}
+
+.dgrep-vscroll-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: auto;
+  position: relative;
+  min-height: 0;
+}
+
+.dgrep-vscroll-spacer {
+  position: relative;
+  width: 1px;
+  pointer-events: none;
+}
+
+.dgrep-vscroll-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  font-size: 11px;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.dgrep-vscroll-row:hover {
+  background: var(--bg-hover);
+}
+
+.dgrep-row-alt {
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.dgrep-row-selected {
+  background: color-mix(in srgb, var(--accent-blue) 18%, transparent) !important;
+}
+
+.dgrep-row-error {
+  border-left: 3px solid #f85149;
+}
+
+.dgrep-row-warning {
+  border-left: 3px solid #e5a100;
+}
+
+.dgrep-vscroll-cell {
+  padding: 2px 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  color: var(--text-primary);
+  line-height: 20px;
+}
+
+.dgrep-td-wrap {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.dgrep-highlight {
+  background: rgba(255, 213, 79, 0.35);
+  border-radius: 1px;
+}
+
+/* ==================== Bookmark Manager ==================== */
+.dgrep-bookmark-picker {
+  position: relative;
+  display: inline-block;
+}
+
+.dgrep-bookmark-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dgrep-bookmark-btn.active {
+  color: var(--accent-blue);
+}
+
+.dgrep-bookmark-dropdown {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  width: 320px;
+  max-height: 350px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md, 6px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.dgrep-bookmark-dropdown.hidden {
+  display: none;
+}
+
+.dgrep-bookmark-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.dgrep-bookmark-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: var(--space-1) 0;
+}
+
+.dgrep-bookmark-empty {
+  padding: var(--space-3);
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.dgrep-bookmark-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 4px var(--space-3);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.dgrep-bookmark-item:hover {
+  background: var(--bg-hover);
+}
+
+.dgrep-bookmark-row-num {
+  font-weight: 600;
+  color: var(--accent-blue);
+  flex-shrink: 0;
+  min-width: 50px;
+}
+
+.dgrep-bookmark-ts {
+  color: var(--text-secondary);
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.dgrep-bookmark-msg {
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  flex: 1;
+}
+
+.dgrep-bookmark-indicator {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--accent-blue);
+  z-index: 2;
+}
+
+/* ==================== Live Tail ==================== */
+.dgrep-live-tail-container {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.dgrep-live-tail-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dgrep-live-tail-btn.active {
+  background: color-mix(in srgb, #3fb950 15%, transparent);
+  border-color: #3fb950;
+  color: #3fb950;
+}
+
+.dgrep-live-tail-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #3fb950;
+  animation: dgrep-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes dgrep-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+.dgrep-live-tail-interval {
+  font-size: 10px;
+  padding: 1px 2px;
+}
+
+.dgrep-live-tail-status {
+  font-size: 11px;
+  color: #3fb950;
+  white-space: nowrap;
+}
+
+/* ==================== Context Menu (right-click) ==================== */
+.dgrep-context-menu {
+  position: fixed;
+  z-index: 1000;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md, 6px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  min-width: 200px;
+  padding: 4px 0;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.dgrep-context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dgrep-context-menu-item:hover {
+  background: var(--bg-hover);
+}
+
+.dgrep-context-menu-separator {
+  height: 1px;
+  background: var(--border-color);
+  margin: 4px 0;
+}
+
+.dgrep-context-menu-color {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ==================== Condition Chips ==================== */
+.dgrep-condition-chip {
+  cursor: default;
+}
+
+.dgrep-condition-mode-toggle {
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.8;
+  user-select: none;
+}
+
+.dgrep-condition-mode-toggle:hover {
+  opacity: 1;
+}
+
+.dgrep-condition-regex-badge {
+  font-size: 9px;
+  font-weight: 700;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  color: var(--accent-blue);
+  background: color-mix(in srgb, var(--accent-blue) 15%, transparent);
+  border-radius: 3px;
+  padding: 0 3px;
+  line-height: 14px;
+}
+
+/* ==================== Quick Filter Regex Toggle ==================== */
+.dgrep-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+
+.dgrep-regex-btn {
+  font-size: 10px;
+  font-weight: 700;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  padding: 3px 6px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.dgrep-regex-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.dgrep-regex-btn.active {
+  color: var(--accent-blue);
+  border-color: var(--accent-blue);
+  background: color-mix(in srgb, var(--accent-blue) 12%, transparent);
+}
+
+/* ==================== AI Progress Lines ==================== */
+.dgrep-ai-summary-progress,
+.dgrep-rca-progress {
+  max-height: 100px;
+  overflow-y: auto;
+  padding: var(--space-1) 0;
+}
+
+.dgrep-ai-progress-line,
+.dgrep-rca-progress-step {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  padding: 1px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ==================== AI Summary Recommendations ==================== */
+.dgrep-ai-summary-recommendations {
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-color-muted);
+}
+
+.dgrep-ai-summary-recommendations ul {
+  margin: var(--space-1) 0 0 var(--space-3);
+  padding: 0;
+}
+
+.dgrep-ai-summary-recommendations li {
+  font-size: 12px;
+  color: var(--text-primary);
+  margin-bottom: var(--space-1);
+}
+
+/* ==================== RCA Code References ==================== */
+.dgrep-rca-code-refs-section {
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-color-muted);
+}
+
+.dgrep-rca-code-ref {
+  font-size: 12px;
+  padding: 2px 0;
+}
+
+.dgrep-rca-code-ref code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 4px;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+  color: var(--accent-blue);
 }

@@ -17,9 +17,21 @@ import {
 import type { DGrepFormState } from '../../shared/dgrep-ui-types.js';
 import { DGrepSearchableSelect } from './dgrep-searchable-select.js';
 import { DGrepResultsTable } from './dgrep-results-table.js';
+import { DGrepTimeHistogram } from './dgrep-time-histogram.js';
+import { DGrepSeverityMinimap } from './dgrep-severity-minimap.js';
 import { parseDGrepUrl, buildDGrepUrl } from './dgrep-url-parser.js';
 import { KqlEditor } from './kql-editor.js';
 import { getIcon, Search, X, Download, RefreshCw, Zap } from '../utils/icons.js';
+import { DGrepNLInput } from './dgrep-nl-input.js';
+import { DGrepCommandPalette } from './dgrep-command-palette.js';
+import { DGrepSavedQueries } from './dgrep-saved-queries.js';
+import type { SavedQuery } from './dgrep-saved-queries.js';
+import { DGrepFacetedSidebar } from './dgrep-faceted-sidebar.js';
+import { DGrepAISummaryPanel } from './dgrep-ai-summary-panel.js';
+import { DGrepRCAPanel } from './dgrep-ai-rca-panel.js';
+import { DGrepChatPanel } from './dgrep-chat-panel.js';
+import { DGrepAISuggestionsBar } from './dgrep-ai-suggestions-bar.js';
+import type { DGrepAISummary, DGrepRootCauseAnalysis, DGrepChatEvent } from '../../shared/dgrep-ai-types.js';
 
 const ENDPOINT_NAMES = Object.keys(DGREP_ENDPOINT_URLS) as DGrepEndpointName[];
 const LOG_IDS = Object.keys(LOG_CONFIGS) as LogId[];
@@ -30,6 +42,16 @@ export class DGrepSearchView {
   private container: HTMLElement;
   private namespaceSelect!: DGrepSearchableSelect;
   private resultsTable!: DGrepResultsTable;
+  private histogram!: DGrepTimeHistogram;
+  private minimap!: DGrepSeverityMinimap;
+  private facetedSidebar!: DGrepFacetedSidebar;
+  private nlInput!: DGrepNLInput;
+  private commandPalette!: DGrepCommandPalette;
+  private savedQueries!: DGrepSavedQueries;
+  private aiSummaryPanel!: DGrepAISummaryPanel;
+  private rcaPanel!: DGrepRCAPanel;
+  private chatPanel!: DGrepChatPanel;
+  private suggestionsBar!: DGrepAISuggestionsBar;
   private serverQueryEditor!: KqlEditor;
   private clientQueryEditor!: KqlEditor;
 
@@ -48,6 +70,12 @@ export class DGrepSearchView {
   private eventsLoading = false;
   private bufferedEvents: Array<{ type: string; event: any }> = [];
 
+  // Column preset applied flag (reset per search, set after first data load)
+  private columnPresetApplied = false;
+
+  // Quick filter regex toggle state
+  private quickFilterRegex = false;
+
   // Token state
   private tokenStatus: { hasToken: boolean; valid: boolean } = { hasToken: false, valid: false };
   private acquiringToken = false;
@@ -64,6 +92,10 @@ export class DGrepSearchView {
   private onGetResultsCallback: ((sessionId: string) => Promise<{ columns: string[]; rows: Record<string, any>[] } | undefined>) | null = null;
   private onGetResultsPageCallback: ((sessionId: string, offset: number, limit: number) => Promise<{ columns: string[]; rows: Record<string, any>[]; totalCount: number } | undefined>) | null = null;
   private onRunClientQueryCallback: ((sessionId: string, clientQuery: string) => Promise<void>) | null = null;
+  private onNLToKQLCallback: ((prompt: string, columns: string[]) => Promise<{ kql: string; explanation: string }>) | null = null;
+  private onSaveQueryCallback: ((name: string, formState: DGrepFormState) => Promise<void>) | null = null;
+  private onLoadQueriesCallback: (() => Promise<SavedQuery[]>) | null = null;
+  private onDeleteQueryCallback: ((name: string) => Promise<void>) | null = null;
 
   constructor(containerId: string) {
     this.container = document.getElementById(containerId)!;
@@ -86,12 +118,23 @@ export class DGrepSearchView {
   onGetResults(cb: (sessionId: string) => Promise<{ columns: string[]; rows: Record<string, any>[] } | undefined>): void { this.onGetResultsCallback = cb; }
   onGetResultsPage(cb: (sessionId: string, offset: number, limit: number) => Promise<{ columns: string[]; rows: Record<string, any>[]; totalCount: number } | undefined>): void { this.onGetResultsPageCallback = cb; }
   onRunClientQuery(cb: (sessionId: string, clientQuery: string) => Promise<void>): void { this.onRunClientQueryCallback = cb; }
+  onNLToKQL(cb: (prompt: string, columns: string[]) => Promise<{ kql: string; explanation: string }>): void { this.onNLToKQLCallback = cb; }
+  onSaveQuery(cb: (name: string, formState: DGrepFormState) => Promise<void>): void { this.onSaveQueryCallback = cb; }
+  onLoadQueries(cb: () => Promise<SavedQuery[]>): void { this.onLoadQueriesCallback = cb; }
+  onDeleteQuery(cb: (name: string) => Promise<void>): void { this.onDeleteQueryCallback = cb; }
 
   /** Check and display token status. Call when the DGrep tab becomes visible. */
   async checkTokenStatus(): Promise<void> {
     if (!this.onCheckTokenStatusCallback) return;
     try {
-      this.tokenStatus = await this.onCheckTokenStatusCallback();
+      // Use a timeout to prevent blocking the UI if backend is slow
+      const result = await Promise.race([
+        this.onCheckTokenStatusCallback(),
+        new Promise<{ hasToken: boolean; valid: boolean }>((_, reject) =>
+          setTimeout(() => reject(new Error('Token check timeout')), 5000)
+        ),
+      ]);
+      this.tokenStatus = result;
     } catch {
       this.tokenStatus = { hasToken: false, valid: false };
     }
@@ -145,6 +188,10 @@ export class DGrepSearchView {
     const isNewSearch = this.pendingSessionId && !this.activeSessionId;
     if (isCurrentSearch || isNewSearch) {
       this.resultsTable.setData(event.columns, event.rows);
+      if (!this.columnPresetApplied) {
+        this.columnPresetApplied = true;
+        this.applySavedColumnPreset();
+      }
       this.enableActionButtons(true);
       this.updateStatusBar(
         `Searching... (${event.rows.length.toLocaleString()} of ~${event.totalCount.toLocaleString()} rows loaded)`,
@@ -156,71 +203,129 @@ export class DGrepSearchView {
 
   setResults(columns: string[], rows: Record<string, any>[]): void {
     this.resultsTable.setData(columns, rows);
+    if (!this.columnPresetApplied) {
+      this.columnPresetApplied = true;
+      this.applySavedColumnPreset();
+    }
+    this.updateHistogram(columns, rows);
+  }
+
+  // AI event handlers (called from app.ts when bridge events arrive)
+  handleAISummaryProgress(event: { sessionId: string; text: string }): void {
+    this.aiSummaryPanel?.handleSummaryProgress?.(event.text);
+  }
+  handleAISummaryComplete(event: { sessionId: string; summary?: DGrepAISummary; error?: string }): void {
+    if (event.error) {
+      this.aiSummaryPanel?.handleSummaryError?.(event.error);
+    } else if (event.summary) {
+      this.aiSummaryPanel?.handleSummaryComplete?.(event.summary);
+    }
+    // Enable AI buttons
+    const btn = this.container.querySelector('#dgrepAISummarizeBtn') as HTMLButtonElement;
+    if (btn) btn.disabled = false;
+    const chatBtn = this.container.querySelector('#dgrepAIChatBtn') as HTMLButtonElement;
+    if (chatBtn) chatBtn.disabled = false;
+  }
+  handleAIRCAProgress(event: { sessionId: string; text: string }): void {
+    this.rcaPanel?.handleRCAProgress?.(event.text);
+  }
+  handleAIRCAComplete(event: { sessionId: string; analysis?: DGrepRootCauseAnalysis; error?: string }): void {
+    if (event.error) {
+      this.rcaPanel?.handleRCAError?.(event.error);
+    } else if (event.analysis) {
+      this.rcaPanel?.handleRCAComplete?.(event.analysis);
+    }
+  }
+  handleAIChatEvent(event: DGrepChatEvent): void {
+    this.chatPanel?.handleChatEvent?.(event);
   }
 
   async populateFromUrl(url: string): Promise<void> {
     const parsed = parseDGrepUrl(url);
-    if (!parsed) return;
+    if (!parsed) {
+      this.updateStatusBar('Could not parse DGrep URL', undefined, undefined, true);
+      return;
+    }
 
-    // Set endpoint
-    if (parsed.endpoint) {
-      const endpointSelect = this.container.querySelector('#dgrepEndpoint') as HTMLSelectElement;
-      if (endpointSelect) {
-        endpointSelect.value = parsed.endpoint;
-        await this.onEndpointChange(parsed.endpoint);
+    this.updateStatusBar('Parsing URL...', undefined);
+
+    try {
+      // Set endpoint and cascade namespace fetch
+      if (parsed.endpoint) {
+        const endpointSelect = this.container.querySelector('#dgrepEndpoint') as HTMLSelectElement;
+        if (endpointSelect) {
+          endpointSelect.value = parsed.endpoint;
+          await this.onEndpointChange(parsed.endpoint);
+        }
       }
-    }
 
-    // Set namespace
-    if (parsed.namespace) {
-      this.namespaceSelect.setValue(parsed.namespace);
-      await this.onNamespaceChange(parsed.namespace);
-    }
-
-    // Set events
-    if (parsed.eventNames.length > 0) {
-      this.selectedEvents = new Set(parsed.eventNames);
-      this.renderEventsList();
-    }
-
-    // Set time
-    if (parsed.referenceTime) {
-      const timeInput = this.container.querySelector('#dgrepReferenceTime') as HTMLInputElement;
-      if (timeInput) {
-        // Convert ISO to datetime-local format
-        const dt = new Date(parsed.referenceTime);
-        timeInput.value = dt.toISOString().slice(0, 16);
+      // Set namespace and cascade events fetch
+      // onNamespaceChange() clears selectedEvents, so we must set events AFTER it completes
+      if (parsed.namespace) {
+        this.namespaceSelect.setValue(parsed.namespace);
+        try {
+          await this.onNamespaceChange(parsed.namespace);
+        } catch (err: any) {
+          console.warn('Failed to fetch events for namespace:', parsed.namespace, err);
+        }
       }
-    }
 
-    // Set offset
-    if (parsed.offset != null) {
-      const offsetVal = this.container.querySelector('#dgrepOffsetValue') as HTMLInputElement;
-      if (offsetVal) offsetVal.value = String(parsed.offset);
-    }
-    if (parsed.offsetUnit) {
-      const offsetUnit = this.container.querySelector('#dgrepOffsetUnit') as HTMLSelectElement;
-      if (offsetUnit) offsetUnit.value = parsed.offsetUnit;
-    }
+      // Set events AFTER namespace change has fetched the events list
+      // Even if the fetch failed, force-add the URL's event names so they're selectable
+      if (parsed.eventNames.length > 0) {
+        this.selectedEvents = new Set(parsed.eventNames);
+        // Ensure the URL event names are in allEvents even if the fetch didn't return them
+        for (const ev of parsed.eventNames) {
+          if (!this.allEvents.includes(ev)) {
+            this.allEvents.push(ev);
+          }
+        }
+        this.filterEvents('');  // Re-filter to update filteredEvents and render with checks
+      }
 
-    // Set offset sign
-    const signRadio = this.container.querySelector(`input[name="dgrepOffsetSign"][value="${parsed.offsetSign}"]`) as HTMLInputElement;
-    if (signRadio) signRadio.checked = true;
+      // Set time
+      if (parsed.referenceTime) {
+        const timeInput = this.container.querySelector('#dgrepReferenceTime') as HTMLInputElement;
+        if (timeInput) {
+          const dt = new Date(parsed.referenceTime);
+          timeInput.value = dt.toISOString().slice(0, 16);
+        }
+      }
 
-    // Set server query
-    if (parsed.serverQuery) {
-      this.serverQueryEditor.setValue(parsed.serverQuery);
-    }
+      // Set offset
+      if (parsed.offset != null) {
+        const offsetVal = this.container.querySelector('#dgrepOffsetValue') as HTMLInputElement;
+        if (offsetVal) offsetVal.value = String(parsed.offset);
+      }
+      if (parsed.offsetUnit) {
+        const offsetUnit = this.container.querySelector('#dgrepOffsetUnit') as HTMLSelectElement;
+        if (offsetUnit) offsetUnit.value = parsed.offsetUnit;
+      }
 
-    // Set client query
-    if (parsed.clientQuery) {
-      this.clientQueryEditor.setValue(parsed.clientQuery);
-    }
+      // Set offset sign
+      const signRadio = this.container.querySelector(`input[name="dgrepOffsetSign"][value="${parsed.offsetSign}"]`) as HTMLInputElement;
+      if (signRadio) signRadio.checked = true;
 
-    // Set scoping conditions
-    if (parsed.scopingConditions.length > 0) {
-      this.scopingConditions = parsed.scopingConditions;
-      this.renderScopingConditions();
+      // Set server query
+      if (parsed.serverQuery) {
+        this.serverQueryEditor.setValue(parsed.serverQuery);
+      }
+
+      // Set client query
+      if (parsed.clientQuery) {
+        this.clientQueryEditor.setValue(parsed.clientQuery);
+      }
+
+      // Set scoping conditions
+      if (parsed.scopingConditions.length > 0) {
+        this.scopingConditions = parsed.scopingConditions;
+        this.renderScopingConditions();
+      }
+
+      this.updateStatusBar('URL parsed. Ready to search.', undefined);
+    } catch (err: any) {
+      console.error('Failed to populate from URL:', err);
+      this.updateStatusBar(`URL parse error: ${err.message}`, undefined, undefined, true);
     }
   }
 
@@ -261,12 +366,15 @@ export class DGrepSearchView {
 
           <!-- Quick actions bar -->
           <div class="dgrep-quick-bar">
-            <div class="dgrep-field">
-              <label>Log Preset</label>
-              <select id="dgrepLogId" class="dgrep-select">
-                <option value="">-- Select preset --</option>
-                ${LOG_IDS.map(id => `<option value="${id}">${id} (${LOG_CONFIGS[id].namespace}/${LOG_CONFIGS[id].events})</option>`).join('')}
-              </select>
+            <div class="dgrep-field" style="display:flex;align-items:end;gap:4px">
+              <div style="flex:1">
+                <label>Log Preset</label>
+                <select id="dgrepLogId" class="dgrep-select">
+                  <option value="">-- Select preset --</option>
+                  ${LOG_IDS.map(id => `<option value="${id}">${id} (${LOG_CONFIGS[id].namespace}/${LOG_CONFIGS[id].events})</option>`).join('')}
+                </select>
+              </div>
+              <div id="dgrepSavedQueriesContainer"></div>
             </div>
             <div class="dgrep-field dgrep-url-field">
               <label>DGrep URL</label>
@@ -344,6 +452,12 @@ export class DGrepSearchView {
               <button class="btn btn-xs btn-secondary" id="dgrepAddScoping">+ Add condition</button>
             </div>
 
+            <!-- NL-to-KQL input -->
+            <div class="dgrep-field">
+              <label>AI Query</label>
+              <div id="dgrepNLInputContainer"></div>
+            </div>
+
             <!-- Server Query -->
             <div class="dgrep-field">
               <label>Server Query (KQL)</label>
@@ -386,13 +500,19 @@ export class DGrepSearchView {
             </div>
           </div>
 
+          <!-- Time histogram -->
+          <div id="dgrepHistogramContainer"></div>
+
           <!-- Client query -->
           <div class="dgrep-client-query-bar">
             <div class="dgrep-client-query-section">
               <div id="dgrepClientQueryEditor" class="kql-editor-container kql-editor-client"></div>
               <button class="btn btn-sm btn-primary" id="dgrepRunClientQuery" disabled title="Run client query against existing server results">Run</button>
             </div>
-            <input type="text" id="dgrepClientFilter" class="dgrep-input" placeholder="Quick text filter across all columns...">
+            <div class="dgrep-filter-row">
+              <input type="text" id="dgrepClientFilter" class="dgrep-input" placeholder="Quick filter (Enter = filter, Shift+Enter = highlight)...">
+              <button class="dgrep-regex-btn" id="dgrepRegexToggle" title="Toggle regex mode">.*</button>
+            </div>
           </div>
 
           <!-- Actions bar -->
@@ -402,10 +522,25 @@ export class DGrepSearchView {
             </button>
             <button class="btn btn-sm btn-secondary" id="dgrepOpenGeneva" disabled>Open in Geneva</button>
             <button class="btn btn-sm btn-secondary" id="dgrepCopyQueryId" disabled>Copy Query ID</button>
+            <button class="btn btn-sm btn-secondary dgrep-facets-btn" id="dgrepFacetsToggle">Facets</button>
+            <span style="flex:1"></span>
+            <button class="btn btn-sm btn-secondary" id="dgrepAISummarizeBtn" disabled>Summarize</button>
+            <button class="btn btn-sm btn-secondary" id="dgrepAIChatBtn" disabled>AI Chat</button>
           </div>
 
-          <!-- Results table -->
-          <div class="dgrep-results-area" id="dgrepResultsArea"></div>
+          <!-- AI Summary Panel -->
+          <div id="dgrepAISummarySlot"></div>
+          <!-- AI Suggestions Bar -->
+          <div id="dgrepAISuggestionsSlot"></div>
+
+          <!-- Results + Chat + Faceted Sidebar -->
+          <div style="display:flex;flex:1;overflow:hidden;min-height:0">
+            <div class="dgrep-results-area" id="dgrepResultsArea" style="flex:1;overflow:hidden;min-height:0"></div>
+            <div id="dgrepChatPanelSlot"></div>
+            <div id="dgrepFacetedSidebarSlot" style="display:flex;overflow:hidden;min-height:0"></div>
+          </div>
+          <!-- RCA Panel (slides up from bottom) -->
+          <div id="dgrepRCAPanelSlot"></div>
         </div>
       </div>
     `;
@@ -418,6 +553,152 @@ export class DGrepSearchView {
 
     const resultsArea = this.container.querySelector('#dgrepResultsArea')!;
     this.resultsTable = new DGrepResultsTable(resultsArea as HTMLElement);
+
+    // Initialize faceted sidebar
+    const facetSlot = this.container.querySelector('#dgrepFacetedSidebarSlot') as HTMLElement;
+    this.facetedSidebar = new DGrepFacetedSidebar(facetSlot);
+    this.facetedSidebar.onFilterAdd = (column, value) => {
+      // Add as a quick value filter on the results table
+      const filters = this.resultsTable.getColumnFilters();
+      filters.set(column, new Set([value]));
+      this.resultsTable.setColumnFilters(filters);
+    };
+    this.facetedSidebar.onFilterExclude = (column, value) => {
+      // Exclude: set column filter to all values except this one
+      const allRows = this.resultsTable.getFilteredRows();
+      const allVals = new Set<string>();
+      for (const row of allRows) {
+        allVals.add(String(row[column] ?? ''));
+      }
+      allVals.delete(value);
+      const filters = this.resultsTable.getColumnFilters();
+      filters.set(column, allVals);
+      this.resultsTable.setColumnFilters(filters);
+    };
+
+    // Wire column visibility persistence
+    this.resultsTable.onColumnVisibilityChange = (visibleColumns) => {
+      const key = this.getColumnPresetKey();
+      if (key) {
+        localStorage.setItem(key, JSON.stringify(visibleColumns));
+      }
+    };
+
+    // Wire data flow to faceted sidebar
+    this.resultsTable.onDataChange((columns, _allRows, filteredRows) => {
+      this.facetedSidebar.setData(columns, filteredRows);
+    });
+
+    // Initialize AI panels
+    const summarySlot = this.container.querySelector('#dgrepAISummarySlot') as HTMLElement;
+    this.aiSummaryPanel = new DGrepAISummaryPanel(summarySlot);
+    this.aiSummaryPanel.onSummarize = async (columns, rows, patterns) => {
+      if (this.activeSessionId) {
+        const metadata = this.buildAnalysisMetadata(rows.length);
+        await (window as any).electronAPI?.dgrepAISummarizeLogs?.(
+          this.activeSessionId, columns, rows.slice(0, 5000), patterns || [], metadata
+        );
+      }
+    };
+
+    const rcaSlot = this.container.querySelector('#dgrepRCAPanelSlot') as HTMLElement;
+    this.rcaPanel = new DGrepRCAPanel(rcaSlot);
+    this.rcaPanel.onNavigateToRow = (rowIndex: number) => {
+      // Select the row in the results table by setting selection
+      (this.resultsTable as any).selectedRowIndex = rowIndex;
+      (this.resultsTable as any).render?.();
+    };
+
+    const chatSlot = this.container.querySelector('#dgrepChatPanelSlot') as HTMLElement;
+    this.chatPanel = new DGrepChatPanel(chatSlot);
+    this.chatPanel.onCreateSession = async (columns, rows) => {
+      return await (window as any).electronAPI?.dgrepAIChatCreate?.(this.activeSessionId, columns, rows.slice(0, 2000)) ?? '';
+    };
+    this.chatPanel.onSendMessage = async (chatSessionId, message) => {
+      await (window as any).electronAPI?.dgrepAIChatSend?.(chatSessionId, message);
+    };
+    this.chatPanel.onDestroySession = async (chatSessionId) => {
+      await (window as any).electronAPI?.dgrepAIChatDestroy?.(chatSessionId);
+    };
+
+    const suggestionsSlot = this.container.querySelector('#dgrepAISuggestionsSlot') as HTMLElement;
+    this.suggestionsBar = new DGrepAISuggestionsBar(suggestionsSlot);
+    this.suggestionsBar.onSuggestionClick = (suggestion: string) => {
+      this.chatPanel.show();
+      // Pre-fill the chat input with the suggestion text
+      (this.chatPanel as any).prefillMessage?.(suggestion);
+    };
+
+    // Wire AI buttons in actions bar
+    this.container.querySelector('#dgrepAISummarizeBtn')?.addEventListener('click', () => {
+      this.aiSummaryPanel.toggle();
+      if ((this.aiSummaryPanel as any).visible) {
+        const rows = this.resultsTable.getFilteredRows();
+        const cols = this.resultsTable.getColumns();
+        const patterns = this.resultsTable.getPatterns();
+        this.aiSummaryPanel.summarize(cols, rows, patterns as any);
+      }
+    });
+    this.container.querySelector('#dgrepAIChatBtn')?.addEventListener('click', () => {
+      this.chatPanel.toggle();
+      if (this.chatPanel.isVisible()) {
+        const rows = this.resultsTable.getFilteredRows();
+        const cols = this.resultsTable.getColumns();
+        this.chatPanel.initSession(cols, rows);
+      }
+    });
+
+    // Initialize time histogram
+    const histogramContainer = this.container.querySelector('#dgrepHistogramContainer')!;
+    this.histogram = new DGrepTimeHistogram(histogramContainer as HTMLElement);
+    this.histogram.onTimeRangeSelect((start, end) => {
+      this.resultsTable.setTimeRangeFilter(start, end);
+    });
+
+    // Initialize NL input
+    const nlContainer = this.container.querySelector('#dgrepNLInputContainer') as HTMLElement;
+    this.nlInput = new DGrepNLInput(nlContainer, {
+      onGenerateKQL: async (prompt, columns) => {
+        if (!this.onNLToKQLCallback) {
+          this.nlInput.setError('NL-to-KQL not available');
+          return;
+        }
+        try {
+          const result = await this.onNLToKQLCallback(prompt, columns);
+          this.nlInput.setResult(result.kql, result.explanation);
+          this.serverQueryEditor.setValue(result.kql);
+        } catch (err: any) {
+          this.nlInput.setError(err.message || 'Failed to generate KQL');
+        }
+      },
+      onKQLGenerated: (_kql, _explanation) => {
+        // Already set in onGenerateKQL above
+      },
+    });
+
+    // Initialize saved queries
+    const savedQueriesContainer = this.container.querySelector('#dgrepSavedQueriesContainer') as HTMLElement;
+    this.savedQueries = new DGrepSavedQueries(savedQueriesContainer, {
+      onSaveQuery: async (name, _formState) => {
+        const formState = this.getFormState();
+        if (this.onSaveQueryCallback) {
+          await this.onSaveQueryCallback(name, formState);
+          await this.refreshSavedQueries();
+        }
+      },
+      onLoadQuery: (formState) => {
+        this.loadFormState(formState);
+      },
+      onDeleteQuery: async (name) => {
+        if (this.onDeleteQueryCallback) {
+          await this.onDeleteQueryCallback(name);
+          await this.refreshSavedQueries();
+        }
+      },
+    });
+
+    // Initialize command palette (singleton)
+    this.commandPalette = DGrepCommandPalette.getInstance();
 
     // Initialize KQL editors
     this.serverQueryEditor = new KqlEditor({
@@ -598,9 +879,37 @@ export class DGrepSearchView {
       this.executeClientQuery();
     });
 
-    // Client filter
-    this.container.querySelector('#dgrepClientFilter')?.addEventListener('input', (e) => {
-      this.resultsTable.setClientFilter((e.target as HTMLInputElement).value);
+    // Client filter - live text filter on input (passes regex flag)
+    const clientFilterInput = this.container.querySelector('#dgrepClientFilter') as HTMLInputElement;
+    clientFilterInput?.addEventListener('input', () => {
+      this.resultsTable.setClientFilter(clientFilterInput.value, this.quickFilterRegex);
+    });
+
+    // Client filter - Enter = create filter condition, Shift+Enter = create highlight condition
+    clientFilterInput?.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key !== 'Enter') return;
+      const value = clientFilterInput.value.trim();
+      if (!value) return;
+      e.preventDefault();
+      const mode = e.shiftKey ? 'highlight' : 'filter';
+      const color = mode === 'highlight' ? this.resultsTable.nextHighlightColor() : '';
+      this.resultsTable.addCondition({
+        id: this.resultsTable.generateConditionId(),
+        column: '__text__',
+        value,
+        isRegex: this.quickFilterRegex,
+        mode,
+        color,
+      });
+      clientFilterInput.value = '';
+      this.resultsTable.setClientFilter('');
+    });
+
+    // Regex toggle button
+    this.container.querySelector('#dgrepRegexToggle')?.addEventListener('click', () => {
+      this.quickFilterRegex = !this.quickFilterRegex;
+      const btn = this.container.querySelector('#dgrepRegexToggle');
+      btn?.classList.toggle('active', this.quickFilterRegex);
     });
 
     // Download CSV
@@ -619,6 +928,13 @@ export class DGrepSearchView {
       if (this.activeSessionId) {
         navigator.clipboard.writeText(this.activeSessionId);
       }
+    });
+
+    // Facets toggle
+    this.container.querySelector('#dgrepFacetsToggle')?.addEventListener('click', () => {
+      this.facetedSidebar.toggle();
+      const btn = this.container.querySelector('#dgrepFacetsToggle');
+      btn?.classList.toggle('active', this.facetedSidebar.isVisible());
     });
   }
 
@@ -789,10 +1105,15 @@ export class DGrepSearchView {
     const opts = this.buildQueryOptions();
     if (!opts) return;
 
+    // Clear previous results before starting a new search
+    this.resultsTable.clearData();
+    this.histogram.setData([], '', '');
+
     this.searching = true;
     this.pendingSessionId = true;
     this.activeSessionId = null;
     this.bufferedEvents = [];
+    this.columnPresetApplied = false;
     this.updateSearchButtons();
     this.enableClientQuery(false);
     this.updateStatusBar('Starting search...', 0);
@@ -805,6 +1126,8 @@ export class DGrepSearchView {
         this.enableActionButtons(true);
         // Replay any buffered events that arrived before we got the sessionId
         this.replayBufferedEvents(sessionId);
+        // Auto-collapse the query panel to give more space to results
+        this.collapseQueryPanel();
       }
     } catch (err: any) {
       this.pendingSessionId = false;
@@ -903,6 +1226,50 @@ export class DGrepSearchView {
       maxResults,
       identityColumns: Object.keys(identityColumns).length > 0 ? identityColumns : undefined,
     };
+  }
+
+  private buildAnalysisMetadata(totalRows: number): any {
+    const endpointSelect = this.container.querySelector('#dgrepEndpoint') as HTMLSelectElement;
+    const endpointName = endpointSelect?.value as DGrepEndpointName;
+    const endpoint = DGREP_ENDPOINT_URLS[endpointName] || '';
+    const namespace = this.namespaceSelect?.getValue() || '';
+    const events = Array.from(this.selectedEvents);
+    const timeRange = this.computeTimeRange();
+    return {
+      endpoint,
+      namespace,
+      events,
+      startTime: timeRange.startTime || '',
+      endTime: timeRange.endTime || '',
+      totalRows,
+    };
+  }
+
+  getFormState(): DGrepFormState { return this.buildFormState(); }
+
+  async loadFormState(s: DGrepFormState): Promise<void> {
+    const ep = this.container.querySelector('#dgrepEndpoint') as HTMLSelectElement;
+    if (ep && s.endpoint) { ep.value = s.endpoint; await this.onEndpointChange(s.endpoint); }
+    if (s.namespace) { this.namespaceSelect.setValue(s.namespace); await this.onNamespaceChange(s.namespace); }
+    if (s.selectedEvents?.length) { this.selectedEvents = new Set(s.selectedEvents); this.renderEventsList(); }
+    if (s.referenceTime) { const t = this.container.querySelector('#dgrepReferenceTime') as HTMLInputElement; if (t) t.value = s.referenceTime; }
+    if (s.offsetSign) { const r = this.container.querySelector(`input[name="dgrepOffsetSign"][value="${s.offsetSign}"]`) as HTMLInputElement; if (r) r.checked = true; }
+    if (s.offsetValue != null) { const o = this.container.querySelector('#dgrepOffsetValue') as HTMLInputElement; if (o) o.value = String(s.offsetValue); }
+    if (s.offsetUnit) { const u = this.container.querySelector('#dgrepOffsetUnit') as HTMLSelectElement; if (u) u.value = s.offsetUnit; }
+    if (s.scopingConditions) { this.scopingConditions = [...s.scopingConditions]; this.renderScopingConditions(); }
+    if (s.serverQuery != null) this.serverQueryEditor.setValue(s.serverQuery);
+    if (s.clientQuery != null) this.clientQueryEditor.setValue(s.clientQuery);
+    if (s.maxResults) { const m = this.container.querySelector('#dgrepMaxResults') as HTMLSelectElement; if (m) m.value = String(s.maxResults); }
+    if (s.showSecurityEvents != null) { this.showSecurityEvents = s.showSecurityEvents; const c = this.container.querySelector('#dgrepShowSecurityEvents') as HTMLInputElement; if (c) c.checked = s.showSecurityEvents; }
+  }
+
+  async refreshSavedQueries(): Promise<void> {
+    if (!this.onLoadQueriesCallback) return;
+    try {
+      const qs = await this.onLoadQueriesCallback();
+      this.savedQueries.setQueries(qs);
+      this.commandPalette.addSavedQueryCommands(qs, (n) => { const q = qs.find(x => x.name === n); if (q) this.loadFormState(q.formState); });
+    } catch (e: any) { console.error('Failed to load saved queries:', e); }
   }
 
   private buildFormState(): DGrepFormState {
@@ -1031,6 +1398,20 @@ export class DGrepSearchView {
     if (csvBtn) csvBtn.disabled = !enabled;
     if (genevaBtn) genevaBtn.disabled = !enabled;
     if (copyBtn) copyBtn.disabled = !enabled;
+    // Enable AI buttons when results are available
+    const aiSumBtn = this.container.querySelector('#dgrepAISummarizeBtn') as HTMLButtonElement;
+    const aiChatBtn = this.container.querySelector('#dgrepAIChatBtn') as HTMLButtonElement;
+    if (aiSumBtn) aiSumBtn.disabled = !enabled;
+    if (aiChatBtn) aiChatBtn.disabled = !enabled;
+  }
+
+  private collapseQueryPanel(): void {
+    const panel = this.container.querySelector('#dgrepQueryPanel');
+    if (panel && !panel.classList.contains('collapsed')) {
+      panel.classList.add('collapsed');
+      const btn = this.container.querySelector('#dgrepCollapseBtn');
+      if (btn) btn.innerHTML = '&raquo;';
+    }
   }
 
   private enableClientQuery(enabled: boolean): void {
@@ -1052,8 +1433,13 @@ export class DGrepSearchView {
         const results = await this.onGetResultsCallback?.(sessionId);
         if (results) {
           this.resultsTable.setData(results.columns, results.rows);
+          if (!this.columnPresetApplied) {
+            this.columnPresetApplied = true;
+            this.applySavedColumnPreset();
+          }
           this.enableActionButtons(true);
           this.updateStatusBar(`Complete: ${results.rows.length.toLocaleString()} results`, 100, results.rows.length);
+          this.updateHistogram(results.columns, results.rows);
         }
         return;
       }
@@ -1063,10 +1449,15 @@ export class DGrepSearchView {
 
       // Show first page immediately
       this.resultsTable.setData(columns, allRows);
+      if (!this.columnPresetApplied) {
+        this.columnPresetApplied = true;
+        this.applySavedColumnPreset();
+      }
       this.enableActionButtons(true);
 
       if (totalCount <= pageSize) {
         this.updateStatusBar(`Complete: ${totalCount.toLocaleString()} results`, 100, totalCount);
+        this.updateHistogram(columns, allRows);
         return;
       }
 
@@ -1089,10 +1480,88 @@ export class DGrepSearchView {
       }
 
       this.updateStatusBar(`Complete: ${allRows.length.toLocaleString()} results`, 100, allRows.length);
+      this.updateHistogram(columns, allRows);
     } catch (err: any) {
       console.error('Failed to load results:', err);
       this.updateStatusBar(`Error loading results: ${err.message}`, undefined, undefined, true);
     }
+  }
+
+  private updateHistogram(columns: string[], rows: Record<string, any>[]): void {
+    const timeCol = columns.find(c =>
+      c === 'PreciseTimeStamp' || c === 'TIMESTAMP' || c.toLowerCase().includes('timestamp')
+    ) || '';
+    // Prefer text-based severity columns (severityText=Information/Error/Warning) over numeric Level
+    const sevCol = columns.find(c =>
+      c === 'severityText' || c === 'Severity' || c === 'level' || c === 'Level'
+    ) || '';
+    if (timeCol) {
+      this.histogram.setData(rows, timeCol, sevCol);
+    }
+    // Update minimap
+    if (sevCol) {
+      this.ensureMinimap();
+      this.minimap?.setData(rows, sevCol);
+    }
+  }
+
+  private ensureMinimap(): void {
+    if (this.minimap) return;
+    const slot = this.resultsTable.getMinimapSlot();
+    if (!slot) return;
+    // Clear the slot placeholder and mount the minimap
+    slot.innerHTML = '';
+    this.minimap = new DGrepSeverityMinimap(slot);
+    this.minimap.onScrollTo((rowIndex) => {
+      const scrollEl = this.resultsTable.getScrollContainer();
+      if (scrollEl) {
+        const rowHeight = 24;
+        // Center the target row in the viewport
+        const viewportHeight = scrollEl.clientHeight;
+        scrollEl.scrollTop = Math.max(0, rowIndex * rowHeight - viewportHeight / 2);
+      }
+    });
+
+    // Wire scroll events to update minimap viewport
+    const scrollEl = this.resultsTable.getScrollContainer();
+    if (scrollEl) {
+      scrollEl.addEventListener('scroll', () => {
+        this.updateMinimapViewport(scrollEl);
+      });
+    }
+  }
+
+  private updateMinimapViewport(scrollEl: HTMLElement): void {
+    if (!this.minimap) return;
+    const totalRows = this.resultsTable.getRowCount();
+    if (totalRows === 0) return;
+    const rowHeight = 24;
+    const visibleRows = Math.floor(scrollEl.clientHeight / rowHeight);
+    const scrolledRows = Math.floor(scrollEl.scrollTop / rowHeight);
+    this.minimap.setViewportRange(scrolledRows, Math.min(totalRows, scrolledRows + visibleRows));
+  }
+
+  /** Apply saved column preset if one exists for the current namespace+events */
+  private applySavedColumnPreset(): void {
+    const key = this.getColumnPresetKey();
+    if (!key) return;
+    const saved = localStorage.getItem(key);
+    if (!saved) return;
+    try {
+      const names: string[] = JSON.parse(saved);
+      if (Array.isArray(names) && names.length > 0) {
+        this.resultsTable.setVisibleColumnNames(names);
+      }
+    } catch {
+      // Ignore corrupt data
+    }
+  }
+
+  private getColumnPresetKey(): string {
+    const ns = this.namespaceSelect.getValue();
+    const events = Array.from(this.selectedEvents).sort().join(',');
+    if (!ns || !events) return '';
+    return `dgrep-columns:${ns}:${events}`;
   }
 
   private escapeHtml(text: string): string {

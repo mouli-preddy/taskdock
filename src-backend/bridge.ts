@@ -31,7 +31,9 @@ import { getWorktreeService, WorktreeService } from '../src/main/git/worktree-se
 import { getPluginEngine, disposePluginEngine } from '../src/main/plugins/plugin-engine.js';
 import { getCfvService, disposeCfvService, getCfvChatService, disposeCfvChatService, getCfvFilterService } from '../src/main/cfv/index.js';
 import { getDGrepService, disposeDGrepService } from '../src/main/dgrep/dgrep-service.js';
+import { getDGrepAIService, disposeDGrepAIService } from '../src/main/dgrep/dgrep-ai-service.js';
 import type { LogId } from '../src/shared/dgrep-types.js';
+import type { DGrepSavedQuery } from '../src/shared/dgrep-ai-types.js';
 import { buildReviewPrompt } from '../src/main/terminal/review-prompt.js';
 import type { ConsoleReviewSettings } from '../src/shared/terminal-types.js';
 import { DEFAULT_CONSOLE_REVIEW_SETTINGS } from '../src/shared/terminal-types.js';
@@ -249,6 +251,24 @@ dgrepService.on('progress', (event) => broadcast('dgrep:progress', event));
 dgrepService.on('complete', (event) => broadcast('dgrep:complete', event));
 dgrepService.on('error', (event) => broadcast('dgrep:error', event));
 dgrepService.on('intermediate-results', (event) => broadcast('dgrep:intermediate-results', event));
+dgrepService.on('live-tail-data', (event) => broadcast('dgrep:live-tail-data', event));
+
+// DGrep AI service
+const dgrepAIService = getDGrepAIService();
+
+// Configure AI service from settings
+{
+  const settings = loadStoreData().consoleReview;
+  const dgrepAnalysis = settings?.dgrepAnalysis || { provider: 'claude-sdk', sourceRepository: '' };
+  dgrepAIService.setProvider(dgrepAnalysis.provider);
+  dgrepAIService.setSourceRepo(dgrepAnalysis.sourceRepository || null);
+}
+
+dgrepAIService.on('ai:summary-progress', (event) => broadcast('dgrep:ai:summary-progress', event));
+dgrepAIService.on('ai:summary-complete', (event) => broadcast('dgrep:ai:summary-complete', event));
+dgrepAIService.on('ai:rca-progress', (event) => broadcast('dgrep:ai:rca-progress', event));
+dgrepAIService.on('ai:rca-complete', (event) => broadcast('dgrep:ai:rca-complete', event));
+dgrepAIService.on('ai:chat-event', (event) => broadcast('dgrep:ai:chat-event', event));
 
 // Warm up provider cache asynchronously at startup
 // This runs in the background so dialogs open instantly
@@ -1145,6 +1165,76 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
     case 'dgrep:get-monitoring-accounts':
       return dgrepService.getMonitoringAccounts();
 
+    // DGrep: Surrounding docs, live tail, saved queries
+    case 'dgrep-ai:get-surrounding-docs':
+      return dgrepService.getSurroundingDocs(params[0], params[1], params[2]);
+    case 'dgrep:live-tail-start':
+      dgrepService.startLiveTail(params[0], params[1]);
+      return;
+    case 'dgrep:live-tail-stop':
+      dgrepService.stopLiveTail(params[0]);
+      return;
+    case 'dgrep:save-query': {
+      const storeData = loadStoreData();
+      const queries: DGrepSavedQuery[] = storeData.dgrepSavedQueries || [];
+      const existing = queries.findIndex((q) => q.id === params[0].id);
+      if (existing >= 0) {
+        queries[existing] = params[0];
+      } else {
+        queries.push(params[0]);
+      }
+      storeData.dgrepSavedQueries = queries;
+      saveStoreData(storeData);
+      return;
+    }
+    case 'dgrep:load-queries': {
+      const storeData = loadStoreData();
+      return storeData.dgrepSavedQueries || [];
+    }
+    case 'dgrep:delete-query': {
+      const storeData = loadStoreData();
+      storeData.dgrepSavedQueries = (storeData.dgrepSavedQueries || []).filter(
+        (q: DGrepSavedQuery) => q.id !== params[0]
+      );
+      saveStoreData(storeData);
+      return;
+    }
+
+    // DGrep AI API
+    case 'dgrep-ai:summarize-logs': {
+      // params: [sessionId, columns, rows, patterns, metadata]
+      // Re-read settings each call so provider changes take effect
+      const dgrepSettings = loadStoreData().consoleReview?.dgrepAnalysis;
+      if (dgrepSettings) {
+        dgrepAIService.setProvider(dgrepSettings.provider);
+        dgrepAIService.setSourceRepo(dgrepSettings.sourceRepository || null);
+      }
+      dgrepAIService.summarizeLogs(params[0], params[1], params[2], params[3] || [], params[4] || {});
+      return;
+    }
+    case 'dgrep-ai:nl-to-kql':
+      return dgrepAIService.naturalLanguageToKQL(params[0], params[1], params[2]);
+    case 'dgrep-ai:analyze-root-cause': {
+      // params: [sessionId, targetRow, targetIndex, contextRows, columns, metadata]
+      const dgrepSettings2 = loadStoreData().consoleReview?.dgrepAnalysis;
+      if (dgrepSettings2) {
+        dgrepAIService.setProvider(dgrepSettings2.provider);
+        dgrepAIService.setSourceRepo(dgrepSettings2.sourceRepository || null);
+      }
+      dgrepAIService.analyzeRootCause(params[0], params[1], params[2], params[3], params[4], params[5] || {});
+      return;
+    }
+    case 'dgrep-ai:detect-anomalies':
+      return dgrepAIService.detectAnomalies(params[0], params[1], params[2]);
+    case 'dgrep-ai:chat-create':
+      return dgrepAIService.createChatSession(params[0], params[1], params[2]);
+    case 'dgrep-ai:chat-send':
+      await dgrepAIService.sendChatMessage(params[0], params[1]);
+      return;
+    case 'dgrep-ai:chat-destroy':
+      await dgrepAIService.destroyChatSession(params[0]);
+      return;
+
     default:
       throw new Error(`Unknown method: ${method}`);
   }
@@ -1209,6 +1299,7 @@ process.on('SIGINT', async () => {
   disposePluginEngine();
   disposeCfvChatService();
   disposeCfvService();
+  disposeDGrepAIService();
   disposeDGrepService();
   disposeLogger();
   wss.close();
@@ -1225,6 +1316,7 @@ process.on('SIGTERM', async () => {
   disposePluginEngine();
   disposeCfvChatService();
   disposeCfvService();
+  disposeDGrepAIService();
   disposeDGrepService();
   disposeLogger();
   wss.close();

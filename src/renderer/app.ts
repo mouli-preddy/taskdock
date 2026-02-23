@@ -369,6 +369,20 @@ class PRReviewApp {
       return window.electronAPI.dgrepRunClientQuery(sessionId, clientQuery);
     });
 
+    // DGrep AI callbacks
+    this.dgrepSearchView.onNLToKQL(async (prompt, columns) => {
+      return window.electronAPI.dgrepAINLToKQL(prompt, columns, []);
+    });
+    this.dgrepSearchView.onSaveQuery(async (name, formState) => {
+      return window.electronAPI.dgrepSaveQuery({ name, formState, timestamp: new Date().toISOString() } as any);
+    });
+    this.dgrepSearchView.onLoadQueries(async () => {
+      return window.electronAPI.dgrepLoadQueries() as any;
+    });
+    this.dgrepSearchView.onDeleteQuery(async (name) => {
+      return window.electronAPI.dgrepDeleteQuery(name);
+    });
+
     // Initialize CFV home view
     this.cfvHomeView = new CfvHomeView('cfvHomePanel');
     this.cfvHomeView.onFetchCall((callId) => this.cfvFetchCall(callId));
@@ -1095,6 +1109,23 @@ class PRReviewApp {
 
     window.electronAPI.onDgrepIntermediateResults((event: { sessionId: string; columns: string[]; rows: Record<string, any>[]; totalCount: number }) => {
       this.dgrepSearchView.setIntermediateResults(event);
+    });
+
+    // DGrep AI event listeners
+    window.electronAPI.onDgrepAISummaryProgress((event: any) => {
+      this.dgrepSearchView.handleAISummaryProgress(event);
+    });
+    window.electronAPI.onDgrepAISummaryComplete((event: any) => {
+      this.dgrepSearchView.handleAISummaryComplete(event);
+    });
+    window.electronAPI.onDgrepAIRCAProgress((event: any) => {
+      this.dgrepSearchView.handleAIRCAProgress(event);
+    });
+    window.electronAPI.onDgrepAIRCAComplete((event: any) => {
+      this.dgrepSearchView.handleAIRCAComplete(event);
+    });
+    window.electronAPI.onDgrepAIChatEvent((event: any) => {
+      this.dgrepSearchView.handleAIChatEvent(event);
     });
   }
 
