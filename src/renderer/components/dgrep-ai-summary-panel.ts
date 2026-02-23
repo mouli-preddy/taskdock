@@ -75,9 +75,9 @@ export class DGrepAISummaryPanel {
     for (const line of lines) {
       this.progressLines.push(line);
     }
-    // Keep last 20 lines for scrollable agent thoughts
-    if (this.progressLines.length > 20) {
-      this.progressLines = this.progressLines.slice(-20);
+    // Keep last 50 lines for scrollable agent activity log
+    if (this.progressLines.length > 50) {
+      this.progressLines = this.progressLines.slice(-50);
     }
     this.updateProgressDisplay();
   }
@@ -173,15 +173,14 @@ export class DGrepAISummaryPanel {
   private renderLoading() {
     const content = this.el.querySelector('.dgrep-ai-summary-content') as HTMLElement;
     if (!content) return;
-    content.innerHTML = `
-      <div class="dgrep-ai-loading">
-        <span class="dgrep-ai-loading-dots">Analyzing logs</span>
-      </div>
-      <div class="dgrep-ai-summary-progress"></div>
-    `;
+    content.innerHTML = `<div class="dgrep-ai-summary-progress"></div>`;
   }
 
   private updateProgressDisplay() {
+    // Remove the static loading dots if still present
+    const loadingEl = this.el.querySelector('.dgrep-ai-loading');
+    if (loadingEl) loadingEl.remove();
+
     let progressEl = this.el.querySelector('.dgrep-ai-summary-progress') as HTMLElement;
     if (!progressEl) {
       const content = this.el.querySelector('.dgrep-ai-summary-content') as HTMLElement;
@@ -190,10 +189,9 @@ export class DGrepAISummaryPanel {
       progressEl.className = 'dgrep-ai-summary-progress';
       content.appendChild(progressEl);
     }
-    // Show scrolling agent thoughts — tool calls highlighted differently
     progressEl.innerHTML = this.progressLines
       .map(line => {
-        const isToolUse = line.startsWith('[Using ');
+        const isToolUse = line.startsWith('[');
         const cls = isToolUse ? 'dgrep-ai-progress-line dgrep-ai-progress-tool' : 'dgrep-ai-progress-line';
         return `<div class="${cls}">${escapeHtml(line.substring(0, 500))}</div>`;
       })

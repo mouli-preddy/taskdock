@@ -336,16 +336,17 @@ Perform root cause analysis. Respond with ONLY a JSON object:
     });
 
     for await (const message of response) {
-      // Stream assistant thoughts/text as progress
       if (message.type === 'assistant') {
+        // Stream assistant text as progress
         const text = this.extractTextContent(message);
         if (text) {
           this.emit(`ai:${taskType}-progress`, { sessionId, text });
         }
-        // Also emit tool use info so user can see what the agent is doing
+        // Stream tool use with a short summary of what it's doing
         const toolUses = this.extractToolUses(message);
         for (const tool of toolUses) {
-          this.emit(`ai:${taskType}-progress`, { sessionId, text: `[Using ${tool.name}]` });
+          const summary = this.summarizeToolUse(tool);
+          this.emit(`ai:${taskType}-progress`, { sessionId, text: summary });
         }
       }
       if (message.type === 'result') {
@@ -396,6 +397,15 @@ Perform root cause analysis. Respond with ONLY a JSON object:
           }
           case 'assistant.message': {
             fullContent = event.data?.content || fullContent;
+            break;
+          }
+          case 'tool.call': {
+            const toolName = event.data?.name || event.data?.toolName || 'tool';
+            this.emit(`ai:${taskType}-progress`, { sessionId, text: `[Copilot calling ${toolName}]` });
+            break;
+          }
+          case 'tool.result': {
+            this.emit(`ai:${taskType}-progress`, { sessionId, text: `[Tool result received]` });
             break;
           }
           case 'session.idle': {
@@ -476,6 +486,30 @@ Perform root cause analysis. Respond with ONLY a JSON object:
     return message.content
       .filter((c: any) => c.type === 'tool_use')
       .map((c: any) => ({ name: c.name || 'unknown', input: c.input }));
+  }
+
+  private summarizeToolUse(tool: { name: string; input?: any }): string {
+    const inp = tool.input || {};
+    switch (tool.name) {
+      case 'Read':
+        return `[Reading] ${inp.file_path || ''}`;
+      case 'Write':
+        return `[Writing] ${inp.file_path || ''}`;
+      case 'Edit':
+        return `[Editing] ${inp.file_path || ''}`;
+      case 'Grep':
+        return `[Searching] "${inp.pattern || ''}" ${inp.path ? 'in ' + inp.path : ''}`;
+      case 'Glob':
+        return `[Finding files] ${inp.pattern || ''}`;
+      case 'Bash': {
+        const cmd = String(inp.command || '').substring(0, 150);
+        return `[Running] ${cmd}`;
+      }
+      case 'Task':
+        return `[Launching subagent] ${inp.description || ''}`;
+      default:
+        return `[${tool.name}]`;
+    }
   }
 
   // ==================== Natural Language to KQL (lightweight, no workspace) ====================
