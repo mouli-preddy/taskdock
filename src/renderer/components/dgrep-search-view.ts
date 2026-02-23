@@ -596,7 +596,7 @@ export class DGrepSearchView {
       if (this.activeSessionId) {
         const metadata = this.buildAnalysisMetadata(rows.length);
         await (window as any).electronAPI?.dgrepAISummarizeLogs?.(
-          this.activeSessionId, columns, rows.slice(0, 5000), patterns || [], metadata
+          this.activeSessionId, columns, rows.slice(0, 2000), patterns || [], metadata
         );
       }
     };

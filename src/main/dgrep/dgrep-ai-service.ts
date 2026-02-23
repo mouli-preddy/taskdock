@@ -158,7 +158,9 @@ export class DGrepAIService extends EventEmitter {
       if (this.provider === 'claude-sdk') {
         await this.executeWithClaude(sessionId, prompt, cwd, workspace.summaryOutputPath, 'summary');
       } else {
-        await this.executeWithCopilot(sessionId, prompt, cwd, workspace.summaryOutputPath, 'summary');
+        // Copilot can't read files — build inline prompt with truncated data
+        const inlinePrompt = this.buildCopilotInlinePrompt(columns, rows, patterns, metadata, 'summary');
+        await this.executeWithCopilot(sessionId, inlinePrompt, cwd, workspace.summaryOutputPath, 'summary');
       }
     } catch (err: any) {
       logger.error(LOG_CATEGORY, 'Summarization failed', { sessionId, error: err?.message });
@@ -196,12 +198,99 @@ export class DGrepAIService extends EventEmitter {
       if (this.provider === 'claude-sdk') {
         await this.executeWithClaude(sessionId, prompt, cwd, workspace.rcaOutputPath, 'rca');
       } else {
-        await this.executeWithCopilot(sessionId, prompt, cwd, workspace.rcaOutputPath, 'rca');
+        // Copilot can't read files — build inline prompt with truncated data
+        const inlinePrompt = this.buildCopilotRCAInlinePrompt(columns, contextRows, targetRow, targetIndex, metadata);
+        await this.executeWithCopilot(sessionId, inlinePrompt, cwd, workspace.rcaOutputPath, 'rca');
       }
     } catch (err: any) {
       logger.error(LOG_CATEGORY, 'RCA failed', { sessionId, error: err?.message });
       this.emit('ai:rca-complete', { sessionId, error: err?.message || 'Root cause analysis failed' });
     }
+  }
+
+  // ==================== Copilot Inline Prompts (Copilot can't read files) ====================
+
+  private buildCopilotInlinePrompt(
+    columns: string[],
+    rows: Record<string, any>[],
+    patterns: any[],
+    metadata: AnalysisMetadata,
+    _taskType: string
+  ): string {
+    // Truncate to ~300 rows to stay well under 168k token limit
+    const truncated = rows.slice(0, 300);
+    const rowsJson = JSON.stringify(truncated, null, 0);
+
+    return `You are an expert log analyst for Microsoft service logs from Geneva DGrep.
+
+## Query Context
+- Endpoint: ${metadata.endpoint}
+- Namespace: ${metadata.namespace}
+- Events: ${metadata.events.join(', ')}
+- Time range: ${metadata.startTime} to ${metadata.endTime}
+- Total rows: ${metadata.totalRows} (showing first ${truncated.length})
+
+## Columns
+${columns.join(', ')}
+
+## Detected Patterns
+${JSON.stringify(patterns, null, 0)}
+
+## Log Data (first ${truncated.length} rows as JSON)
+${rowsJson}
+
+## Task
+Analyze these logs and respond with ONLY a JSON object:
+\`\`\`json
+{
+  "errorBreakdown": [{ "errorType": "string", "count": 0, "severity": "critical|error|warning|info", "sampleMessage": "string" }],
+  "topPatterns": [{ "pattern": "string", "count": 0, "trend": "increasing|stable|decreasing", "firstSeen": "ISO", "lastSeen": "ISO", "percentage": 0 }],
+  "timeCorrelations": [{ "description": "string", "startTime": "ISO", "endTime": "ISO", "affectedRows": 0 }],
+  "narrative": "Markdown summary of findings",
+  "recommendations": ["actionable items"],
+  "totalRowsAnalyzed": ${truncated.length},
+  "timeRange": { "start": "${metadata.startTime}", "end": "${metadata.endTime}" }
+}
+\`\`\``;
+  }
+
+  private buildCopilotRCAInlinePrompt(
+    columns: string[],
+    contextRows: Record<string, any>[],
+    targetRow: Record<string, any>,
+    targetIndex: number,
+    metadata: AnalysisMetadata,
+  ): string {
+    const truncated = contextRows.slice(0, 200);
+
+    return `You are an expert root cause analyst for Microsoft service logs from Geneva DGrep.
+
+## Target Error (Row ${targetIndex})
+\`\`\`json
+${JSON.stringify(targetRow, null, 2)}
+\`\`\`
+
+## Context Rows (${truncated.length} rows)
+Columns: ${columns.join(', ')}
+${JSON.stringify(truncated, null, 0)}
+
+## Query Context
+- Namespace: ${metadata.namespace}, Events: ${metadata.events.join(', ')}
+- Time: ${metadata.startTime} to ${metadata.endTime}
+
+## Task
+Perform root cause analysis. Respond with ONLY a JSON object:
+\`\`\`json
+{
+  "rootCause": "Clear explanation",
+  "confidence": 0.85,
+  "severity": "critical|high|medium|low",
+  "evidenceTimeline": [{ "timestamp": "ISO", "description": "string", "rowIndex": 0, "relevance": "direct|contributing|context" }],
+  "linkedRows": [0],
+  "recommendation": "What to do",
+  "additionalFindings": "Extra context"
+}
+\`\`\``;
   }
 
   // ==================== Agent Executors ====================
@@ -265,7 +354,7 @@ export class DGrepAIService extends EventEmitter {
       streaming: true,
       systemMessage: {
         mode: 'append',
-        content: `You are a log analysis agent. Follow the instructions in the prompt exactly. Write your output to the specified file path as JSON.`,
+        content: `You are a log analysis agent. Follow the instructions exactly and respond with ONLY a valid JSON object as specified.`,
       },
     });
 
