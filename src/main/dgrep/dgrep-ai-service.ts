@@ -217,38 +217,57 @@ export class DGrepAIService extends EventEmitter {
     metadata: AnalysisMetadata,
     _taskType: string
   ): string {
-    // Truncate to ~300 rows to stay well under 168k token limit
-    const truncated = rows.slice(0, 300);
-    const rowsJson = JSON.stringify(truncated, null, 0);
+    // Compute severity counts from ALL rows to give Copilot full picture
+    const severityCounts: Record<string, number> = {};
+    const errorRows: Array<Record<string, any> & { _idx: number }> = [];
+    const sevCol = columns.find(c => /^severity/i.test(c)) || columns.find(c => /^level$/i.test(c));
+    const msgCol = columns.find(c => /^message$/i.test(c)) || columns.find(c => /^msg$/i.test(c));
 
-    return `You are an expert log analyst for Microsoft service logs from Geneva DGrep.
+    for (let i = 0; i < rows.length; i++) {
+      const sev = sevCol ? String(rows[i][sevCol] ?? '').toLowerCase() : '';
+      severityCounts[sev] = (severityCounts[sev] || 0) + 1;
+      if (sev === 'error' || sev === 'warning' || sev === 'critical' || sev === 'fatal') {
+        errorRows.push({ ...rows[i], _idx: i });
+      }
+    }
 
-## Query Context
-- Endpoint: ${metadata.endpoint}
-- Namespace: ${metadata.namespace}
-- Events: ${metadata.events.join(', ')}
-- Time range: ${metadata.startTime} to ${metadata.endTime}
-- Total rows: ${metadata.totalRows} (showing first ${truncated.length})
+    // Send error/warning rows (up to 100) + a sample of other rows (up to 200)
+    const errorSample = errorRows.slice(0, 100);
+    const otherSample = rows.slice(0, 200);
+    const severityReport = Object.entries(severityCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, v]) => `  ${k || '(empty)'}: ${v}`)
+      .join('\n');
+
+    return `You are analyzing service logs. Separate real failures from noise.
+
+## Context
+- Namespace: ${metadata.namespace}, Events: ${metadata.events.join(', ')}
+- Time: ${metadata.startTime} to ${metadata.endTime}
+- Total rows: ${rows.length}
+
+## Severity Distribution (computed from ALL ${rows.length} rows)
+${severityReport}
 
 ## Columns
 ${columns.join(', ')}
 
-## Detected Patterns
-${JSON.stringify(patterns, null, 0)}
+## Error/Warning Rows (${errorSample.length} of ${errorRows.length} total)
+${JSON.stringify(errorSample, null, 0)}
 
-## Log Data (first ${truncated.length} rows as JSON)
-${rowsJson}
+## Sample Rows (first ${otherSample.length})
+${JSON.stringify(otherSample, null, 0)}
 
 ## Task
-Analyze these logs and respond with ONLY a JSON object:
+Analyze and respond with ONLY a JSON object:
 \`\`\`json
 {
   "errorBreakdown": [{ "errorType": "string", "count": 0, "severity": "critical|error|warning|info", "sampleMessage": "string" }],
   "topPatterns": [{ "pattern": "string", "count": 0, "trend": "increasing|stable|decreasing", "firstSeen": "ISO", "lastSeen": "ISO", "percentage": 0 }],
   "timeCorrelations": [{ "description": "string", "startTime": "ISO", "endTime": "ISO", "affectedRows": 0 }],
-  "narrative": "Markdown summary of findings",
+  "narrative": "What happened — real issues vs noise",
   "recommendations": ["actionable items"],
-  "totalRowsAnalyzed": ${truncated.length},
+  "totalRowsAnalyzed": ${rows.length},
   "timeRange": { "start": "${metadata.startTime}", "end": "${metadata.endTime}" }
 }
 \`\`\``;

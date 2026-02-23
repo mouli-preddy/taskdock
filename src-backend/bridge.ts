@@ -1209,7 +1209,11 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
         dgrepAIService.setProvider(dgrepSettings.provider);
         dgrepAIService.setSourceRepo(dgrepSettings.sourceRepository || null);
       }
-      dgrepAIService.summarizeLogs(params[0], params[1], params[2], params[3] || [], params[4] || {});
+      // Use full rows from session cache instead of truncated renderer data
+      const sumFullResults = dgrepService.getResults(params[0]);
+      const sumColumns = sumFullResults?.columns || params[1];
+      const sumRows = sumFullResults?.rows || params[2];
+      dgrepAIService.summarizeLogs(params[0], sumColumns, sumRows, params[3] || [], params[4] || {});
       return;
     }
     case 'dgrep-ai:nl-to-kql':
@@ -1221,7 +1225,11 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
         dgrepAIService.setProvider(dgrepSettings2.provider);
         dgrepAIService.setSourceRepo(dgrepSettings2.sourceRepository || null);
       }
-      dgrepAIService.analyzeRootCause(params[0], params[1], params[2], params[3], params[4], params[5] || {});
+      // Use full rows from session cache for context
+      const rcaFullResults = dgrepService.getResults(params[0]);
+      const rcaRows = rcaFullResults?.rows || params[3];
+      const rcaColumns = rcaFullResults?.columns || params[4];
+      dgrepAIService.analyzeRootCause(params[0], params[1], params[2], rcaRows, rcaColumns, params[5] || {});
       return;
     }
     case 'dgrep-ai:detect-anomalies':

@@ -1,12 +1,13 @@
 /**
  * DGrep Analysis Workspace
- * Creates workspace folders with CSV data, patterns, metadata, and prompt files
+ * Creates workspace folders with CSV data, query tool, and prompt files
  * for AI agent-based log analysis.
  */
 
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { getQueryToolSource } from './dgrep-query-tool.js';
 
 const TASKDOCK_DIR = path.join(os.homedir(), '.taskdock');
 const DGREP_ANALYSIS_DIR = path.join(TASKDOCK_DIR, 'dgrep', 'analysis');
@@ -14,6 +15,7 @@ const DGREP_ANALYSIS_DIR = path.join(TASKDOCK_DIR, 'dgrep', 'analysis');
 export interface AnalysisWorkspace {
   basePath: string;
   dataPath: string;
+  queryToolPath: string;
   patternsPath: string;
   metadataPath: string;
   summaryOutputPath: string;
@@ -48,6 +50,10 @@ export function createAnalysisWorkspace(
   );
   fs.writeFileSync(dataPath, [header, ...csvRows].join('\n'), 'utf-8');
 
+  // Write query tool
+  const queryToolPath = path.join(basePath, 'query-logs.mjs');
+  fs.writeFileSync(queryToolPath, getQueryToolSource(), 'utf-8');
+
   // Write patterns
   const patternsPath = path.join(basePath, 'patterns.json');
   fs.writeFileSync(patternsPath, JSON.stringify(patterns, null, 2), 'utf-8');
@@ -59,6 +65,7 @@ export function createAnalysisWorkspace(
   return {
     basePath,
     dataPath,
+    queryToolPath,
     patternsPath,
     metadataPath,
     summaryOutputPath: path.join(basePath, 'summary-output.json'),
@@ -70,70 +77,76 @@ export function createAnalysisWorkspace(
 export function buildSummaryPrompt(workspace: AnalysisWorkspace, sourceRepoPath?: string): string {
   const meta = JSON.parse(fs.readFileSync(workspace.metadataPath, 'utf-8'));
 
-  return `# Log Analysis Task: Understand What Actually Happened
+  return `# Log Analysis
 
-You are a senior on-call engineer analyzing DGrep logs from Microsoft Geneva. Your job is NOT to simply count errors — it is to figure out **what actually happened** and whether it matters.
+Analyze ${meta.totalRows} rows of service logs from ${meta.namespace} (${meta.events.join(', ')}).
+Time range: ${meta.startTime} to ${meta.endTime}.
 
-## Critical Mindset
-
-**Many log entries that look alarming are harmless.** Services routinely log errors for:
-- Expected retry paths (transient network blips, token refreshes)
-- Graceful degradation (fallback codepaths that work as designed)
-- Noisy health checks or background tasks that fail without user impact
-- Race conditions during startup/shutdown that self-resolve
-
-**Your job is to separate signal from noise.** An error logged 500 times might be completely benign if it's a retry loop that always succeeds on the next attempt. Meanwhile, a single warning buried in the logs might indicate a real outage.
-
-## Input Files (in ${workspace.basePath})
-- \`data.csv\` — Log data with ${meta.totalRows} rows. Columns: ${meta.columns.join(', ')}
-- \`patterns.json\` — Detected message patterns with frequency counts
-- \`metadata.json\` — Query parameters (endpoint: ${meta.endpoint}, namespace: ${meta.namespace}, events: ${meta.events.join(', ')})
+## Files in ${workspace.basePath}
+- \`data.csv\` — The log data. **Do NOT read this file end-to-end.** Use the query tool below.
+- \`query-logs.mjs\` — CSV-aware search tool. Use this to explore the data.
+- \`patterns.json\` — Pre-detected message patterns by frequency (may miss low-count issues).
+- \`metadata.json\` — Query parameters.
 ${sourceRepoPath ? `
 ## Source Code
-The source code for this service is available in the current working directory (\`${sourceRepoPath}\`). **Use it.** Read source files to:
-- Trace what code path produces each error message
-- Understand if an error is caught and handled (retry, fallback, ignored)
-- Determine if an error actually reaches users or silently resolves
-- Map log messages to their call chains and understand the flow
-- Use subagents (Task tool) to investigate multiple code paths in parallel when needed
+Source code is at \`${sourceRepoPath}\` (current working directory). Read source files to trace error origins, understand retry/fallback logic, and determine if errors propagate to users. Use subagents (Task tool) for parallel code investigation if needed.
 ` : ''}
-## Analysis Process
-1. **Read the data** — Read data.csv and patterns.json
-2. **Build a timeline** — What happened chronologically? Identify phases (normal → degradation → failure → recovery)
-3. **Trace each error pattern through the code** (if source available) — Does this error get retried? Does the caller handle it? Does it propagate to users?
-4. **Classify real impact:**
-   - **Real issues**: Errors that caused user-visible failures, data loss, or service degradation
-   - **Noise**: Errors that are logged but handled, retried successfully, or have no downstream impact
-5. **Identify the story** — What is the one-paragraph explanation a human on-call would give their manager?
-6. **Write your analysis** as JSON to: \`${workspace.summaryOutputPath}\`
+## How to Investigate
+
+**Step 1: Understand the data shape.**
+Run \`node query-logs.mjs --head 3\` to see column names and a few sample rows.
+
+**Step 2: Find errors and warnings.**
+Based on what you see in the columns, use the tool to search. Examples:
+- \`node query-logs.mjs "Error" --count\`
+- \`node query-logs.mjs "Warning" --count\`
+- \`node query-logs.mjs "Error" --limit 30\` to see the actual error messages
+
+**Step 3: Find operational issues.**
+Search for things that indicate real failures:
+- \`node query-logs.mjs "fail|exception|timeout|retry|refused|exceeded|fatal"\`
+- Search for whatever else seems relevant based on what you see.
+
+**Step 4: Investigate each interesting finding.**
+- \`node query-logs.mjs --row N --context 10\` to see what happened before/after an error
+- \`node query-logs.mjs "some_correlation_id"\` to trace a specific request
+- Use Grep on data.csv for more complex searches if needed
+
+**Step 5: Separate real failures from noise.**
+- An error that was retried and succeeded = noise
+- Retries exhausted / max attempts exceeded = real failure
+- Auth errors followed by token refresh = noise
+- HTTP 5xx as the final response = real failure
+- High-frequency library logging at Error level = usually noise
+
+**Step 6: Write your analysis** as JSON to: \`${workspace.summaryOutputPath}\`
 
 ## Output JSON Schema
-Write a JSON file with this exact structure:
 \`\`\`json
 {
   "errorBreakdown": [
-    { "errorType": "ErrorName", "count": 48, "severity": "critical", "sampleMessage": "Example message" }
+    { "errorType": "ErrorName", "count": 48, "severity": "critical|error|warning|info", "sampleMessage": "Example message" }
   ],
   "topPatterns": [
-    { "pattern": "description", "count": 100, "trend": "increasing", "firstSeen": "ISO date", "lastSeen": "ISO date", "percentage": 12.5 }
+    { "pattern": "description", "count": 100, "trend": "increasing|stable|decreasing", "firstSeen": "ISO date", "lastSeen": "ISO date", "percentage": 12.5 }
   ],
   "timeCorrelations": [
-    { "description": "Error spike at 14:32 UTC correlated with deployment", "startTime": "ISO date", "endTime": "ISO date", "affectedRows": 25 }
+    { "description": "Error spike at 14:32 UTC", "startTime": "ISO date", "endTime": "ISO date", "affectedRows": 25 }
   ],
-  "narrative": "Markdown summary: the story of what happened, what was real vs noise, and what actually needs attention",
-  "recommendations": ["actionable recommendation with specific next steps"],
-  "totalRowsAnalyzed": 1000,
-  "timeRange": { "start": "ISO date", "end": "ISO date" }
+  "narrative": "The story of what happened — what was real vs noise, and what needs attention",
+  "recommendations": ["specific actionable next steps"],
+  "totalRowsAnalyzed": ${meta.totalRows},
+  "timeRange": { "start": "${meta.startTime}", "end": "${meta.endTime}" }
 }
 \`\`\`
 
-### Severity Guidelines
-- **critical**: User-facing outage, data loss, or security breach — confirmed, not speculative
-- **error**: Real failures that affected functionality but service partially continued
-- **warning**: Degraded behavior or issues that could escalate if not addressed
-- **info**: Logged as errors but confirmed harmless (retried, handled, no user impact)
+## Severity Guide
+- **critical**: Confirmed user-facing outage or data loss
+- **error**: Real failures that affected functionality
+- **warning**: Issues that could escalate
+- **info**: Logged as errors but confirmed harmless
 
-**Default to lower severity unless you have evidence of real impact.** A high error count alone does NOT make something critical.`;
+If you find retry exhaustion or terminal failures, the assessment cannot be "no issues found."`;
 }
 
 export function buildRCAPrompt(
@@ -142,66 +155,51 @@ export function buildRCAPrompt(
   targetIndex: number,
   sourceRepoPath?: string
 ): string {
-  return `# Log Analysis Task: Root Cause Analysis — Trace the Real Cause
+  return `# Root Cause Analysis
 
-You are a senior on-call engineer investigating a specific log entry. Your job is to figure out **what actually caused this** and **whether it actually matters**.
+Investigate a specific log entry and trace what caused it.
 
-## Critical Mindset
-
-**Don't take the error message at face value.** Many errors are:
-- Symptoms of an upstream failure (the real cause is elsewhere)
-- Expected behavior logged at the wrong level (e.g., "error" for a normal retry)
-- Side effects of a legitimate operation (shutdown, deployment, config change)
-
-**Trace backwards through the evidence.** The target row is where the user is looking, but the root cause is usually earlier in the timeline — a failed dependency, a bad config push, a resource exhaustion, etc.
-
-## Input Files (in ${workspace.basePath})
-- \`data.csv\` — Full log data with surrounding context
-- \`patterns.json\` — Detected patterns
-- \`metadata.json\` — Query context
+## Files in ${workspace.basePath}
+- \`data.csv\` — Full log data. Use the query tool, not sequential reading.
+- \`query-logs.mjs\` — CSV-aware search tool.
+- \`patterns.json\` — Detected patterns.
+- \`metadata.json\` — Query context.
 ${sourceRepoPath ? `
 ## Source Code
-Source code is available in the current working directory. **Use it extensively:**
-- Find the code that emits this log message — trace the method, its callers, its error handlers
-- Determine if this error is caught, retried, or propagated
-- Look at the retry/fallback logic — does the operation eventually succeed?
-- Understand the service architecture from the code to trace cross-component failures
-- Use subagents (Task tool) to investigate multiple source files or call chains in parallel
+Source at current working directory. Find the code that emits this log message, trace its callers, understand retry/fallback logic.
 ` : ''}
 ## Target Entry (Row ${targetIndex})
 \`\`\`json
 ${JSON.stringify(targetRow, null, 2)}
 \`\`\`
 
-## Investigation Process
-1. **Read surrounding logs** — Look at what happened in the 30-60 seconds before and after this entry
-2. **Identify the causal chain** — What triggered what? Follow correlation IDs, request IDs, or timestamps
-3. **Trace through code** (if available) — Find where this message is logged, what conditions produce it, what the caller does when it fails
-4. **Assess real impact** — Did this error actually cause a user-visible problem, or was it handled gracefully?
-5. **Determine root cause** — Not "X threw an exception" but "X threw because Y timed out because Z was overloaded due to W"
-6. **Write your analysis** to: \`${workspace.rcaOutputPath}\`
+## How to Investigate
+
+1. **Get context:** Run \`node query-logs.mjs --row ${targetIndex} --context 15\` to see what happened around this entry.
+
+2. **Trace the request:** Look for correlation IDs, request IDs, or activity IDs in the target row. Search for them: \`node query-logs.mjs "the_id_value"\`
+
+3. **Find the cause:** The root cause is usually BEFORE the target entry — a failed dependency, a timeout, a bad request. Trace backwards.
+
+4. **Check if it was handled:** Did retries succeed? Did a fallback kick in? Or did the error propagate to the user?
+
+5. **Write your analysis** to: \`${workspace.rcaOutputPath}\`
 
 ## Output JSON Schema
 \`\`\`json
 {
-  "rootCause": "The real root cause — not just the symptom, but WHY it happened and the full causal chain",
+  "rootCause": "WHY this happened — the full causal chain, not just the symptom",
   "confidence": 0.85,
   "severity": "critical|high|medium|low",
   "evidenceTimeline": [
-    { "timestamp": "2026-02-20T15:32:00Z", "description": "What happened and why it matters", "rowIndex": 145, "relevance": "direct|contributing|context" }
+    { "timestamp": "ISO date", "description": "what happened", "rowIndex": 0, "relevance": "direct|contributing|context" }
   ],
   "linkedRows": [1, 5, 12],
-  "recommendation": "Specific, actionable next steps — not generic advice",
-  "codeReferences": ["file.cs:123 - method that threw the error", "caller.cs:45 - retry logic that should have caught this"],
-  "additionalFindings": "Was this a real issue or noise? Is it a one-off or systemic? What else should the engineer check?"
+  "recommendation": "specific next steps",
+  "codeReferences": ["file.cs:123 - relevant code"],
+  "additionalFindings": "real issue or noise? one-off or systemic?"
 }
-\`\`\`
-
-### Severity Guidelines
-- **critical**: Confirmed user-facing outage or data loss with evidence
-- **high**: Real failure that degraded service, but not a full outage
-- **medium**: Issue that needs fixing but didn't cause immediate user impact (or was retried successfully)
-- **low**: Logged as error but actually benign — handled, retried, or expected behavior`;
+\`\`\``;
 }
 
 function csvEscape(value: string): string {
