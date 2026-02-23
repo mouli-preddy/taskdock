@@ -26,7 +26,7 @@ import type {
 import type { FileChange } from '../../shared/types.js';
 
 interface CopilotConfig {
-  model: 'gpt-4o' | 'gpt-4' | 'gpt-5' | 'claude-3.5-sonnet';
+  model: 'claude-opus-4.6' | 'gpt-4o' | 'gpt-4' | 'gpt-5' | 'claude-3.5-sonnet';
   streaming: boolean;
 }
 

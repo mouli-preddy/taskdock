@@ -158,7 +158,7 @@ export class CfvChatService extends EventEmitter {
     }
 
     const session = await client.createSession({
-      model: 'gpt-4o',
+      model: 'claude-opus-4.6',
       streaming: true,
       workingDirectory: callOutputDir,
       systemMessage: {
