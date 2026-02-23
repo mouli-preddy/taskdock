@@ -75,6 +75,11 @@ export interface ConsoleReviewSettings {
     showTerminal: boolean;
     timeoutMinutes: number;
   };
+  dgrepAnalysis: {
+    provider: 'claude-sdk' | 'copilot-sdk';
+    /** Path to linked source repo for code correlation (empty = none) */
+    sourceRepository: string;
+  };
 }
 
 export const DEFAULT_CONSOLE_REVIEW_SETTINGS: ConsoleReviewSettings = {
@@ -97,5 +102,9 @@ export const DEFAULT_CONSOLE_REVIEW_SETTINGS: ConsoleReviewSettings = {
     provider: 'claude-terminal',
     showTerminal: false,
     timeoutMinutes: 5,
+  },
+  dgrepAnalysis: {
+    provider: 'claude-sdk',
+    sourceRepository: '',
   },
 };

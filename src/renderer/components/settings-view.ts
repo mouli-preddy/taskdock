@@ -5,7 +5,7 @@ import type { PollingSettings, NotificationSettings } from '../../shared/types.j
 import { DEFAULT_POLLING_SETTINGS, DEFAULT_NOTIFICATION_SETTINGS } from '../../shared/types.js';
 import { escapeHtml } from '../utils/html-utils.js';
 import { notificationService } from '../services/notification-service.js';
-import { getIcon, Eye, Plus, X, Globe, MessageSquare, Wand2 } from '../utils/icons.js';
+import { getIcon, Eye, Plus, X, Globe, MessageSquare, Wand2, Search } from '../utils/icons.js';
 
 export interface ReviewSettings {
   organization: string;
@@ -445,6 +445,29 @@ export class SettingsView {
                   </div>
                 </div>
               </div>
+
+              <div class="ai-provider-card">
+                <div class="ai-provider-header">
+                  <div class="ai-provider-title-group">
+                    <span class="ai-provider-icon">${getIcon(Search, 16)}</span>
+                    <span class="ai-provider-title">DGrep Log Analysis</span>
+                  </div>
+                </div>
+                <div class="ai-provider-settings">
+                  <div class="ai-provider-row">
+                    <select id="dgrepAnalysisProvider" class="ai-provider-select">
+                      <option value="claude-sdk">Claude SDK</option>
+                      <option value="copilot-sdk">Copilot SDK</option>
+                    </select>
+                  </div>
+                  <div class="ai-provider-row" style="margin-top: 6px;">
+                    <label style="font-size: 12px; color: var(--text-secondary); margin-right: 8px;">Source repo</label>
+                    <select id="dgrepAnalysisSourceRepo" class="ai-provider-select" style="flex: 1;">
+                      <option value="">None</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -637,6 +660,9 @@ export class SettingsView {
 
       const defaultChatAI = (this.container.querySelector('#defaultChatAI') as HTMLSelectElement).value as 'copilot' | 'claude';
 
+      const dgrepAnalysisProvider = (this.container.querySelector('#dgrepAnalysisProvider') as HTMLSelectElement).value as 'claude-sdk' | 'copilot-sdk';
+      const dgrepAnalysisSourceRepo = (this.container.querySelector('#dgrepAnalysisSourceRepo') as HTMLSelectElement).value;
+
       // 4. Gather Polling settings
       const pollingEnabled = (this.container.querySelector('#pollingEnabled') as HTMLInputElement).checked;
       let pollingIntervalSeconds = parseInt((this.container.querySelector('#pollingInterval') as HTMLInputElement).value, 10);
@@ -662,6 +688,10 @@ export class SettingsView {
           provider: applyChangesProvider,
           showTerminal: applyChangesShowTerminal,
           timeoutMinutes: applyChangesTimeoutMinutes,
+        },
+        dgrepAnalysis: {
+          provider: dgrepAnalysisProvider,
+          sourceRepository: dgrepAnalysisSourceRepo,
         },
       };
       await window.electronAPI.setConsoleReviewSettings(this.consoleReviewSettings);
@@ -862,6 +892,25 @@ export class SettingsView {
     // Default Chat AI form value
     const defaultChatAI = this.container.querySelector('#defaultChatAI') as HTMLSelectElement;
     if (defaultChatAI) defaultChatAI.value = this.consoleReviewSettings.defaultChatAI || 'copilot';
+
+    // DGrep Analysis settings
+    const dgrepAnalysis = this.consoleReviewSettings.dgrepAnalysis || { provider: 'claude-sdk', sourceRepository: '' };
+    const dgrepAnalysisProvider = this.container.querySelector('#dgrepAnalysisProvider') as HTMLSelectElement;
+    if (dgrepAnalysisProvider) dgrepAnalysisProvider.value = dgrepAnalysis.provider;
+
+    const dgrepAnalysisSourceRepo = this.container.querySelector('#dgrepAnalysisSourceRepo') as HTMLSelectElement;
+    if (dgrepAnalysisSourceRepo) {
+      // Populate with linked repos
+      dgrepAnalysisSourceRepo.innerHTML = '<option value="">None</option>';
+      for (const repo of this.consoleReviewSettings.linkedRepositories || []) {
+        const label = repo.description || repo.path.split(/[\\/]/).pop() || repo.path;
+        const opt = document.createElement('option');
+        opt.value = repo.path;
+        opt.textContent = label;
+        dgrepAnalysisSourceRepo.appendChild(opt);
+      }
+      dgrepAnalysisSourceRepo.value = dgrepAnalysis.sourceRepository;
+    }
 
     this.renderLinkedReposList();
     this.renderMonitoredReposList();

@@ -282,6 +282,10 @@ export interface ElectronAPI {
       showTerminal: boolean;
       timeoutMinutes: number;
     };
+    dgrepAnalysis: {
+      provider: 'claude-sdk' | 'copilot-sdk';
+      sourceRepository: string;
+    };
   }>;
   setConsoleReviewSettings: (settings: {
     linkedRepositories: { path: string; originUrl: string }[];
@@ -303,6 +307,10 @@ export interface ElectronAPI {
       provider: 'claude-sdk' | 'claude-terminal' | 'copilot-sdk' | 'copilot-terminal';
       showTerminal: boolean;
       timeoutMinutes: number;
+    };
+    dgrepAnalysis: {
+      provider: 'claude-sdk' | 'copilot-sdk';
+      sourceRepository: string;
     };
   }) => Promise<void>;
   browseFolder: () => Promise<string | null>;
@@ -505,6 +513,31 @@ export interface ElectronAPI {
   onDgrepComplete: (callback: (event: any) => void) => () => void;
   onDgrepError: (callback: (event: any) => void) => () => void;
   onDgrepIntermediateResults: (callback: (event: any) => void) => () => void;
+  onDgrepLiveTailData: (callback: (event: any) => void) => () => void;
+
+  // DGrep extra methods
+  dgrepGetSurroundingDocs: (sessionId: string, rowIndex: number, count: number) => Promise<{ columns: string[]; rows: Record<string, any>[]; startIndex: number; endIndex: number } | undefined>;
+  dgrepStartLiveTail: (sessionId: string, intervalMs?: number) => Promise<void>;
+  dgrepStopLiveTail: (sessionId: string) => Promise<void>;
+  dgrepSaveQuery: (query: import('../shared/dgrep-ai-types.js').DGrepSavedQuery) => Promise<void>;
+  dgrepLoadQueries: () => Promise<import('../shared/dgrep-ai-types.js').DGrepSavedQuery[]>;
+  dgrepDeleteQuery: (queryId: string) => Promise<void>;
+
+  // DGrep AI API
+  dgrepAISummarizeLogs: (sessionId: string, columns: string[], rows: any[], patterns?: string[]) => Promise<void>;
+  dgrepAINLToKQL: (prompt: string, columns: string[], sampleRows: any[]) => Promise<import('../shared/dgrep-ai-types.js').DGrepNLToKQLResult>;
+  dgrepAIAnalyzeRootCause: (sessionId: string, targetRow: any, contextRows: any[], columns: string[], searchParams?: any) => Promise<void>;
+  dgrepAIDetectAnomalies: (sessionId: string, columns: string[], rows: any[]) => Promise<import('../shared/dgrep-ai-types.js').DGrepAnomalyResult | null>;
+  dgrepAIChatCreate: (sessionId: string, columns: string[], rows: any[]) => Promise<string>;
+  dgrepAIChatSend: (chatSessionId: string, message: string) => Promise<void>;
+  dgrepAIChatDestroy: (chatSessionId: string) => Promise<void>;
+
+  // DGrep AI event listeners
+  onDgrepAISummaryDelta: (callback: (event: { sessionId: string; delta: string }) => void) => () => void;
+  onDgrepAISummaryComplete: (callback: (event: { sessionId: string; summary?: import('../shared/dgrep-ai-types.js').DGrepAISummary; raw?: string; error?: string }) => void) => () => void;
+  onDgrepAIRCADelta: (callback: (event: { sessionId: string; delta: string; toolCall?: string }) => void) => () => void;
+  onDgrepAIRCAComplete: (callback: (event: { sessionId: string; analysis?: import('../shared/dgrep-ai-types.js').DGrepRootCauseAnalysis; raw?: string; error?: string }) => void) => () => void;
+  onDgrepAIChatEvent: (callback: (event: import('../shared/dgrep-ai-types.js').DGrepChatEvent) => void) => () => void;
 }
 
 declare global {
