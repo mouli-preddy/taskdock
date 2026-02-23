@@ -309,7 +309,7 @@ Perform root cause analysis. Respond with ONLY a JSON object:
       prompt,
       options: {
         model: 'sonnet',
-        maxTurns: 30,
+        maxTurns: 50,
         cwd,
         permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
@@ -317,10 +317,16 @@ Perform root cause analysis. Respond with ONLY a JSON object:
     });
 
     for await (const message of response) {
+      // Stream assistant thoughts/text as progress
       if (message.type === 'assistant') {
         const text = this.extractTextContent(message);
         if (text) {
           this.emit(`ai:${taskType}-progress`, { sessionId, text });
+        }
+        // Also emit tool use info so user can see what the agent is doing
+        const toolUses = this.extractToolUses(message);
+        for (const tool of toolUses) {
+          this.emit(`ai:${taskType}-progress`, { sessionId, text: `[Using ${tool.name}]` });
         }
       }
       if (message.type === 'result') {
@@ -444,6 +450,13 @@ Perform root cause analysis. Respond with ONLY a JSON object:
         .join('');
     }
     return '';
+  }
+
+  private extractToolUses(message: any): Array<{ name: string; input?: any }> {
+    if (!message.content || !Array.isArray(message.content)) return [];
+    return message.content
+      .filter((c: any) => c.type === 'tool_use')
+      .map((c: any) => ({ name: c.name || 'unknown', input: c.input }));
   }
 
   // ==================== Natural Language to KQL (lightweight, no workspace) ====================

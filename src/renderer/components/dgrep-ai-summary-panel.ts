@@ -70,14 +70,14 @@ export class DGrepAISummaryPanel {
   /** Called by app.ts when agent progress text arrives */
   handleSummaryProgress(text: string) {
     if (!text) return;
-    // Show the latest progress line from the agent
-    const trimmed = text.trim();
-    if (trimmed) {
-      this.progressLines.push(trimmed);
-      // Keep only last 5 lines
-      if (this.progressLines.length > 5) {
-        this.progressLines = this.progressLines.slice(-5);
-      }
+    // Split multi-line agent output into separate lines
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    for (const line of lines) {
+      this.progressLines.push(line);
+    }
+    // Keep last 20 lines for scrollable agent thoughts
+    if (this.progressLines.length > 20) {
+      this.progressLines = this.progressLines.slice(-20);
     }
     this.updateProgressDisplay();
   }
@@ -190,9 +190,13 @@ export class DGrepAISummaryPanel {
       progressEl.className = 'dgrep-ai-summary-progress';
       content.appendChild(progressEl);
     }
-    // Show scrolling status lines from the agent
+    // Show scrolling agent thoughts — tool calls highlighted differently
     progressEl.innerHTML = this.progressLines
-      .map(line => `<div class="dgrep-ai-progress-line">${escapeHtml(line.substring(0, 200))}</div>`)
+      .map(line => {
+        const isToolUse = line.startsWith('[Using ');
+        const cls = isToolUse ? 'dgrep-ai-progress-line dgrep-ai-progress-tool' : 'dgrep-ai-progress-line';
+        return `<div class="${cls}">${escapeHtml(line.substring(0, 500))}</div>`;
+      })
       .join('');
     progressEl.scrollTop = progressEl.scrollHeight;
   }

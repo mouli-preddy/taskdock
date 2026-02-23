@@ -58,12 +58,12 @@ export class DGrepRCAPanel {
   /** Agent progress text */
   handleRCAProgress(text: string) {
     if (!text) return;
-    const trimmed = text.trim();
-    if (trimmed) {
-      this.progressSteps.push(trimmed);
-      if (this.progressSteps.length > 8) {
-        this.progressSteps = this.progressSteps.slice(-8);
-      }
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    for (const line of lines) {
+      this.progressSteps.push(line);
+    }
+    if (this.progressSteps.length > 20) {
+      this.progressSteps = this.progressSteps.slice(-20);
     }
     this.updateProgress();
   }

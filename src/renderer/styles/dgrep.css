@@ -3119,19 +3119,24 @@
 /* ==================== AI Progress Lines ==================== */
 .dgrep-ai-summary-progress,
 .dgrep-rca-progress {
-  max-height: 100px;
+  max-height: 200px;
   overflow-y: auto;
   padding: var(--space-1) 0;
+  font-family: var(--font-mono);
 }
 
 .dgrep-ai-progress-line,
 .dgrep-rca-progress-step {
   font-size: 11px;
-  color: var(--text-tertiary);
-  padding: 1px 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: var(--text-secondary);
+  padding: 2px 0;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.dgrep-ai-progress-tool {
+  color: var(--accent-blue);
+  font-weight: 500;
 }
 
 /* ==================== AI Summary Recommendations ==================== */
