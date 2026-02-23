@@ -470,10 +470,12 @@ Perform root cause analysis. Respond with ONLY a JSON object:
   }
 
   private extractTextContent(message: any): string {
-    if (!message.content) return '';
-    if (typeof message.content === 'string') return message.content;
-    if (Array.isArray(message.content)) {
-      return message.content
+    // SDK yields { type: 'assistant', message: { content: [...] } }
+    const content = message.message?.content || message.content;
+    if (!content) return '';
+    if (typeof content === 'string') return content;
+    if (Array.isArray(content)) {
+      return content
         .filter((c: any) => c.type === 'text')
         .map((c: any) => c.text)
         .join('');
@@ -482,8 +484,9 @@ Perform root cause analysis. Respond with ONLY a JSON object:
   }
 
   private extractToolUses(message: any): Array<{ name: string; input?: any }> {
-    if (!message.content || !Array.isArray(message.content)) return [];
-    return message.content
+    const content = message.message?.content || message.content;
+    if (!content || !Array.isArray(content)) return [];
+    return content
       .filter((c: any) => c.type === 'tool_use')
       .map((c: any) => ({ name: c.name || 'unknown', input: c.input }));
   }
