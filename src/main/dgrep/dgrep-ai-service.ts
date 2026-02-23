@@ -328,7 +328,7 @@ Perform root cause analysis. Respond with ONLY a JSON object:
       prompt,
       options: {
         model: 'sonnet',
-        maxTurns: 50,
+        maxTurns: 100,
         cwd,
         permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,

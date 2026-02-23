@@ -72,50 +72,98 @@ export function createAnalysisWorkspace(
 export function buildSummaryPrompt(workspace: AnalysisWorkspace, sourceRepoPath?: string): string {
   const meta = JSON.parse(fs.readFileSync(workspace.metadataPath, 'utf-8'));
 
+  const ws = workspace.basePath.replace(/\\/g, '/');
+  const outputPath = workspace.summaryOutputPath.replace(/\\/g, '/');
+
   return `# Log Analysis
 
 Analyze ${meta.totalRows} rows of service logs from ${meta.namespace} (${meta.events.join(', ')}).
 Time range: ${meta.startTime} to ${meta.endTime}.
 
-## Files in ${workspace.basePath}
-- \`data.csv\` — The log data with a \`_row\` column for line numbers. **Do NOT read this file end-to-end.** Use the query tool.
-- \`query-logs.mjs\` — CSV-aware search tool. Use this to explore the data.
+## Workspace: ${ws}
+- \`data.csv\` — Log data with \`_row\` column. **Do NOT read end-to-end.** Use the query tool.
+- \`query-logs.mjs\` — CSV-aware search tool (run via Bash).
 - \`metadata.json\` — Query parameters.
 ${sourceRepoPath ? `
 ## Source Code
-Source code is at \`${sourceRepoPath}\` (current working directory). Read source files to trace error origins, understand retry/fallback logic, and determine if errors propagate to users. Use subagents (Task tool) for parallel code investigation if needed.
+Source code is at \`${sourceRepoPath}\` (current working directory). Subagents can read source files to trace errors back to code.
 ` : ''}
-## How to Investigate
+## Process — Follow these 4 phases in order. Use TaskCreate to track progress.
 
-**Step 1: Understand the data shape.**
-Run \`node query-logs.mjs --head 3\` to see column names and a few sample rows.
+### Phase 1: Extract Errors
 
-**Step 2: Find errors and warnings.**
-Based on what you see in the columns, use the tool to search. Examples:
-- \`node query-logs.mjs "Error" --count\`
-- \`node query-logs.mjs "Warning" --count\`
-- \`node query-logs.mjs "Error" --limit 30\` to see the actual error messages
+Create a task: "Extract errors and warnings from logs"
 
-**Step 3: Find operational issues.**
-Search for things that indicate real failures:
-- \`node query-logs.mjs "fail|exception|timeout|retry|refused|exceeded|fatal"\`
-- Search for whatever else seems relevant based on what you see.
+1. Run \`node ${ws}/query-logs.mjs --head 3\` to see column names and sample rows.
+2. Use the query tool to find all errors, exceptions, failures, and warnings:
+   - \`node ${ws}/query-logs.mjs "Error" --limit 200\`
+   - \`node ${ws}/query-logs.mjs "exception|fail|timeout|retry|refused|exceeded|fatal|unreachable|5[0-9][0-9]" --limit 200\`
+   - Search for whatever else seems relevant based on the columns you see.
+3. Write ALL found error/warning rows to \`${ws}/errors-extracted.md\` — one entry per row with its row number, timestamp, severity, and full message.
+4. Mark the task completed.
 
-**Step 4: Investigate each interesting finding.**
-- \`node query-logs.mjs --row N --context 10\` to see what happened before/after an error
-- \`node query-logs.mjs "some_correlation_id"\` to trace a specific request
-- Use Grep on data.csv for more complex searches if needed
+### Phase 2: Categorize
 
-**Step 5: Separate real failures from noise.**
-- An error that was retried and succeeded = noise
-- Retries exhausted / max attempts exceeded = real failure
-- Auth errors followed by token refresh = noise
-- HTTP 5xx as the final response = real failure
-- High-frequency library logging at Error level = usually noise
+Create a task: "Categorize errors into groups"
 
-**Step 6: Write your analysis** as JSON to: \`${workspace.summaryOutputPath}\`
+Launch a subagent (Task tool, subagent_type "general-purpose") with this instruction:
 
-## Output JSON Schema
+> Read \`${ws}/errors-extracted.md\`. Group similar errors together — same root message template but different IDs/timestamps/line numbers count as one group.
+>
+> Write \`${ws}/error-categories.md\` with this format — each category gets an unchecked checkbox:
+>
+> - [ ] **1. [short description]** (N occurrences, rows: X, Y, Z)
+>   Sample: [one representative message]
+>
+> - [ ] **2. [short description]** (N occurrences, rows: X, Y, Z)
+>   Sample: [one representative message]
+>
+> Order by likely severity (most concerning first). Mark obvious noise as "(likely noise)" but leave real investigation to the next phase.
+
+Wait for it to finish. Read \`${ws}/error-categories.md\`. Create a task for each category: "Investigate: [category description]". Mark the categorize task completed.
+
+### Phase 3: Investigate (parallel subagents)
+
+For EACH category, launch a separate subagent (Task tool, subagent_type "general-purpose") to investigate it. **Launch them all in parallel in a single message with multiple tool calls.**
+
+Each subagent gets this instruction (fill in the specifics for that category):
+
+> You are investigating one error category from a log analysis.
+>
+> **Category:** [name]
+> **Occurrences:** [count]
+> **Rows:** [row numbers from the category]
+> **Sample:** [the sample message]
+>
+> **Workspace:** \`${ws}\`
+> - Use \`node ${ws}/query-logs.mjs --row N --context 15\` to see what happened around each error.
+> - Use \`node ${ws}/query-logs.mjs "some_id_from_the_row"\` to trace a request by its correlation/activity/trace ID.
+> - Use Grep on \`${ws}/data.csv\` for complex searches.
+${sourceRepoPath ? `> - Source code is at \`${sourceRepoPath}\`. Read source files to trace where the error originates and whether it is caught/retried/propagated.\n` : ''}
+> **Determine:**
+> 1. Is this a REAL failure or noise?
+>    - Retried and succeeded → noise
+>    - Retries exhausted / max attempts exceeded → REAL failure
+>    - Auth error + token refresh + success → noise
+>    - HTTP 5xx as the final response with no recovery → REAL failure
+>    - High-frequency library logging → usually noise
+> 2. What is the root cause?
+> 3. What is the user/service impact?
+> 4. What should be done about it?
+>
+> Write your detailed findings to \`${ws}/investigation-[N].md\` where N is the category number.
+> Then edit \`${ws}/error-categories.md\` to check off this category: change \`- [ ]\` to \`- [x]\` for category [N].
+
+After all subagents complete, read \`${ws}/error-categories.md\` and verify all checkboxes are checked. Mark each investigation task as completed.
+
+### Phase 4: Synthesize report
+
+Create a task: "Write final analysis report"
+
+Read all \`${ws}/investigation-*.md\` files. Synthesize into the final JSON report.
+
+Write to: \`${outputPath}\`
+
 \`\`\`json
 {
   "errorBreakdown": [
@@ -127,7 +175,7 @@ Search for things that indicate real failures:
   "timeCorrelations": [
     { "description": "Error spike at 14:32 UTC", "startTime": "ISO date", "endTime": "ISO date", "affectedRows": 25 }
   ],
-  "narrative": "The story of what happened — what was real vs noise, and what needs attention",
+  "narrative": "The story of what ACTUALLY happened — lead with real issues, explain what is noise and why, be specific about impact",
   "recommendations": ["specific actionable next steps"],
   "totalRowsAnalyzed": ${meta.totalRows},
   "timeRange": { "start": "${meta.startTime}", "end": "${meta.endTime}" }
@@ -140,7 +188,7 @@ Search for things that indicate real failures:
 - **warning**: Issues that could escalate
 - **info**: Logged as errors but confirmed harmless
 
-If you find retry exhaustion or terminal failures, the assessment cannot be "no issues found."`;
+If any investigation found retry exhaustion or terminal failures, the assessment cannot be "no issues found."`;
 }
 
 export function buildRCAPrompt(
