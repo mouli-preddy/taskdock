@@ -375,7 +375,7 @@ Perform root cause analysis. Respond with ONLY a JSON object:
     const client = await this.getClient();
 
     const session = await client.createSession({
-      model: 'gpt-4o',
+      model: 'claude-opus-4-6',
       streaming: true,
       systemMessage: {
         mode: 'append',
@@ -501,7 +501,7 @@ Perform root cause analysis. Respond with ONLY a JSON object:
     ].join('\n');
 
     const session = await client.createSession({
-      model: 'gpt-4o',
+      model: 'claude-opus-4-6',
       streaming: false,
       systemMessage: {
         mode: 'append',
@@ -569,7 +569,7 @@ Perform root cause analysis. Respond with ONLY a JSON object:
     ].join('\n');
 
     const session = await client.createSession({
-      model: 'gpt-4o',
+      model: 'claude-opus-4-6',
       streaming: false,
       systemMessage: {
         mode: 'append',
@@ -642,7 +642,7 @@ Perform root cause analysis. Respond with ONLY a JSON object:
     this.chatSessions.set(chatSessionId, chatSession);
 
     const session = await client.createSession({
-      model: 'gpt-4o',
+      model: 'claude-opus-4-6',
       streaming: true,
       systemMessage: {
         mode: 'append',
