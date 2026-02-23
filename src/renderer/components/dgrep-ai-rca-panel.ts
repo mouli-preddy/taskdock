@@ -71,7 +71,6 @@ export class DGrepRCAPanel {
   /** Complete analysis arrived */
   handleRCAComplete(analysis: DGrepRootCauseAnalysis) {
     this.loading = false;
-    this.narrativeBuffer = analysis.rootCause;
     this.renderComplete(analysis);
   }
 

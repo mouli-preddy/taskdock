@@ -86,7 +86,6 @@ export class DGrepAISummaryPanel {
   handleSummaryComplete(summary: DGrepAISummary) {
     this.loading = false;
     this.cachedSummary = summary;
-    this.narrativeBuffer = summary.narrative;
     this.renderComplete(summary);
   }
 
