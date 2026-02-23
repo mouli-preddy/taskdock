@@ -390,22 +390,22 @@ Perform root cause analysis. Respond with ONLY a JSON object:
       session.on((event: any) => {
         switch (event.type) {
           case 'assistant.message_delta': {
-            const delta = event.data?.deltaContent || event.data?.content || '';
+            const delta = event.data?.deltaContent || '';
             fullContent += delta;
-            this.emit(`ai:${taskType}-progress`, { sessionId, text: delta });
+            if (delta) this.emit(`ai:${taskType}-progress`, { sessionId, text: delta });
             break;
           }
           case 'assistant.message': {
             fullContent = event.data?.content || fullContent;
             break;
           }
-          case 'tool.call': {
-            const toolName = event.data?.name || event.data?.toolName || 'tool';
-            this.emit(`ai:${taskType}-progress`, { sessionId, text: `[Copilot calling ${toolName}]` });
+          case 'tool.execution_start': {
+            const toolName = event.data?.toolName || event.data?.name || 'tool';
+            this.emit(`ai:${taskType}-progress`, { sessionId, text: `[Copilot tool] ${toolName}` });
             break;
           }
-          case 'tool.result': {
-            this.emit(`ai:${taskType}-progress`, { sessionId, text: `[Tool result received]` });
+          case 'tool.execution_end': {
+            this.emit(`ai:${taskType}-progress`, { sessionId, text: `[Tool done]` });
             break;
           }
           case 'session.idle': {
@@ -767,7 +767,7 @@ Perform root cause analysis. Respond with ONLY a JSON object:
 
     switch (event.type) {
       case 'assistant.message_delta': {
-        const delta = event.data?.deltaContent || event.data?.content || '';
+        const delta = event.data?.deltaContent || '';
         if (currentMsg) {
           currentMsg.content += delta;
         }
@@ -794,8 +794,8 @@ Perform root cause analysis. Respond with ONLY a JSON object:
         break;
       }
 
-      case 'tool.call': {
-        const toolName = event.data?.name || event.data?.toolName || 'unknown';
+      case 'tool.execution_start': {
+        const toolName = event.data?.toolName || event.data?.name || 'unknown';
         this.emitChatEvent({
           chatSessionId,
           type: 'tool_call',
@@ -804,7 +804,7 @@ Perform root cause analysis. Respond with ONLY a JSON object:
         break;
       }
 
-      case 'tool.result': {
+      case 'tool.execution_end': {
         this.emitChatEvent({
           chatSessionId,
           type: 'tool_result',

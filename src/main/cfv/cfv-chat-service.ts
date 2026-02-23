@@ -618,7 +618,7 @@ export class CfvChatService extends EventEmitter {
 
     switch (event.type) {
       case 'assistant.message_delta': {
-        const delta = event.data?.deltaContent || event.data?.content || '';
+        const delta = event.data?.deltaContent || '';
         if (currentMsg) {
           currentMsg.content += delta;
         }
@@ -645,8 +645,8 @@ export class CfvChatService extends EventEmitter {
         break;
       }
 
-      case 'tool.call': {
-        const toolName = event.data?.name || event.data?.toolName || 'unknown';
+      case 'tool.execution_start': {
+        const toolName = event.data?.toolName || event.data?.name || 'unknown';
         this.emitChatEvent({
           sessionId,
           type: 'tool_call',
@@ -655,7 +655,7 @@ export class CfvChatService extends EventEmitter {
         break;
       }
 
-      case 'tool.result': {
+      case 'tool.execution_end': {
         this.emitChatEvent({
           sessionId,
           type: 'tool_result',
