@@ -327,7 +327,7 @@ Perform root cause analysis. Respond with ONLY a JSON object:
     const response = query({
       prompt,
       options: {
-        model: 'sonnet',
+        model: 'opus',
         maxTurns: 100,
         cwd,
         permissionMode: 'bypassPermissions',
