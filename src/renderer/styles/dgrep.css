@@ -3481,3 +3481,40 @@
   font-size: 13px;
   padding: 4px 8px;
 }
+
+/* ==================== Improve Display ==================== */
+
+.dgrep-improve-display-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 4px var(--space-3);
+  background: color-mix(in srgb, var(--accent-blue) 8%, var(--bg-secondary));
+  border-bottom: 1px solid var(--border-color-muted);
+  font-size: 11px;
+  color: var(--text-secondary);
+  min-height: 24px;
+  flex-shrink: 0;
+}
+
+.dgrep-improve-display-icon {
+  font-size: 12px;
+}
+
+.dgrep-improve-display-text {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dgrep-improve-display-btn.active {
+  background: color-mix(in srgb, var(--accent-blue) 20%, var(--bg-secondary));
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+.dgrep-improve-display-btn.loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
