@@ -527,6 +527,7 @@ export interface ElectronAPI {
   dgrepAISummarizeLogs: (sessionId: string, columns: string[], rows: any[], patterns: any[], metadata: { endpoint: string; namespace: string; events: string[]; startTime: string; endTime: string; totalRows: number }) => Promise<void>;
   dgrepAINLToKQL: (prompt: string, columns: string[], sampleRows: any[]) => Promise<import('../shared/dgrep-ai-types.js').DGrepNLToKQLResult>;
   dgrepAIAnalyzeRootCause: (sessionId: string, targetRow: any, targetIndex: number, contextRows: any[], columns: string[], metadata: { endpoint: string; namespace: string; events: string[]; startTime: string; endTime: string; totalRows: number }) => Promise<void>;
+  dgrepAIReadFile: (filePath: string) => Promise<string>;
   dgrepAIDetectAnomalies: (sessionId: string, columns: string[], rows: any[]) => Promise<import('../shared/dgrep-ai-types.js').DGrepAnomalyResult | null>;
   dgrepAIChatCreate: (sessionId: string, columns: string[], rows: any[]) => Promise<string>;
   dgrepAIChatSend: (chatSessionId: string, message: string) => Promise<void>;

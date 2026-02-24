@@ -1232,6 +1232,19 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       dgrepAIService.analyzeRootCause(params[0], params[1], params[2], rcaRows, rcaColumns, params[5] || {});
       return;
     }
+    case 'dgrep-ai:read-file': {
+      // Read an investigation .md file from the workspace
+      const filePath = params[0] as string;
+      // Security: only allow reading from the analysis workspace directory
+      const analysisDir = path.join(os.homedir(), '.taskdock', 'dgrep', 'analysis');
+      if (!filePath.startsWith(analysisDir) && !filePath.replace(/\\/g, '/').startsWith(analysisDir.replace(/\\/g, '/'))) {
+        throw new Error('Access denied: can only read from analysis workspace');
+      }
+      if (!fs.existsSync(filePath)) {
+        throw new Error('File not found');
+      }
+      return fs.readFileSync(filePath, 'utf-8');
+    }
     case 'dgrep-ai:detect-anomalies':
       return dgrepAIService.detectAnomalies(params[0], params[1], params[2]);
     case 'dgrep-ai:chat-create':

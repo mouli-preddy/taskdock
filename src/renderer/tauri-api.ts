@@ -709,6 +709,8 @@ export const tauriAPI = {
     invoke('dgrep-ai:nl-to-kql', prompt, columns, sampleRows),
   dgrepAIAnalyzeRootCause: (sessionId: string, targetRow: any, targetIndex: number, contextRows: any[], columns: string[], metadata: any) =>
     invoke('dgrep-ai:analyze-root-cause', sessionId, targetRow, targetIndex, contextRows, columns, metadata),
+  dgrepAIReadFile: (filePath: string) =>
+    invoke('dgrep-ai:read-file', filePath),
   dgrepAIDetectAnomalies: (sessionId: string, columns: string[], rows: any[]) =>
     invoke('dgrep-ai:detect-anomalies', sessionId, columns, rows),
   dgrepAIChatCreate: (sessionId: string, columns: string[], rows: any[]) =>

@@ -2017,6 +2017,17 @@
 }
 
 /* ==================== AI Summary Panel ==================== */
+/* ==================== Resize Handle ==================== */
+.dgrep-ai-summary-resize {
+  height: 4px;
+  cursor: ns-resize;
+  background: transparent;
+  transition: background 0.15s;
+}
+.dgrep-ai-summary-resize:hover {
+  background: var(--accent-blue);
+}
+
 .dgrep-ai-summary {
   flex-shrink: 0;
   border-top: 2px solid var(--accent-blue);
@@ -2048,10 +2059,38 @@
   color: var(--accent-blue);
 }
 
+.dgrep-ai-summary-header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.dgrep-ai-analysis-level {
+  font-size: 11px;
+  padding: 2px 6px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+}
+
+.dgrep-ai-custom-prompt {
+  padding: 4px var(--space-3);
+  border-bottom: 1px solid var(--border-color-muted);
+}
+.dgrep-ai-custom-prompt-input {
+  width: 100%;
+  font-size: 12px;
+  padding: 4px 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+}
+
 .dgrep-ai-summary-content {
   padding: var(--space-2) var(--space-3);
   overflow-y: auto;
-  max-height: 300px;
 }
 
 .dgrep-ai-summary-empty {
@@ -3177,4 +3216,128 @@
   background: var(--bg-tertiary);
   border-radius: 3px;
   color: var(--accent-blue);
+}
+
+/* ==================== AI Issues List ==================== */
+.dgrep-ai-issues-section {
+  margin-bottom: var(--space-2);
+}
+
+.dgrep-ai-issue-row {
+  padding: var(--space-2);
+  border: 1px solid var(--border-color-muted);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-1);
+  background: var(--bg-primary);
+}
+.dgrep-ai-issue-row:hover {
+  border-color: var(--border-color);
+}
+
+.dgrep-ai-issue-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-bottom: 4px;
+}
+
+.dgrep-ai-issue-severity {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.dgrep-ai-issue-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.dgrep-ai-issue-count {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.dgrep-ai-issue-cause {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin-bottom: 4px;
+}
+
+.dgrep-ai-issue-details-btn {
+  font-size: 11px;
+  color: var(--accent-blue);
+}
+
+/* ==================== AI Detail View ==================== */
+.dgrep-ai-detail-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.dgrep-ai-detail-back {
+  align-self: flex-start;
+  margin-bottom: var(--space-1);
+}
+
+.dgrep-ai-detail-content {
+  font-size: 12px;
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+.dgrep-ai-detail-content h2 {
+  font-size: 16px;
+  margin: var(--space-2) 0 var(--space-1);
+  color: var(--text-primary);
+}
+.dgrep-ai-detail-content h3 {
+  font-size: 14px;
+  margin: var(--space-2) 0 var(--space-1);
+  color: var(--text-primary);
+}
+.dgrep-ai-detail-content h4 {
+  font-size: 12px;
+  font-weight: 600;
+  margin: var(--space-1) 0;
+  color: var(--text-primary);
+}
+.dgrep-ai-detail-content pre {
+  background: var(--bg-tertiary);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  margin: var(--space-1) 0;
+  font-size: 11px;
+}
+.dgrep-ai-detail-content code {
+  background: var(--bg-tertiary);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+.dgrep-ai-detail-content pre code {
+  padding: 0;
+  background: none;
+}
+.dgrep-ai-detail-content ul {
+  margin: var(--space-1) 0;
+  padding-left: 16px;
+}
+.dgrep-ai-detail-content li {
+  margin: 2px 0;
+}
+.dgrep-ai-detail-loading {
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: var(--space-2);
 }

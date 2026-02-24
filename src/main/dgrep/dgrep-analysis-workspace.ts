@@ -29,6 +29,8 @@ export interface AnalysisMetadata {
   startTime: string;
   endTime: string;
   totalRows: number;
+  analysisLevel?: 'quick' | 'detailed' | 'custom';
+  customPrompt?: string;
 }
 
 export function createAnalysisWorkspace(
@@ -123,8 +125,14 @@ Launch a subagent (Task tool, subagent_type "general-purpose") with this instruc
 Wait for it to finish. Read \`${ws}/error-categories.md\`. Create a task for each category: "Investigate: [category description]". Mark the categorize task completed.
 
 ### Phase 3: Investigate (parallel subagents)
-
-For EACH category, launch a separate subagent (Task tool, subagent_type "general-purpose") to investigate it. **Launch them all in parallel in a single message with multiple tool calls.**
+${meta.analysisLevel === 'quick' ? `
+**QUICK MODE:** Only investigate categories that look like real issues. Skip categories marked as "(likely noise)" in the categorization. This saves time by not investigating obvious noise.
+` : meta.analysisLevel === 'custom' && meta.customPrompt ? `
+**CUSTOM FOCUS:** The user wants you to focus on: "${meta.customPrompt}". Prioritize investigating categories related to this concern. You may skip unrelated categories.
+` : `
+**DETAILED MODE:** Investigate ALL categories, including those marked as noise, to confirm they are truly benign.
+`}
+For EACH category you are investigating, launch a separate subagent (Task tool, subagent_type "general-purpose"). **Launch them all in parallel in a single message with multiple tool calls.**
 
 Each subagent gets this instruction (fill in the specifics for that category):
 
@@ -166,6 +174,16 @@ Write to: \`${outputPath}\`
 
 \`\`\`json
 {
+  "issues": [
+    {
+      "id": "issue-1",
+      "title": "Short issue description",
+      "severity": "critical|error|warning|info",
+      "occurrences": 5,
+      "briefRootCause": "1-2 sentence explanation of why this happened",
+      "detailedAnalysisPath": "${ws}/investigation-1.md"
+    }
+  ],
   "errorBreakdown": [
     { "errorType": "ErrorName", "count": 48, "severity": "critical|error|warning|info", "sampleMessage": "Example message" }
   ],
@@ -181,6 +199,8 @@ Write to: \`${outputPath}\`
   "timeRange": { "start": "${meta.startTime}", "end": "${meta.endTime}" }
 }
 \`\`\`
+
+The \`issues\` array should have one entry per investigated category from Phase 3. Use the investigation-N.md file path as \`detailedAnalysisPath\`.
 
 ## Severity Guide
 - **critical**: Confirmed user-facing outage or data loss

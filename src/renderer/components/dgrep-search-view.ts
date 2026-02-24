@@ -595,8 +595,10 @@ export class DGrepSearchView {
     this.aiSummaryPanel.onSummarize = async (columns, rows, patterns) => {
       if (this.activeSessionId) {
         const metadata = this.buildAnalysisMetadata(rows.length);
+        const { level, customPrompt } = this.aiSummaryPanel.getAnalysisLevel();
         await (window as any).electronAPI?.dgrepAISummarizeLogs?.(
-          this.activeSessionId, columns, rows.slice(0, 2000), patterns || [], metadata
+          this.activeSessionId, columns, rows.slice(0, 2000), patterns || [],
+          { ...metadata, analysisLevel: level, customPrompt }
         );
       }
     };

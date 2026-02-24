@@ -1,5 +1,5 @@
 import { escapeHtml } from '../utils/html-utils.js';
-import { Sparkles, ChevronDown, ChevronRight } from '../utils/icons.js';
+import { Sparkles, ChevronDown, ChevronRight, ArrowLeft } from '../utils/icons.js';
 import { iconHtml } from '../utils/icons.js';
 import type { DGrepAISummary, DGrepPatternTrend } from '../../shared/dgrep-ai-types.js';
 
@@ -27,6 +27,8 @@ export class DGrepAISummaryPanel {
   private progressLines: string[] = [];
   private cachedSummary: DGrepAISummary | null = null;
   private cachedSessionId: string | null = null;
+  private contentHeight = 300;
+  private detailView = false;
 
   onSummarize: ((columns: string[], rows: any[], patterns?: string[]) => void) | null = null;
 
@@ -60,6 +62,7 @@ export class DGrepAISummaryPanel {
     this.progressLines = [];
     this.cachedSummary = null;
     this.collapsed = false;
+    this.detailView = false;
     this.show();
     this.renderLoading();
     if (this.onSummarize) {
@@ -67,29 +70,25 @@ export class DGrepAISummaryPanel {
     }
   }
 
-  /** Called by app.ts when agent progress text arrives */
   handleSummaryProgress(text: string) {
     if (!text) return;
-    // Split multi-line agent output into separate lines
     const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     for (const line of lines) {
       this.progressLines.push(line);
     }
-    // Keep last 50 lines for scrollable agent activity log
     if (this.progressLines.length > 50) {
       this.progressLines = this.progressLines.slice(-50);
     }
     this.updateProgressDisplay();
   }
 
-  /** Called when the full summary is ready */
   handleSummaryComplete(summary: DGrepAISummary) {
     this.loading = false;
     this.cachedSummary = summary;
+    this.detailView = false;
     this.renderComplete(summary);
   }
 
-  /** Called on error */
   handleSummaryError(error: string) {
     this.loading = false;
     const content = this.el.querySelector('.dgrep-ai-summary-content') as HTMLElement;
@@ -98,7 +97,6 @@ export class DGrepAISummaryPanel {
     }
   }
 
-  /** Cache the sessionId so we can skip re-summarizing */
   setSessionId(sessionId: string) {
     if (sessionId !== this.cachedSessionId) {
       this.cachedSummary = null;
@@ -112,6 +110,7 @@ export class DGrepAISummaryPanel {
 
   private render() {
     this.el.innerHTML = `
+      <div class="dgrep-ai-summary-resize"></div>
       <div class="dgrep-ai-summary-header">
         <div class="dgrep-ai-summary-header-left">
           <button class="btn btn-ghost btn-xs dgrep-ai-summary-toggle">
@@ -121,11 +120,21 @@ export class DGrepAISummaryPanel {
             ${iconHtml(Sparkles, { size: 14 })} AI Summary
           </span>
         </div>
-        <button class="btn btn-xs btn-primary dgrep-ai-summarize-btn">
-          ${iconHtml(Sparkles, { size: 12 })} Summarize
-        </button>
+        <div class="dgrep-ai-summary-header-right">
+          <select class="dgrep-ai-analysis-level">
+            <option value="quick">Quick</option>
+            <option value="detailed" selected>Detailed</option>
+            <option value="custom">Custom...</option>
+          </select>
+          <button class="btn btn-xs btn-primary dgrep-ai-summarize-btn">
+            ${iconHtml(Sparkles, { size: 12 })} Summarize
+          </button>
+        </div>
       </div>
-      <div class="dgrep-ai-summary-content">
+      <div class="dgrep-ai-custom-prompt" style="display:none;">
+        <input type="text" class="dgrep-ai-custom-prompt-input" placeholder="Focus on... (e.g. timeout errors, meeting join failures)" />
+      </div>
+      <div class="dgrep-ai-summary-content" style="max-height:${this.contentHeight}px">
         <div class="dgrep-ai-summary-empty">Click "Summarize" to analyze the current log results with AI.</div>
       </div>
     `;
@@ -141,28 +150,72 @@ export class DGrepAISummaryPanel {
 
     const header = this.el.querySelector('.dgrep-ai-summary-header');
     header?.addEventListener('click', (e) => {
-      if ((e.target as HTMLElement).closest('.dgrep-ai-summarize-btn')) return;
+      const target = e.target as HTMLElement;
+      if (target.closest('.dgrep-ai-summarize-btn') || target.closest('.dgrep-ai-analysis-level')) return;
       this.collapsed = !this.collapsed;
       this.updateCollapsed();
     });
 
-    // The summarize button click is handled externally via onSummarize callback
-    // It's triggered by the parent component that has access to columns/rows
     const summarizeBtn = this.el.querySelector('.dgrep-ai-summarize-btn');
     summarizeBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
-      // The parent component should call summarize() with actual data
-      // This button just serves as a visual trigger
       this.el.dispatchEvent(new CustomEvent('request-summarize', { bubbles: true }));
     });
+
+    // Analysis level dropdown
+    const levelSelect = this.el.querySelector('.dgrep-ai-analysis-level') as HTMLSelectElement;
+    const customPromptEl = this.el.querySelector('.dgrep-ai-custom-prompt') as HTMLElement;
+    levelSelect?.addEventListener('change', () => {
+      if (customPromptEl) {
+        customPromptEl.style.display = levelSelect.value === 'custom' ? '' : 'none';
+      }
+    });
+
+    // Resize handle
+    const resizeHandle = this.el.querySelector('.dgrep-ai-summary-resize') as HTMLElement;
+    if (resizeHandle) {
+      let startY = 0;
+      let startHeight = 0;
+      const onMouseMove = (e: MouseEvent) => {
+        const delta = startY - e.clientY;
+        this.contentHeight = Math.max(100, Math.min(800, startHeight + delta));
+        const content = this.el.querySelector('.dgrep-ai-summary-content') as HTMLElement;
+        if (content) content.style.maxHeight = `${this.contentHeight}px`;
+      };
+      const onMouseUp = () => {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+      resizeHandle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        startY = e.clientY;
+        startHeight = this.contentHeight;
+        document.body.style.cursor = 'ns-resize';
+        document.body.style.userSelect = 'none';
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+      });
+    }
+  }
+
+  getAnalysisLevel(): { level: 'quick' | 'detailed' | 'custom'; customPrompt?: string } {
+    const select = this.el.querySelector('.dgrep-ai-analysis-level') as HTMLSelectElement;
+    const level = (select?.value || 'detailed') as 'quick' | 'detailed' | 'custom';
+    if (level === 'custom') {
+      const input = this.el.querySelector('.dgrep-ai-custom-prompt-input') as HTMLInputElement;
+      return { level, customPrompt: input?.value || '' };
+    }
+    return { level };
   }
 
   private updateCollapsed() {
     const content = this.el.querySelector('.dgrep-ai-summary-content') as HTMLElement;
+    const customPrompt = this.el.querySelector('.dgrep-ai-custom-prompt') as HTMLElement;
     const toggleBtn = this.el.querySelector('.dgrep-ai-summary-toggle');
-    if (content) {
-      content.style.display = this.collapsed ? 'none' : '';
-    }
+    if (content) content.style.display = this.collapsed ? 'none' : '';
+    if (customPrompt && this.collapsed) customPrompt.style.display = 'none';
     if (toggleBtn) {
       toggleBtn.innerHTML = this.collapsed
         ? iconHtml(ChevronRight, { size: 14 })
@@ -177,7 +230,6 @@ export class DGrepAISummaryPanel {
   }
 
   private updateProgressDisplay() {
-    // Remove the static loading dots if still present
     const loadingEl = this.el.querySelector('.dgrep-ai-loading');
     if (loadingEl) loadingEl.remove();
 
@@ -204,6 +256,26 @@ export class DGrepAISummaryPanel {
     if (!content) return;
 
     let html = '';
+
+    // Issues list (primary view)
+    const issues = summary.issues;
+    if (issues && issues.length > 0) {
+      html += '<div class="dgrep-ai-issues-section">';
+      html += '<div class="dgrep-ai-summary-bar-label">Issues Found</div>';
+      for (const issue of issues) {
+        const color = SEVERITY_COLORS[issue.severity] || '#6e7681';
+        html += `<div class="dgrep-ai-issue-row" data-issue-path="${escapeHtml(issue.detailedAnalysisPath || '')}">
+          <div class="dgrep-ai-issue-header">
+            <span class="dgrep-ai-issue-severity" style="background:${color}">${issue.severity.toUpperCase()}</span>
+            <span class="dgrep-ai-issue-title">${escapeHtml(issue.title)}</span>
+            <span class="dgrep-ai-issue-count">${issue.occurrences} occurrence${issue.occurrences !== 1 ? 's' : ''}</span>
+          </div>
+          <div class="dgrep-ai-issue-cause">${escapeHtml(issue.briefRootCause)}</div>
+          ${issue.detailedAnalysisPath ? '<button class="btn btn-ghost btn-xs dgrep-ai-issue-details-btn">View Details</button>' : ''}
+        </div>`;
+      }
+      html += '</div>';
+    }
 
     // Error breakdown bar
     if (summary.errorBreakdown && summary.errorBreakdown.length > 0) {
@@ -239,6 +311,53 @@ export class DGrepAISummaryPanel {
     </div>`;
 
     content.innerHTML = html;
+    this.attachIssueDetailListeners();
+  }
+
+  private attachIssueDetailListeners() {
+    this.el.querySelectorAll('.dgrep-ai-issue-details-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const row = (btn as HTMLElement).closest('.dgrep-ai-issue-row') as HTMLElement;
+        const filePath = row?.dataset.issuePath;
+        if (!filePath) return;
+        await this.showDetailView(filePath);
+      });
+    });
+  }
+
+  private async showDetailView(filePath: string) {
+    const content = this.el.querySelector('.dgrep-ai-summary-content') as HTMLElement;
+    if (!content) return;
+
+    content.innerHTML = `<div class="dgrep-ai-detail-loading">Loading analysis...</div>`;
+
+    try {
+      const mdContent = await (window as any).electronAPI?.dgrepAIReadFile?.(filePath);
+      if (!mdContent) {
+        content.innerHTML = `<div class="dgrep-ai-summary-error">Could not read file</div>`;
+        return;
+      }
+
+      this.detailView = true;
+      content.innerHTML = `
+        <div class="dgrep-ai-detail-view">
+          <button class="btn btn-ghost btn-xs dgrep-ai-detail-back">
+            ${iconHtml(ArrowLeft, { size: 14 })} Back to Summary
+          </button>
+          <div class="dgrep-ai-detail-content">
+            ${this.renderMarkdown(mdContent)}
+          </div>
+        </div>
+      `;
+
+      content.querySelector('.dgrep-ai-detail-back')?.addEventListener('click', () => {
+        this.detailView = false;
+        if (this.cachedSummary) this.renderComplete(this.cachedSummary);
+      });
+    } catch (err: any) {
+      content.innerHTML = `<div class="dgrep-ai-summary-error">Error: ${escapeHtml(err?.message || 'Failed to load')}</div>`;
+    }
   }
 
   private renderErrorBreakdown(breakdown: DGrepAISummary['errorBreakdown']): string {
@@ -261,7 +380,6 @@ export class DGrepAISummaryPanel {
     }
     html += '</svg>';
 
-    // Legend
     html += '<div class="dgrep-ai-summary-bar-legend">';
     for (const item of breakdown) {
       const pct = Math.round((item.count / total) * 100);
@@ -297,16 +415,27 @@ export class DGrepAISummaryPanel {
 
   private renderMarkdown(text: string): string {
     let html = escapeHtml(text);
+    // Headers
+    html = html.replace(/^### (.+)$/gm, '<h4>$1</h4>');
+    html = html.replace(/^## (.+)$/gm, '<h3>$1</h3>');
+    html = html.replace(/^# (.+)$/gm, '<h2>$1</h2>');
+    // Code blocks
     html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_m, _lang, code) => `<pre><code>${code}</code></pre>`);
     html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    // Bold/italic
     html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
+    // Lists
     html = html.replace(/^[\s]*[-*]\s+(.+)$/gm, '<li>$1</li>');
     html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+    // Paragraphs
     html = html.replace(/\n\n/g, '</p><p>');
     html = `<p>${html}</p>`;
     html = html.replace(/<p>\s*<\/p>/g, '');
     html = html.replace(/(?<!>)\n(?!<)/g, '<br>');
+    // Clean up headers inside paragraphs
+    html = html.replace(/<p><(h[234])>/g, '<$1>');
+    html = html.replace(/<\/(h[234])><\/p>/g, '</$1>');
     return html;
   }
 }
