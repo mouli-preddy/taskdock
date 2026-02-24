@@ -62,6 +62,10 @@ export class DGrepSearchView {
   private showSecurityEvents = false;
   private scopingConditions: ScopingCondition[] = [];
 
+  // Service linking
+  private services: Array<{ id: string; name: string; repoPath: string }> = [];
+  private namespaceServiceMap: Record<string, string> = {}; // namespace -> serviceId
+
   // Search state
   private activeSessionId: string | null = null;
   private pendingSessionId = false; // true while waiting for sessionId from RPC
@@ -103,6 +107,61 @@ export class DGrepSearchView {
     this.attachEventListeners();
     // Show "no token" bar immediately — checkTokenStatus() will update it
     this.renderTokenBar();
+    this.loadServicesAndMapping();
+  }
+
+  private async loadServicesAndMapping(): Promise<void> {
+    try {
+      this.services = await (window as any).electronAPI?.getServices?.() ?? [];
+      // Load persisted namespace→service mapping from localStorage
+      try {
+        this.namespaceServiceMap = JSON.parse(localStorage.getItem('dgrep:namespaceServiceMap') || '{}');
+      } catch { this.namespaceServiceMap = {}; }
+      this.populateServiceDropdown();
+    } catch { /* ignore */ }
+  }
+
+  private populateServiceDropdown(): void {
+    const select = this.container.querySelector('#dgrepLinkedService') as HTMLSelectElement;
+    if (!select) return;
+    const currentVal = select.value;
+    select.innerHTML = '<option value="">None</option>';
+    for (const svc of this.services) {
+      const opt = document.createElement('option');
+      opt.value = svc.id;
+      opt.textContent = svc.name;
+      select.appendChild(opt);
+    }
+    select.value = currentVal || '';
+  }
+
+  private getLinkedServiceRepoPath(): string | null {
+    const select = this.container.querySelector('#dgrepLinkedService') as HTMLSelectElement;
+    const serviceId = select?.value;
+    if (!serviceId) return null;
+    const svc = this.services.find(s => s.id === serviceId);
+    return svc?.repoPath || null;
+  }
+
+  private updateLinkedServiceFromNamespace(): void {
+    const namespace = this.namespaceSelect?.getValue();
+    if (!namespace) return;
+    const select = this.container.querySelector('#dgrepLinkedService') as HTMLSelectElement;
+    if (!select) return;
+    const savedServiceId = this.namespaceServiceMap[namespace];
+    select.value = savedServiceId || '';
+  }
+
+  private saveNamespaceServiceMapping(): void {
+    const namespace = this.namespaceSelect?.getValue();
+    const select = this.container.querySelector('#dgrepLinkedService') as HTMLSelectElement;
+    if (!namespace || !select) return;
+    if (select.value) {
+      this.namespaceServiceMap[namespace] = select.value;
+    } else {
+      delete this.namespaceServiceMap[namespace];
+    }
+    localStorage.setItem('dgrep:namespaceServiceMap', JSON.stringify(this.namespaceServiceMap));
   }
 
   // ==================== Callback setters ====================
@@ -402,6 +461,14 @@ export class DGrepSearchView {
               <div class="dgrep-loading-indicator hidden" id="dgrepNamespaceLoading">Loading namespaces...</div>
             </div>
 
+            <!-- Linked Service -->
+            <div class="dgrep-field">
+              <label>Linked Service</label>
+              <select id="dgrepLinkedService" class="dgrep-select dgrep-select-sm">
+                <option value="">None</option>
+              </select>
+            </div>
+
             <!-- Events -->
             <div class="dgrep-field">
               <label>Events</label>
@@ -596,9 +663,10 @@ export class DGrepSearchView {
       if (this.activeSessionId) {
         const metadata = this.buildAnalysisMetadata(rows.length);
         const { level, customPrompt } = this.aiSummaryPanel.getAnalysisLevel();
+        const sourceRepoPath = this.getLinkedServiceRepoPath();
         await (window as any).electronAPI?.dgrepAISummarizeLogs?.(
           this.activeSessionId, columns, rows.slice(0, 2000), patterns || [],
-          { ...metadata, analysisLevel: level, customPrompt }
+          { ...metadata, analysisLevel: level, customPrompt, sourceRepoPath }
         );
       }
     };
@@ -815,6 +883,11 @@ export class DGrepSearchView {
       }
     });
 
+    // Linked service change → persist mapping
+    this.container.querySelector('#dgrepLinkedService')?.addEventListener('change', () => {
+      this.saveNamespaceServiceMapping();
+    });
+
     // Events filter
     this.container.querySelector('#dgrepEventsFilter')?.addEventListener('input', (e) => {
       this.filterEvents((e.target as HTMLInputElement).value);
@@ -972,6 +1045,9 @@ export class DGrepSearchView {
 
   private async onNamespaceChange(namespace: string): Promise<void> {
     if (!namespace) return;
+
+    // Auto-select linked service for this namespace
+    this.updateLinkedServiceFromNamespace();
 
     const endpointSelect = this.container.querySelector('#dgrepEndpoint') as HTMLSelectElement;
     const name = endpointSelect?.value as DGrepEndpointName;

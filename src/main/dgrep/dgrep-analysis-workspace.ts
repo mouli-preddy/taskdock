@@ -31,6 +31,7 @@ export interface AnalysisMetadata {
   totalRows: number;
   analysisLevel?: 'quick' | 'standard' | 'detailed' | 'custom';
   customPrompt?: string;
+  sourceRepoPath?: string;
 }
 
 export function createAnalysisWorkspace(
