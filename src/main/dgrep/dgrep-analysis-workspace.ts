@@ -133,7 +133,7 @@ Wait for it to finish. Read \`${ws}/error-categories.md\`. Create a task for eac
 
 ### Phase 3: Investigate (parallel subagents)
 ${meta.analysisLevel === 'quick' ? `
-**QUICK MODE:** Only investigate categories that look like real issues. Skip categories marked as "(likely noise)" in the categorization. This saves time by not investigating obvious noise.
+**QUICK MODE:** From the categorized list, pick the top 3-5 categories most likely to be user-impacting — things like retry exhaustion, terminal HTTP errors, unhandled exceptions, timeouts, service unavailable. Skip obvious noise (library logging, auth refreshes, health checks). Only launch subagents for your selected categories.
 ` : meta.analysisLevel === 'custom' && meta.customPrompt ? `
 **CUSTOM FOCUS:** The user wants you to focus on: "${meta.customPrompt}". Prioritize investigating categories related to this concern. You may skip unrelated categories.
 ` : `
