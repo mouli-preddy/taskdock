@@ -31,7 +31,7 @@ import { DGrepAISummaryPanel } from './dgrep-ai-summary-panel.js';
 import { DGrepRCAPanel } from './dgrep-ai-rca-panel.js';
 import { DGrepChatPanel } from './dgrep-chat-panel.js';
 import { DGrepAISuggestionsBar } from './dgrep-ai-suggestions-bar.js';
-import type { DGrepAISummary, DGrepRootCauseAnalysis, DGrepChatEvent } from '../../shared/dgrep-ai-types.js';
+import type { DGrepAISummary, DGrepRootCauseAnalysis, DGrepChatEvent, ImproveDisplayResult } from '../../shared/dgrep-ai-types.js';
 
 const ENDPOINT_NAMES = Object.keys(DGREP_ENDPOINT_URLS) as DGrepEndpointName[];
 const LOG_IDS = Object.keys(LOG_CONFIGS) as LogId[];
@@ -330,6 +330,21 @@ export class DGrepSearchView {
   handleAIClientQueryUpdate(event: { chatSessionId: string; dgrepSessionId: string; kql: string }): void {
     if (event.dgrepSessionId === this.activeSessionId) {
       this.clientQueryEditor.setValue(event.kql);
+    }
+  }
+
+  handleAIImproveDisplayProgress(event: { sessionId: string; text: string }): void {
+    if (event.sessionId === this.activeSessionId) {
+      this.resultsTable?.showImproveDisplayProgress(event.text);
+    }
+  }
+
+  handleAIImproveDisplayComplete(event: { sessionId: string; result?: ImproveDisplayResult; error?: string }): void {
+    if (event.sessionId !== this.activeSessionId) return;
+    if (event.error) {
+      this.resultsTable?.setImproveDisplayError(event.error);
+    } else if (event.result) {
+      this.resultsTable?.setImproveDisplayResult(event.result);
     }
   }
 
@@ -811,6 +826,14 @@ export class DGrepSearchView {
     // Track row expansions for shadow mode
     this.resultsTable.onRowExpand((rowIndex) => {
       if (this.shadowMode) this.shadowExpandedLines.add(rowIndex);
+    });
+
+    this.resultsTable.onImproveDisplayRequest(() => {
+      if (!this.activeSessionId) return;
+      const columns = this.resultsTable.getColumns();
+      const rows = this.resultsTable.getAllRows();
+      const metadata = this.buildAnalysisMetadata(rows.length);
+      window.electronAPI.dgrepAIImproveDisplay(this.activeSessionId, columns, rows, metadata);
     });
 
     // Initialize AI panels

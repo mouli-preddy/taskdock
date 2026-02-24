@@ -1130,6 +1130,12 @@ class PRReviewApp {
     window.electronAPI.onDgrepAIClientQueryUpdate((event: any) => {
       this.dgrepSearchView.handleAIClientQueryUpdate(event);
     });
+    window.electronAPI.onDgrepAIImproveDisplayProgress((event: any) => {
+      this.dgrepSearchView.handleAIImproveDisplayProgress(event);
+    });
+    window.electronAPI.onDgrepAIImproveDisplayComplete((event: any) => {
+      this.dgrepSearchView.handleAIImproveDisplayComplete(event);
+    });
   }
 
   private async handleTerminalReviewComplete(event: { sessionId: string; result: any }) {
