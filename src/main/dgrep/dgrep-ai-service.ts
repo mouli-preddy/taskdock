@@ -291,7 +291,7 @@ export class DGrepAIService extends EventEmitter {
       if (this.provider === 'claude-sdk') {
         await this.executeImproveDisplayClaude(sessionId, workspace, outputPath);
       } else {
-        await this.executeImproveDisplayCopilot(sessionId, workspace, columns, rows, outputPath);
+        await this.executeImproveDisplayCopilot(sessionId, workspace, outputPath);
       }
     } catch (err: any) {
       logger.error(LOG_CATEGORY, 'Improve display failed', { sessionId, error: err?.message });
@@ -299,12 +299,34 @@ export class DGrepAIService extends EventEmitter {
     }
   }
 
+  /** Read a slice of lines from a data file. Shared by Claude and Copilot tool handlers. */
+  private readFileLines(filePath: string, offset = 0, limit = 200): string {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const lines = content.split('\n');
+    const start = offset;
+    const end = Math.min(start + limit, lines.length);
+    return `Lines ${start}-${end - 1} of ${lines.length} total:\n${lines.slice(start, end).join('\n')}`;
+  }
+
+  /** Search a data file for lines matching a regex. Shared by Claude and Copilot tool handlers. */
+  private searchFileLines(filePath: string, pattern: string, maxResults = 50): string {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const lines = content.split('\n');
+    const regex = new RegExp(pattern, 'i');
+    const matches: string[] = [];
+    for (let i = 0; i < lines.length && matches.length < maxResults; i++) {
+      if (regex.test(lines[i])) {
+        matches.push(`[line ${i}] ${lines[i]}`);
+      }
+    }
+    return `${matches.length} matches for /${pattern}/i:\n${matches.join('\n')}`;
+  }
+
   private async executeImproveDisplayClaude(
     sessionId: string,
     workspace: AnalysisWorkspace,
     outputPath: string,
   ): Promise<void> {
-    const ws = workspace.basePath.replace(/\\/g, '/');
     const dataPath = workspace.dataPath.replace(/\\/g, '/');
     const outPath = outputPath.replace(/\\/g, '/');
 
@@ -335,17 +357,8 @@ export class DGrepAIService extends EventEmitter {
           },
           async (args: { offset?: number; limit?: number }) => {
             try {
-              const content = fs.readFileSync(workspace.dataPath, 'utf-8');
-              const lines = content.split('\n');
-              const start = args.offset ?? 0;
-              const end = Math.min(start + (args.limit ?? 200), lines.length);
-              const slice = lines.slice(start, end);
-              return {
-                content: [{
-                  type: 'text' as const,
-                  text: `Lines ${start}-${end - 1} of ${lines.length} total:\n${slice.join('\n')}`,
-                }],
-              };
+              const text = this.readFileLines(workspace.dataPath, args.offset, args.limit);
+              return { content: [{ type: 'text' as const, text }] };
             } catch (err: any) {
               return { content: [{ type: 'text' as const, text: `Error: ${err?.message}` }], isError: true };
             }
@@ -360,21 +373,8 @@ export class DGrepAIService extends EventEmitter {
           },
           async (args: { pattern: string; max_results?: number }) => {
             try {
-              const content = fs.readFileSync(workspace.dataPath, 'utf-8');
-              const lines = content.split('\n');
-              const regex = new RegExp(args.pattern, 'i');
-              const matches: string[] = [];
-              for (let i = 0; i < lines.length && matches.length < (args.max_results ?? 50); i++) {
-                if (regex.test(lines[i])) {
-                  matches.push(`[line ${i}] ${lines[i]}`);
-                }
-              }
-              return {
-                content: [{
-                  type: 'text' as const,
-                  text: `${matches.length} matches for /${args.pattern}/i:\n${matches.join('\n')}`,
-                }],
-              };
+              const text = this.searchFileLines(workspace.dataPath, args.pattern, args.max_results);
+              return { content: [{ type: 'text' as const, text }] };
             } catch (err: any) {
               return { content: [{ type: 'text' as const, text: `Error: ${err?.message}` }], isError: true };
             }
@@ -420,12 +420,9 @@ export class DGrepAIService extends EventEmitter {
   private async executeImproveDisplayCopilot(
     sessionId: string,
     workspace: AnalysisWorkspace,
-    columns: string[],
-    rows: Record<string, any>[],
     outputPath: string,
   ): Promise<void> {
     const client = await this.getClient();
-    const self = this;
     let errorEmitted = false;
 
     const session = await client.createSession({
@@ -448,12 +445,7 @@ export class DGrepAIService extends EventEmitter {
           },
           handler: async (args: any) => {
             try {
-              const content = fs.readFileSync(workspace.dataPath, 'utf-8');
-              const lines = content.split('\n');
-              const start = args.offset ?? 0;
-              const end = Math.min(start + (args.limit ?? 200), lines.length);
-              const slice = lines.slice(start, end);
-              return `Lines ${start}-${end - 1} of ${lines.length} total:\n${slice.join('\n')}`;
+              return this.readFileLines(workspace.dataPath, args.offset ?? 0, args.limit ?? 200);
             } catch (err: any) {
               return `Error: ${err?.message}`;
             }
@@ -472,16 +464,7 @@ export class DGrepAIService extends EventEmitter {
           },
           handler: async (args: any) => {
             try {
-              const content = fs.readFileSync(workspace.dataPath, 'utf-8');
-              const lines = content.split('\n');
-              const regex = new RegExp(args.pattern, 'i');
-              const matches: string[] = [];
-              for (let i = 0; i < lines.length && matches.length < (args.max_results ?? 50); i++) {
-                if (regex.test(lines[i])) {
-                  matches.push(`[line ${i}] ${lines[i]}`);
-                }
-              }
-              return `${matches.length} matches for /${args.pattern}/i:\n${matches.join('\n')}`;
+              return this.searchFileLines(workspace.dataPath, args.pattern, args.max_results ?? 50);
             } catch (err: any) {
               return `Error: ${err?.message}`;
             }
@@ -498,7 +481,7 @@ export class DGrepAIService extends EventEmitter {
           case 'assistant.message_delta': {
             const delta = event.data?.deltaContent || '';
             fullContent += delta;
-            if (delta) self.emit('ai:improve-display-progress', { sessionId, text: delta });
+            if (delta) this.emit('ai:improve-display-progress', { sessionId, text: delta });
             break;
           }
           case 'assistant.message': {
@@ -507,11 +490,11 @@ export class DGrepAIService extends EventEmitter {
           }
           case 'tool.execution_start': {
             const toolName = event.data?.toolName || event.data?.name || 'tool';
-            self.emit('ai:improve-display-progress', { sessionId, text: `[Tool] ${toolName}` });
+            this.emit('ai:improve-display-progress', { sessionId, text: `[Tool] ${toolName}` });
             break;
           }
           case 'tool.execution_end': {
-            self.emit('ai:improve-display-progress', { sessionId, text: '[Tool done]' });
+            this.emit('ai:improve-display-progress', { sessionId, text: '[Tool done]' });
             break;
           }
           case 'session.idle': {
@@ -522,7 +505,7 @@ export class DGrepAIService extends EventEmitter {
           case 'session.error': {
             const error = event.data?.message || 'Unknown error';
             errorEmitted = true;
-            self.emit('ai:improve-display-complete', { sessionId, error });
+            this.emit('ai:improve-display-complete', { sessionId, error });
             session.destroy().catch(() => {});
             resolve();
             break;
@@ -534,7 +517,7 @@ export class DGrepAIService extends EventEmitter {
         prompt: `Analyze the CSV data file at ${workspace.dataPath.replace(/\\/g, '/')} and provide display improvement recommendations. Use the read_file and search_file tools to explore the data. Return your final answer as the JSON object described in your instructions.`,
       }).catch((err: any) => {
         errorEmitted = true;
-        self.emit('ai:improve-display-complete', { sessionId, error: err?.message || 'Send failed' });
+        this.emit('ai:improve-display-complete', { sessionId, error: err?.message || 'Send failed' });
         resolve();
       });
     });

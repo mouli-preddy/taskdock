@@ -269,7 +269,7 @@ export class DGrepResultsTable {
   }
 
   /** Called when improve display analysis fails */
-  setImproveDisplayError(error: string): void {
+  setImproveDisplayError(_error: string): void {
     this.improveDisplayLoading = false;
     this.improveDisplayActive = false;
     this.hideImproveDisplayProgress();
@@ -1790,6 +1790,7 @@ export class DGrepResultsTable {
     const result = this.improveDisplayResult;
     if (!result) return;
 
+    // Save current state for revert
     this.preImproveColumns = {
       visibleColumns: new Set(this.visibleColumns),
       columnWidths: new Map(this.columnWidths),
@@ -1797,60 +1798,44 @@ export class DGrepResultsTable {
       activePreset: this.activePreset,
     };
 
-    const newVisible = new Set<string>();
-    const orderedCols = result.columns
-      .filter(c => c.visible)
+    // Build ordered list of visible columns that exist in current data
+    const existingColumns = new Set(this.columns);
+    const orderedVisible = result.columns
+      .filter(c => c.visible && existingColumns.has(c.name))
       .sort((a, b) => a.order - b.order)
       .map(c => c.name);
 
-    for (const c of orderedCols) {
-      if (this.columns.includes(c)) newVisible.add(c);
-    }
-    if (newVisible.size === 0) {
-      // Agent produced no valid visible columns — keep current visibility
+    if (orderedVisible.length === 0) {
+      // Agent produced no valid visible columns -- keep current visibility
       this.preImproveColumns = null;
       return;
     }
-    this.visibleColumns = newVisible;
 
-    const reordered: string[] = [];
-    for (const name of orderedCols) {
-      if (this.columns.includes(name)) reordered.push(name);
-    }
-    for (const c of this.columns) {
-      if (!reordered.includes(c)) reordered.push(c);
-    }
-    this.columns = reordered;
+    this.visibleColumns = new Set(orderedVisible);
 
+    // Reorder: AI-ordered columns first, then any remaining columns not mentioned
+    const orderedSet = new Set(orderedVisible);
+    this.columns = [
+      ...orderedVisible,
+      ...this.columns.filter(c => !orderedSet.has(c)),
+    ];
+
+    // Apply custom widths
     for (const col of result.columns) {
-      if (col.width && this.columns.includes(col.name)) {
+      if (col.width && existingColumns.has(col.name)) {
         this.columnWidths.set(col.name, col.width);
       }
     }
 
+    // Compile formatter functions
     this.compiledFormatters.clear();
     for (const fmt of result.formatters) {
-      if (!this.columns.includes(fmt.column)) continue; // skip non-existent columns
-      try {
-        let body = fmt.jsFunction.trim();
-        // Extract body from "function(...) { ... }" wrapper
-        const funcMatch = body.match(/^function\s*\([^)]*\)\s*\{([\s\S]*)\}$/);
-        if (funcMatch) {
-          body = funcMatch[1];
-        } else {
-          // Try arrow function: "(text) => expr" or "(text) => { ... }"
-          const arrowMatch = body.match(/^\(?[^)]*\)?\s*=>\s*(?:\{([\s\S]*)\}|([\s\S]+))$/);
-          if (arrowMatch) {
-            body = arrowMatch[1] ? arrowMatch[1] : `return ${arrowMatch[2]}`;
-          }
-        }
-        const fn = new Function('text', body) as (text: string) => string;
-        this.compiledFormatters.set(fmt.column, (text: string) => {
-          const raw = fn(text);
-          return this.sanitizeFormatterHtml(raw);
-        });
-      } catch {
-        // Skip invalid formatters
+      if (!existingColumns.has(fmt.column)) continue;
+      const fn = this.compileFormatterFunction(fmt.jsFunction);
+      if (fn) {
+        this.compiledFormatters.set(fmt.column, (text: string) =>
+          this.sanitizeFormatterHtml(fn(text))
+        );
       }
     }
 
@@ -1858,6 +1843,27 @@ export class DGrepResultsTable {
     this.scroller.setCellFormatters(this.compiledFormatters);
     this.updateScroller();
     this.renderToolbar();
+  }
+
+  /** Parse a formatter function string (function or arrow syntax) into a callable function, or null on failure. */
+  private compileFormatterFunction(jsFunction: string): ((text: string) => string) | null {
+    try {
+      let body = jsFunction.trim();
+      // Extract body from "function(...) { ... }" wrapper
+      const funcMatch = body.match(/^function\s*\([^)]*\)\s*\{([\s\S]*)\}$/);
+      if (funcMatch) {
+        body = funcMatch[1];
+      } else {
+        // Try arrow function: "(text) => expr" or "(text) => { ... }"
+        const arrowMatch = body.match(/^\(?[^)]*\)?\s*=>\s*(?:\{([\s\S]*)\}|([\s\S]+))$/);
+        if (arrowMatch) {
+          body = arrowMatch[1] ?? `return ${arrowMatch[2]}`;
+        }
+      }
+      return new Function('text', body) as (text: string) => string;
+    } catch {
+      return null;
+    }
   }
 
   private revertImproveDisplay(): void {
