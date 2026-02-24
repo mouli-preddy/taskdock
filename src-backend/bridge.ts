@@ -270,6 +270,8 @@ dgrepAIService.on('ai:rca-progress', (event) => broadcast('dgrep:ai:rca-progress
 dgrepAIService.on('ai:rca-complete', (event) => broadcast('dgrep:ai:rca-complete', event));
 dgrepAIService.on('ai:chat-event', (event) => broadcast('dgrep:ai:chat-event', event));
 dgrepAIService.on('ai:client-query-update', (event) => broadcast('dgrep:ai:client-query-update', event));
+dgrepAIService.on('ai:improve-display-progress', (event) => broadcast('dgrep:ai:improve-display-progress', event));
+dgrepAIService.on('ai:improve-display-complete', (event) => broadcast('dgrep:ai:improve-display-complete', event));
 
 // Warm up provider cache asynchronously at startup
 // This runs in the background so dialogs open instantly
@@ -1253,6 +1255,22 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
     }
     case 'dgrep-ai:detect-anomalies':
       return dgrepAIService.detectAnomalies(params[0], params[1], params[2]);
+    case 'dgrep-ai:improve-display': {
+      // params: [sessionId, columns, rows, metadata]
+      const idMetadata = params[3] || {};
+      const idSettings = loadStoreData().consoleReview?.dgrepAnalysis;
+      if (idSettings) {
+        dgrepAIService.setProvider(idSettings.provider);
+      }
+      const idSourceRepo = idMetadata.sourceRepoPath || idSettings?.sourceRepository || null;
+      dgrepAIService.setSourceRepo(idSourceRepo);
+      // Use full rows from session cache
+      const idFullResults = dgrepService.getResults(params[0]);
+      const idColumns = idFullResults?.columns || params[1];
+      const idRows = idFullResults?.rows || params[2];
+      dgrepAIService.improveDisplay(params[0], idColumns, idRows, idMetadata);
+      return;
+    }
     case 'dgrep-ai:chat-create': {
       // params: [dgrepSessionId, columns, rows, sourceRepoPath?, serviceName?, queryContext?]
       // Use full rows from session cache
