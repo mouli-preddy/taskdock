@@ -131,3 +131,23 @@ export interface DGrepSavedQuery {
   createdAt: string;
   updatedAt: string;
 }
+
+// ==================== Improve Display ====================
+
+export interface ImproveDisplayColumn {
+  name: string;
+  visible: boolean;
+  order: number;
+  width?: number;
+}
+
+export interface ImproveDisplayFormatter {
+  column: string;
+  description: string;
+  jsFunction: string; // function body: (text) => html string
+}
+
+export interface ImproveDisplayResult {
+  columns: ImproveDisplayColumn[];
+  formatters: ImproveDisplayFormatter[];
+}
