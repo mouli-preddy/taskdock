@@ -2,18 +2,22 @@
  * DGrep AI Service
  * AI-powered log analysis using agent executor pattern.
  *
- * Summary and RCA: Workspace-based agent execution using Claude SDK query()
- * or Copilot SDK CopilotClient. Writes data to workspace files, launches
- * agent with prompt, reads structured JSON output.
+ * Summary and RCA: Workspace-based agent execution using Copilot SDK
+ * CopilotClient (default) or Claude SDK query(). Writes data to workspace
+ * files, launches agent with prompt, reads structured JSON output.
  *
  * NL-to-KQL, chat, anomaly detection: Lightweight CopilotClient sessions.
+ * Default model: gpt-5.3-codex via Copilot SDK.
  */
 
 import { EventEmitter } from 'node:events';
 import fs from 'fs';
+import path from 'path';
+import os from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import { query, tool, createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
+import { encode as toonEncode, decode as toonDecode } from '@toon-format/toon';
 import { CopilotClient } from '@github/copilot-sdk';
 import {
   createAnalysisWorkspace,
@@ -130,7 +134,7 @@ interface ChatSession {
 export class DGrepAIService extends EventEmitter {
   private client: CopilotClient | null = null;
   private chatSessions = new Map<string, ChatSession>();
-  private provider: 'claude-sdk' | 'copilot-sdk' = 'claude-sdk';
+  private provider: 'claude-sdk' | 'copilot-sdk' = 'copilot-sdk';
   private sourceRepoPath: string | null = null;
 
   setProvider(provider: 'claude-sdk' | 'copilot-sdk'): void {
@@ -396,7 +400,7 @@ Perform root cause analysis. Respond with ONLY a JSON object:
     const client = await this.getClient();
 
     const session = await client.createSession({
-      model: 'claude-opus-4.6',
+      model: 'gpt-5.3-codex',
       streaming: true,
       systemMessage: {
         mode: 'append',
@@ -558,7 +562,7 @@ Perform root cause analysis. Respond with ONLY a JSON object:
     ].join('\n');
 
     const session = await client.createSession({
-      model: 'claude-opus-4.6',
+      model: 'gpt-5.3-codex',
       streaming: false,
       systemMessage: {
         mode: 'append',
@@ -626,7 +630,7 @@ Perform root cause analysis. Respond with ONLY a JSON object:
     ].join('\n');
 
     const session = await client.createSession({
-      model: 'claude-opus-4.6',
+      model: 'gpt-5.3-codex',
       streaming: false,
       systemMessage: {
         mode: 'append',
@@ -666,18 +670,17 @@ Perform root cause analysis. Respond with ONLY a JSON object:
 
   // ==================== Chat Sessions ====================
 
-  async createChatSession(
+  /** Shared setup for chat and learning sessions: create workspace, metadata, and ChatSession. */
+  private initChatSession(
+    chatSessionId: string,
     dgrepSessionId: string,
+    workspaceId: string,
     columns: string[],
     rows: Record<string, any>[],
     sourceRepoPath?: string,
     serviceName?: string,
-    queryContext?: ChatQueryContext
-  ): Promise<string> {
-    const logger = getLogger();
-    const chatSessionId = uuidv4();
-
-    // Create workspace with CSV + query tool (same as summarize)
+    queryContext?: ChatQueryContext,
+  ): { ws: string; workspace: AnalysisWorkspace } {
     const metadata: AnalysisMetadata = {
       endpoint: queryContext?.endpoint || '',
       namespace: queryContext?.namespace || '',
@@ -688,18 +691,13 @@ Perform root cause analysis. Respond with ONLY a JSON object:
       serverQuery: queryContext?.serverQuery,
       clientQuery: queryContext?.clientQuery,
     };
-    const workspace = createAnalysisWorkspace(
-      `chat-${chatSessionId}`, columns, rows, [], metadata
-    );
-
+    const workspace = createAnalysisWorkspace(workspaceId, columns, rows, [], metadata);
     const ws = workspace.basePath.replace(/\\/g, '/');
 
-    // Write chatSessionId into metadata so the client query tool can read it
-    const metaContent = JSON.parse(fs.readFileSync(workspace.metadataPath, 'utf-8'));
+    // Write chatSessionId into metadata so tools can read it
+    const metaContent = toonDecode(fs.readFileSync(workspace.metadataPath, 'utf-8')) as Record<string, any>;
     metaContent.chatSessionId = chatSessionId;
-    fs.writeFileSync(workspace.metadataPath, JSON.stringify(metaContent, null, 2), 'utf-8');
-
-    const memoryKey = resolveMemoryKey(serviceName, queryContext?.namespace);
+    fs.writeFileSync(workspace.metadataPath, toonEncode(metaContent), 'utf-8');
 
     const chatSession: ChatSession = {
       id: chatSessionId,
@@ -708,7 +706,7 @@ Perform root cause analysis. Respond with ONLY a JSON object:
       sourceRepoPath: sourceRepoPath || null,
       serviceName: serviceName || null,
       queryContext: queryContext || null,
-      memoryKey,
+      memoryKey: resolveMemoryKey(serviceName, queryContext?.namespace),
       messageQueue: [],
       messageReady: null,
       closed: false,
@@ -716,8 +714,39 @@ Perform root cause analysis. Respond with ONLY a JSON object:
       messages: [],
       currentMessageId: null,
     };
-
     this.chatSessions.set(chatSessionId, chatSession);
+
+    return { ws, workspace };
+  }
+
+  /** Create an initial assistant message placeholder for streaming responses. */
+  private createAssistantPlaceholder(chatSessionId: string): void {
+    const session = this.chatSessions.get(chatSessionId);
+    if (!session) return;
+    const assistantMsgId = uuidv4();
+    session.currentMessageId = assistantMsgId;
+    session.messages.push({
+      id: assistantMsgId,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date().toISOString(),
+      status: 'streaming',
+    });
+  }
+
+  async createChatSession(
+    dgrepSessionId: string,
+    columns: string[],
+    rows: Record<string, any>[],
+    sourceRepoPath?: string,
+    serviceName?: string,
+    queryContext?: ChatQueryContext
+  ): Promise<string> {
+    const chatSessionId = uuidv4();
+    const { ws } = this.initChatSession(
+      chatSessionId, dgrepSessionId, `chat-${chatSessionId}`,
+      columns, rows, sourceRepoPath, serviceName, queryContext,
+    );
 
     if (this.provider === 'claude-sdk') {
       this.startClaudeChatSession(chatSessionId, ws, sourceRepoPath, serviceName, queryContext);
@@ -725,7 +754,7 @@ Perform root cause analysis. Respond with ONLY a JSON object:
       await this.startCopilotChatSession(chatSessionId, columns, rows);
     }
 
-    logger.info(LOG_CATEGORY, 'Chat session created', {
+    getLogger().info(LOG_CATEGORY, 'Chat session created', {
       chatSessionId, dgrepSessionId, provider: this.provider, workspace: ws,
     });
     return chatSessionId;
@@ -739,12 +768,23 @@ Perform root cause analysis. Respond with ONLY a JSON object:
     queryContext?: ChatQueryContext
   ): void {
     const initialPrompt = this.buildChatPrompt(ws, sourceRepoPath, serviceName, queryContext);
-    const cwd = sourceRepoPath || ws;
+    this.launchClaudeStreamingSession(chatSessionId, initialPrompt, sourceRepoPath || ws);
+  }
 
-    // Create async generator that yields user messages on demand
+  /**
+   * Shared launcher for Claude SDK streaming sessions (chat and learning).
+   * Creates a message stream generator, MCP tool server, and processes the
+   * response stream in the background, emitting chat events.
+   */
+  private launchClaudeStreamingSession(
+    chatSessionId: string,
+    initialPrompt: string,
+    cwd: string,
+  ): void {
     const self = this;
+
+    // Async generator that yields the initial prompt, then waits for queued user messages
     async function* messageStream(): AsyncGenerator<any, void> {
-      // First message: system context
       yield {
         type: 'user' as const,
         message: { role: 'user' as const, content: initialPrompt },
@@ -756,31 +796,24 @@ Perform root cause analysis. Respond with ONLY a JSON object:
       if (!session) return;
 
       while (!session.closed) {
-        // Wait for a message to be queued
         if (session.messageQueue.length === 0) {
           await new Promise<void>(resolve => { session.messageReady = resolve; });
           session.messageReady = null;
         }
         if (session.closed) break;
 
-        // Drain queue — combine if multiple messages queued while agent was busy
         const queued = session.messageQueue.splice(0);
         if (queued.length === 0) continue;
-        const combined = queued.join('\n\n');
 
         yield {
           type: 'user' as const,
-          message: { role: 'user' as const, content: combined },
+          message: { role: 'user' as const, content: queued.join('\n\n') },
           session_id: '',
           parent_tool_use_id: null,
         };
       }
     }
 
-    // Create MCP server with custom tools for the chat agent
-    const dgrepToolServer = this.createChatToolServer(chatSessionId);
-
-    // Launch query in background — streams responses via events
     const response = query({
       prompt: messageStream(),
       options: {
@@ -789,13 +822,18 @@ Perform root cause analysis. Respond with ONLY a JSON object:
         cwd,
         permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
-        mcpServers: {
-          dgrep: dgrepToolServer,
-        },
+        mcpServers: { dgrep: this.createChatToolServer(chatSessionId) },
       },
     });
 
-    // Process response stream in background
+    this.processClaudeResponseStream(chatSessionId, response);
+  }
+
+  /** Process a Claude SDK response stream in the background, emitting chat events. */
+  private processClaudeResponseStream(
+    chatSessionId: string,
+    response: AsyncIterable<any>,
+  ): void {
     (async () => {
       try {
         for await (const message of response) {
@@ -808,47 +846,27 @@ Perform root cause analysis. Respond with ONLY a JSON object:
               const msgId = session.currentMessageId;
               const currentMsg = session.messages.find(m => m.id === msgId);
               if (currentMsg) currentMsg.content += text;
-              this.emitChatEvent({
-                chatSessionId,
-                type: 'delta',
-                messageId: msgId || undefined,
-                deltaContent: text,
-              });
+              this.emitChatEvent({ chatSessionId, type: 'delta', messageId: msgId || undefined, deltaContent: text });
             }
-            // Stream tool usage
-            const toolUses = this.extractToolUses(message);
-            for (const tool of toolUses) {
-              const summary = this.summarizeToolUse(tool);
-              this.emitChatEvent({
-                chatSessionId,
-                type: 'tool_call',
-                toolName: summary,
-              });
+            for (const t of this.extractToolUses(message)) {
+              this.emitChatEvent({ chatSessionId, type: 'tool_call', toolName: this.summarizeToolUse(t) });
             }
           }
 
           if (message.type === 'result') {
-            const session2 = this.chatSessions.get(chatSessionId);
-            if (session2) {
-              const msgId = session2.currentMessageId;
-              const currentMsg = session2.messages.find(m => m.id === msgId);
+            const s = this.chatSessions.get(chatSessionId);
+            if (s) {
+              const msgId = s.currentMessageId;
+              const currentMsg = s.messages.find(m => m.id === msgId);
               if (currentMsg) currentMsg.status = 'complete';
-              session2.currentMessageId = null;
-              this.emitChatEvent({
-                chatSessionId,
-                type: 'idle',
-                messageId: msgId || undefined,
-              });
+              s.currentMessageId = null;
+              this.emitChatEvent({ chatSessionId, type: 'idle', messageId: msgId || undefined });
             }
           }
         }
       } catch (err: any) {
-        getLogger().error(LOG_CATEGORY, 'Chat stream error', { chatSessionId, error: err?.message });
-        this.emitChatEvent({
-          chatSessionId,
-          type: 'error',
-          error: err?.message || 'Chat stream failed',
-        });
+        getLogger().error(LOG_CATEGORY, 'Claude stream error', { chatSessionId, error: err?.message });
+        this.emitChatEvent({ chatSessionId, type: 'error', error: err?.message || 'Stream failed' });
       }
     })();
   }
@@ -870,7 +888,7 @@ Perform root cause analysis. Respond with ONLY a JSON object:
 
     const self = this;
     const session = await client.createSession({
-      model: 'claude-opus-4.6',
+      model: 'gpt-5.3-codex',
       streaming: true,
       systemMessage: {
         mode: 'append',
@@ -1056,7 +1074,7 @@ ${queryCtxSection}
 - \`data.csv\` — Log data with \`_row\` column. **Do NOT read this file end-to-end.** Use the query tool.
 - \`query-logs.mjs\` — CSV-aware search tool (run via Bash).
 - \`kql-guidelines.md\` — KQL language reference for DGrep.
-- \`metadata.json\` — Query parameters.
+- \`metadata.toon\` — Query parameters.
 
 ## Query Tool Usage
 \`\`\`
@@ -1197,6 +1215,174 @@ You have \`read_memory\` and \`add_memory\` tools to persist learnings across se
 
   getChatSession(chatSessionId: string): ChatSession | undefined {
     return this.chatSessions.get(chatSessionId);
+  }
+
+  // ==================== Shadow Mode ====================
+
+  /** Save a CSV snapshot of results for shadow mode. Returns the file path. */
+  saveShadowCsv(
+    shadowId: string,
+    stepIndex: number,
+    columns: string[],
+    rows: Record<string, any>[]
+  ): string {
+    const dir = path.join(os.homedir(), '.taskdock', 'dgrep', 'analysis', `shadow-${shadowId}`);
+    fs.mkdirSync(dir, { recursive: true });
+
+    const csvPath = path.join(dir, `step-${stepIndex}.csv`).replace(/\\/g, '/');
+    const header = columns.map(c => csvEscapeField(c)).join(',');
+    const csvRows = rows.map(row =>
+      columns.map(c => csvEscapeField(String(row[c] ?? ''))).join(',')
+    );
+    fs.writeFileSync(csvPath, [header, ...csvRows].join('\n'), 'utf-8');
+    return csvPath;
+  }
+
+  /** Create a learning session that analyzes the user's shadow mode actions. */
+  async createLearningSession(
+    dgrepSessionId: string,
+    columns: string[],
+    rows: Record<string, any>[],
+    shadowLog: any[],
+    sourceRepoPath?: string,
+    serviceName?: string,
+    queryContext?: ChatQueryContext
+  ): Promise<string> {
+    const chatSessionId = uuidv4();
+    const { ws, workspace } = this.initChatSession(
+      chatSessionId, dgrepSessionId, `learning-${chatSessionId}`,
+      columns, rows, sourceRepoPath, serviceName, queryContext,
+    );
+
+    // Write shadow actions log
+    const actionsPath = path.join(workspace.basePath, 'shadow-actions.toon');
+    fs.writeFileSync(actionsPath, toonEncode({ steps: shadowLog }), 'utf-8');
+
+    const learningPrompt = this.buildLearningPrompt(ws, shadowLog, sourceRepoPath, serviceName);
+
+    if (this.provider === 'claude-sdk') {
+      this.startLearningClaudeSession(chatSessionId, learningPrompt, sourceRepoPath || ws);
+    } else {
+      await this.startLearningCopilotSession(chatSessionId, learningPrompt);
+    }
+
+    getLogger().info(LOG_CATEGORY, 'Learning session created', { chatSessionId, dgrepSessionId, steps: shadowLog.length });
+    return chatSessionId;
+  }
+
+  private buildLearningPrompt(ws: string, shadowLog: any[], sourceRepoPath?: string, serviceName?: string): string {
+    const stepsSummary = shadowLog.map((action: any, i: number) => {
+      const expanded = action.expandedLines?.length
+        ? ` | Rows inspected: ${action.expandedLines.join(', ')}`
+        : '';
+      return `${i + 1}. [${action.timestamp}] **${action.type}**: ${action.description} → ${action.resultCount} results${expanded} (CSV: ${action.csvPath})`;
+    }).join('\n');
+
+    return `You are analyzing a user's DGrep log investigation workflow to learn from their actions.
+
+## What happened
+The user enabled shadow mode and performed the following actions while investigating ${serviceName ? `**${serviceName}**` : 'service'} logs:
+
+${stepsSummary}
+
+## Workspace: ${ws}
+- \`shadow-actions.toon\` — Full action log with parameters and expandedLines
+- \`data.csv\` — Final result set
+- \`query-logs.mjs\` — CSV search tool
+- \`kql-guidelines.md\` — KQL reference
+- Each step has a CSV snapshot at the path listed above
+
+## Understanding the data
+
+Each action in shadow-actions.toon has an \`expandedLines\` array — these are the row indices the user clicked on to open the detail panel and inspect closely. This tells you which specific log entries the user was interested in. **Read these rows** to understand what caught the user's attention.
+
+## Your Task
+
+1. **Read \`${ws}/shadow-actions.toon\`** to get the full details of each step (query parameters, KQL, expandedLines, etc.)
+2. **For each step**, read the CSV snapshot. Pay special attention to the \`expandedLines\` rows — these are the entries the user inspected in detail
+3. **Analyze the user's intent** — what were they investigating? What patterns were they following? What did each query narrow down? Why did they inspect those specific rows?
+4. **Present your understanding** to the user as a clear numbered list:
+   - What the user was looking for
+   - What each query step accomplished
+   - What the user found or concluded
+   - Any patterns or techniques the user used
+5. **Wait for the user's response** — they may correct your understanding or confirm it
+6. **Once the user validates**, convert each confirmed insight into a memory using the \`add_memory\` tool. Focus on:
+   - Investigation techniques specific to this service
+   - Error patterns and what they mean
+   - Which queries are useful for what purposes
+   - What is noise vs real issues
+   - Any service-specific knowledge
+${sourceRepoPath ? `\n## Source Code\n${serviceName ? `**${serviceName}**` : 'Service'} source code is at \`${sourceRepoPath}\`.` : ''}
+
+## Important
+- Be thorough but concise in your analysis
+- Do NOT save memories until the user explicitly confirms your understanding
+- If you're unsure about something, ask the user rather than guessing`;
+  }
+
+  private startLearningClaudeSession(
+    chatSessionId: string,
+    learningPrompt: string,
+    cwd: string,
+  ): void {
+    this.createAssistantPlaceholder(chatSessionId);
+    this.launchClaudeStreamingSession(chatSessionId, learningPrompt, cwd);
+  }
+
+  private async startLearningCopilotSession(
+    chatSessionId: string,
+    learningPrompt: string,
+  ): Promise<void> {
+    this.createAssistantPlaceholder(chatSessionId);
+
+    const client = await this.getClient();
+    const self = this;
+
+    const session = await client.createSession({
+      model: 'gpt-5.3-codex',
+      streaming: true,
+      systemMessage: {
+        mode: 'append',
+        content: learningPrompt,
+      },
+      tools: [
+        {
+          name: 'read_memory',
+          description: 'Read saved memories for this service.',
+          parameters: { type: 'object', properties: {} },
+          handler: async () => {
+            const cs = self.chatSessions.get(chatSessionId);
+            if (!cs) return 'No session.';
+            const memories = readMemories(cs.memoryKey);
+            if (memories.length === 0) return 'No memories saved yet.';
+            return memories.map((m: string, i: number) => `${i + 1}. ${m}`).join('\n');
+          },
+        },
+        {
+          name: 'add_memory',
+          description: 'Save a learning about this service for future sessions.',
+          parameters: { type: 'object', properties: { memory: { type: 'string' } }, required: ['memory'] },
+          handler: async (args: any) => {
+            const cs = self.chatSessions.get(chatSessionId);
+            if (!cs) return 'No session.';
+            const result = addMemory(cs.memoryKey, args.memory);
+            if (!result.added) return 'Duplicate. Total: ' + result.total;
+            return `Saved. Total: ${result.total}`;
+          },
+        },
+      ],
+    });
+
+    const copilotChatSession = this.chatSessions.get(chatSessionId);
+    if (copilotChatSession) copilotChatSession.copilotSession = session;
+
+    session.on((event: any) => {
+      this.handleCopilotChatEvent(chatSessionId, event);
+    });
+
+    // Send initial message to start analysis
+    await session.send({ prompt: 'Analyze the shadow actions and present your understanding.' });
   }
 
   // ==================== Disposal ====================

@@ -259,7 +259,7 @@ const dgrepAIService = getDGrepAIService();
 // Configure AI service from settings
 {
   const settings = loadStoreData().consoleReview;
-  const dgrepAnalysis = settings?.dgrepAnalysis || { provider: 'claude-sdk', sourceRepository: '' };
+  const dgrepAnalysis = settings?.dgrepAnalysis || { provider: 'copilot-sdk', sourceRepository: '' };
   dgrepAIService.setProvider(dgrepAnalysis.provider);
   dgrepAIService.setSourceRepo(dgrepAnalysis.sourceRepository || null);
 }
@@ -495,7 +495,7 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       const consoleSessionId = `console-${Date.now()}`;
       await storageService.saveReviewSession(
         params[0], params[1], params[2], consoleSessionId,
-        'Console Review', 'claude-sdk', params[3]
+        'Console Review', 'copilot-sdk', params[3]
       );
       return;
     }
@@ -713,7 +713,7 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
           );
 
           // 5. Start AI review with default provider
-          const trigProvider = trigSettings?.analyzeComments?.provider || 'claude-sdk';
+          const trigProvider = trigSettings?.analyzeComments?.provider || 'copilot-sdk';
           const trigRequest = {
             prId: trigPrId,
             provider: trigProvider,
@@ -1276,6 +1276,24 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
     case 'dgrep-ai:chat-destroy':
       await dgrepAIService.destroyChatSession(params[0]);
       return;
+    case 'dgrep-ai:shadow-save-csv':
+      // params: [shadowId, stepIndex, columns, rows]
+      return dgrepAIService.saveShadowCsv(params[0], params[1], params[2], params[3]);
+    case 'dgrep-ai:learning-create': {
+      // params: [dgrepSessionId, columns, rows, shadowLog, sourceRepoPath?, serviceName?, queryContext?]
+      const learnFullResults = dgrepService.getResults(params[0]);
+      const learnColumns = learnFullResults?.columns || params[1];
+      const learnRows = learnFullResults?.rows || params[2];
+      const learnSourceRepo = params[4] || null;
+      const learnServiceName = params[5] || null;
+      const learnQueryContext = params[6] || null;
+      const learnDgrepSettings = loadStoreData().consoleReview?.dgrepAnalysis;
+      if (learnDgrepSettings) {
+        dgrepAIService.setProvider(learnDgrepSettings.provider);
+        dgrepAIService.setSourceRepo(learnSourceRepo || learnDgrepSettings.sourceRepository || null);
+      }
+      return dgrepAIService.createLearningSession(params[0], learnColumns, learnRows, params[3], learnSourceRepo, learnServiceName, learnQueryContext);
+    }
     default:
       throw new Error(`Unknown method: ${method}`);
   }

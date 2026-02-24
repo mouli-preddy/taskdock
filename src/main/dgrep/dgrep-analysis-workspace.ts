@@ -8,6 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { getQueryToolSource } from './dgrep-query-tool.js';
+import { encode as toonEncode, decode as toonDecode } from '@toon-format/toon';
 
 const TASKDOCK_DIR = path.join(os.homedir(), '.taskdock');
 const DGREP_ANALYSIS_DIR = path.join(TASKDOCK_DIR, 'dgrep', 'analysis');
@@ -67,8 +68,8 @@ export function createAnalysisWorkspace(
   fs.writeFileSync(kqlGuidelinesPath, getKqlGuidelines(), 'utf-8');
 
   // Write metadata
-  const metadataPath = path.join(basePath, 'metadata.json');
-  fs.writeFileSync(metadataPath, JSON.stringify({ ...metadata, columns }, null, 2), 'utf-8');
+  const metadataPath = path.join(basePath, 'metadata.toon');
+  fs.writeFileSync(metadataPath, toonEncode({ ...metadata, columns }), 'utf-8');
 
   return {
     basePath,
@@ -83,7 +84,7 @@ export function createAnalysisWorkspace(
 }
 
 export function buildSummaryPrompt(workspace: AnalysisWorkspace, sourceRepoPath?: string): string {
-  const meta = JSON.parse(fs.readFileSync(workspace.metadataPath, 'utf-8'));
+  const meta = toonDecode(fs.readFileSync(workspace.metadataPath, 'utf-8')) as any;
 
   const ws = workspace.basePath.replace(/\\/g, '/');
   const outputPath = workspace.summaryOutputPath.replace(/\\/g, '/');
@@ -101,7 +102,7 @@ ${serviceName ? `Service: **${serviceName}**${serviceDesc ? ` — ${serviceDesc}
 ## Workspace: ${ws}
 - \`data.csv\` — Log data with \`_row\` column. **Do NOT read end-to-end.** Use the query tool.
 - \`query-logs.mjs\` — CSV-aware search tool (run via Bash).
-- \`metadata.json\` — Query parameters.
+- \`metadata.toon\` — Query parameters.
 ${sourceRepoPath ? `
 ## Source Code Repository
 ${serviceName ? `This is the source code for **${serviceName}**.` : 'Source code for this service is available.'}
@@ -245,7 +246,7 @@ export function buildRCAPrompt(
   targetIndex: number,
   sourceRepoPath?: string
 ): string {
-  const meta = JSON.parse(fs.readFileSync(workspace.metadataPath, 'utf-8'));
+  const meta = toonDecode(fs.readFileSync(workspace.metadataPath, 'utf-8')) as any;
   const serviceName = meta.serviceName || '';
   const serviceDesc = meta.serviceDescription || '';
 
@@ -257,7 +258,7 @@ ${serviceName ? `Service: **${serviceName}**${serviceDesc ? ` — ${serviceDesc}
 ## Files in ${workspace.basePath}
 - \`data.csv\` — Full log data with \`_row\` column for line numbers. Use the query tool, not sequential reading.
 - \`query-logs.mjs\` — CSV-aware search tool.
-- \`metadata.json\` — Query context.
+- \`metadata.toon\` — Query context.
 ${sourceRepoPath ? `
 ## Source Code Repository
 ${serviceName ? `This is the source code for **${serviceName}**.` : 'Source code for this service is available.'}

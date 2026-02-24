@@ -94,17 +94,17 @@ export const DEFAULT_CONSOLE_REVIEW_SETTINGS: ConsoleReviewSettings = {
   generatedFilePatterns: [],
   enableWorkIQ: true,
   analyzeComments: {
-    provider: 'claude-sdk',
+    provider: 'copilot-sdk',
     showTerminal: false,
     timeoutMinutes: 5,
   },
   applyChanges: {
-    provider: 'claude-terminal',
+    provider: 'copilot-sdk',
     showTerminal: false,
     timeoutMinutes: 5,
   },
   dgrepAnalysis: {
-    provider: 'claude-sdk',
+    provider: 'copilot-sdk',
     sourceRepository: '',
   },
 };

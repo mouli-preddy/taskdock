@@ -1261,7 +1261,7 @@ class PRReviewApp {
             id: walkthroughSessionId,
             prId: state.prId,
             name: 'Deep Review Walkthrough',
-            provider: 'claude-terminal',
+            provider: 'copilot-sdk',
             showTerminal: false,
             status: 'complete',
             createdAt: new Date().toISOString(),
@@ -3216,7 +3216,7 @@ class PRReviewApp {
     try {
       // Get settings for provider configuration
       const settings = await window.electronAPI.getConsoleReviewSettings();
-      const analyzeSettings = settings.analyzeComments || { provider: 'claude-sdk' };
+      const analyzeSettings = settings.analyzeComments || { provider: 'copilot-sdk' };
 
       // Get file contents for context
       const fileContents: Record<string, string> = {};
@@ -3286,7 +3286,7 @@ class PRReviewApp {
     try {
       // Get settings for provider configuration
       const settings = await window.electronAPI.getConsoleReviewSettings();
-      const analyzeSettings = settings.analyzeComments || { provider: 'claude-sdk' };
+      const analyzeSettings = settings.analyzeComments || { provider: 'copilot-sdk' };
 
       const filePath = thread.threadContext?.filePath;
       const fileContents: Record<string, string> = {};
@@ -4073,7 +4073,7 @@ After this, respond with a simple text response to greet the user and ask them w
     const reviewSession = await window.electronAPI.aiGetSession(event.sessionId);
     const walkthroughSessionId = `review-wt-${event.sessionId}`;
     const displayName = event.walkthrough.displayName || reviewSession?.displayName || 'Review Walkthrough';
-    const provider = reviewSession?.provider || 'claude-sdk';
+    const provider = reviewSession?.provider || 'copilot-sdk';
 
     // Add to walkthroughs sidebar - this is a walkthrough from a review session
     const walkthroughsView = this.walkthroughsViews.get(this.activeReviewTabId);
@@ -4455,7 +4455,7 @@ After this, respond with a simple text response to greet the user and ask them w
         // Get session info for metadata
         const session = await window.electronAPI.walkthroughGetSession(event.sessionId);
         const displayName = session?.name || 'Walkthrough';
-        const provider = session?.provider || 'claude-sdk';
+        const provider = session?.provider || 'copilot-sdk';
 
         await window.electronAPI.aiSaveWalkthroughSession(
           state.org,

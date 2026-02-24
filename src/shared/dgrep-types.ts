@@ -5,6 +5,7 @@
 export type DGrepEndpointName =
   | 'Firstparty PROD'
   | 'Diagnostics PROD'
+  | 'Test'
   | 'CA Mooncake'
   | 'CA Fairfax'
   | 'Firstparty INT'
@@ -20,6 +21,7 @@ export type DGrepEndpointName =
 export const DGREP_ENDPOINT_URLS: Record<DGrepEndpointName, string> = {
   'Firstparty PROD': 'https://firstparty.monitoring.windows.net/',
   'Diagnostics PROD': 'https://production.diagnostics.monitoring.core.windows.net/',
+  'Test': 'https://test2.diagnostics.monitoring.core.windows.net/',
   'CA Mooncake': 'https://mooncake.diagnostics.monitoring.core.chinacloudapi.cn/',
   'CA Fairfax': 'https://fairfax.diagnostics.monitoring.core.usgovcloudapi.net/',
   'Firstparty INT': 'https://firstparty-int.monitoring.windows.net/',

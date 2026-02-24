@@ -334,7 +334,7 @@ export class PluginEngine extends EventEmitter {
   /** Call Copilot SDK with a prompt and return the text response */
   private async callCopilot(prompt: string, opts: any): Promise<string> {
     const logger = getLogger();
-    logger.info('PluginEngine', 'Plugin AI call: Copilot SDK', { model: opts?.model || 'gpt-4o' });
+    logger.info('PluginEngine', 'Plugin AI call: Copilot SDK', { model: opts?.model || 'gpt-5.3-codex' });
 
     const { CopilotClient } = await import('@github/copilot-sdk');
     if (!this._copilotClient || this._copilotClient.getState() === 'error' || this._copilotClient.getState() === 'disconnected') {
@@ -342,7 +342,7 @@ export class PluginEngine extends EventEmitter {
       await client.start();
       this._copilotClient = client;
     }
-    const model = opts?.model || 'gpt-4o';
+    const model = opts?.model || 'gpt-5.3-codex';
     const session = await this._copilotClient.createSession({ model });
     try {
       const response = await session.sendAndWait({ prompt }, 120000);

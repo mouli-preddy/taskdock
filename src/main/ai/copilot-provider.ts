@@ -26,7 +26,7 @@ import type {
 import type { FileChange } from '../../shared/types.js';
 
 interface CopilotConfig {
-  model: 'claude-opus-4.6' | 'gpt-4o' | 'gpt-4' | 'gpt-5' | 'claude-3.5-sonnet';
+  model: 'gpt-5.3-codex' | 'claude-opus-4.6' | 'gpt-4o' | 'gpt-4' | 'gpt-5' | 'claude-3.5-sonnet';
   streaming: boolean;
 }
 
@@ -51,7 +51,7 @@ export async function stopCopilotClient(): Promise<void> {
 export class CopilotProvider implements IAIProvider {
   readonly name: AIProvider = 'copilot';
   private config: CopilotConfig = {
-    model: 'gpt-5',
+    model: 'gpt-5.3-codex',
     streaming: true,
   };
 

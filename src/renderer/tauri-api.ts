@@ -729,6 +729,10 @@ export const tauriAPI = {
     invoke('dgrep-ai:chat-send', chatSessionId, message),
   dgrepAIChatDestroy: (chatSessionId: string) =>
     invoke('dgrep-ai:chat-destroy', chatSessionId),
+  dgrepAIShadowSaveCsv: (shadowId: string, stepIndex: number, columns: string[], rows: any[]) =>
+    invoke('dgrep-ai:shadow-save-csv', shadowId, stepIndex, columns, rows),
+  dgrepAILearningCreate: (sessionId: string, columns: string[], rows: any[], shadowLog: any[], sourceRepoPath?: string, serviceName?: string, queryContext?: any) =>
+    invoke('dgrep-ai:learning-create', sessionId, columns, rows, shadowLog, sourceRepoPath, serviceName, queryContext),
 
   // DGrep AI event listeners
   onDgrepAISummaryProgress: (callback: (event: any) => void) => subscribe('dgrep:ai:summary-progress', callback),

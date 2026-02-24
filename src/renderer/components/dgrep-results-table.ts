@@ -178,6 +178,7 @@ export class DGrepResultsTable {
 
   // Callback for summary panel data
   private onDataChangeCallback: ((columns: string[], rows: Record<string, any>[], filteredRows: Record<string, any>[]) => void) | null = null;
+  private onRowExpandCallback: ((rowIndex: number) => void) | null = null;
 
   // Bound handlers for document-level listeners (to allow cleanup)
   private boundDocMouseDown: ((e: MouseEvent) => void) | null = null;
@@ -235,6 +236,11 @@ export class DGrepResultsTable {
   /** Register a callback for when data changes (used by AI summary panel) */
   onDataChange(cb: (columns: string[], rows: Record<string, any>[], filteredRows: Record<string, any>[]) => void): void {
     this.onDataChangeCallback = cb;
+  }
+
+  /** Register a callback for when a row is expanded (detail panel opened). */
+  onRowExpand(cb: (rowIndex: number) => void): void {
+    this.onRowExpandCallback = cb;
   }
 
   setData(columns: string[], rows: Record<string, any>[]): void {
@@ -722,6 +728,7 @@ export class DGrepResultsTable {
           this.selectedRowIndex = null;
         } else {
           this.selectedRowIndex = index;
+          this.onRowExpandCallback?.(index);
         }
         this.scroller.setSelectedRow(this.selectedRowIndex);
         this.renderDetailPanel();

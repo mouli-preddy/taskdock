@@ -548,6 +548,8 @@ export interface ElectronAPI {
   dgrepAIChatCreate: (sessionId: string, columns: string[], rows: any[], sourceRepoPath?: string, serviceName?: string, queryContext?: { endpoint: string; namespace: string; events: string[]; startTime: string; endTime: string; serverQuery: string; clientQuery: string }) => Promise<string>;
   dgrepAIChatSend: (chatSessionId: string, message: string) => Promise<void>;
   dgrepAIChatDestroy: (chatSessionId: string) => Promise<void>;
+  dgrepAIShadowSaveCsv: (shadowId: string, stepIndex: number, columns: string[], rows: any[]) => Promise<string>;
+  dgrepAILearningCreate: (sessionId: string, columns: string[], rows: any[], shadowLog: any[], sourceRepoPath?: string, serviceName?: string, queryContext?: any) => Promise<string>;
 
   // DGrep AI event listeners
   onDgrepAISummaryProgress: (callback: (event: { sessionId: string; text: string }) => void) => () => void;

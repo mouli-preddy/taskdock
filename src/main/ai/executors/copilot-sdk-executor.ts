@@ -42,7 +42,7 @@ export async function stopCopilotClient(): Promise<void> {
 }
 
 export class CopilotSDKExecutor extends BaseReviewExecutor {
-  private model: 'claude-opus-4.6' | 'gpt-4o' | 'gpt-4' | 'gpt-5' | 'claude-3.5-sonnet' = 'claude-opus-4.6';
+  private model: 'gpt-5.3-codex' | 'claude-opus-4.6' | 'gpt-4o' | 'gpt-4' | 'gpt-5' | 'claude-3.5-sonnet' = 'gpt-5.3-codex';
   private session: any = null;
 
   async isAvailable(): Promise<{ available: boolean; error?: string }> {

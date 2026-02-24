@@ -1,6 +1,5 @@
 import { escapeHtml } from '../utils/html-utils.js';
-import { MessageCircle, X, Send, Loader2 } from '../utils/icons.js';
-import { iconHtml } from '../utils/icons.js';
+import { iconHtml, MessageCircle, X, Send, Loader2 } from '../utils/icons.js';
 import { marked } from 'marked';
 import type { DGrepChatMessage, DGrepChatEvent } from '../../shared/dgrep-ai-types.js';
 
@@ -60,6 +59,16 @@ export class DGrepChatPanel {
     } catch (err) {
       this.showError(`Failed to create chat session: ${err}`);
     }
+  }
+
+  /** Set session ID from an externally created session (e.g. learning mode). */
+  setExternalSession(chatSessionId: string): void {
+    this.chatSessionId = chatSessionId;
+    this.isStreaming = true;
+    // Remove welcome screen so streamed messages are visible
+    const welcome = this.el.querySelector('.dgrep-chat-welcome');
+    if (welcome) welcome.remove();
+    this.updateSendButton();
   }
 
   /** Handle chat events from the backend */

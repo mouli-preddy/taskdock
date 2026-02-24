@@ -80,6 +80,21 @@ export class DGrepSearchView {
   // Quick filter regex toggle state
   private quickFilterRegex = false;
 
+  // Shadow mode state
+  private shadowMode = false;
+  private shadowId = '';
+  private shadowPendingClientQuery = ''; // set when client query starts, consumed on complete
+  private shadowExpandedLines: Set<number> = new Set(); // row indices expanded during current step
+  private shadowLog: Array<{
+    timestamp: string;
+    type: 'server_search' | 'client_query';
+    description: string;
+    params: Record<string, any>;
+    csvPath: string;
+    resultCount: number;
+    expandedLines: number[];
+  }> = [];
+
   // Token state
   private tokenStatus: { hasToken: boolean; valid: boolean } = { hasToken: false, valid: false };
   private acquiringToken = false;
@@ -227,7 +242,20 @@ export class DGrepSearchView {
     this.updateStatusBar(`Complete: ${event.resultCount.toLocaleString()} results`, 100, event.resultCount);
     this.updateSearchButtons();
     this.enableClientQuery(true);
-    this.loadResults(event.sessionId);
+    this.loadResults(event.sessionId).then(() => {
+      // Shadow mode: log action after results are loaded so CSV snapshot has fresh data
+      if (this.shadowMode) {
+        if (this.shadowPendingClientQuery) {
+          const kql = this.shadowPendingClientQuery;
+          this.shadowPendingClientQuery = '';
+          this.shadowLogAction('client_query', `Client query: ${kql}`, { kql }, event.resultCount);
+        } else {
+          const ctx = this.buildChatQueryContext();
+          const desc = `Server search: ${ctx.namespace}/${ctx.events.join(',')} from ${ctx.startTime} to ${ctx.endTime}${ctx.serverQuery ? ` with KQL: ${ctx.serverQuery}` : ''}`;
+          this.shadowLogAction('server_search', desc, ctx, event.resultCount);
+        }
+      }
+    });
   }
 
   setSearchError(event: DGrepErrorEvent): void {
@@ -303,6 +331,114 @@ export class DGrepSearchView {
     if (event.dgrepSessionId === this.activeSessionId) {
       this.clientQueryEditor.setValue(event.kql);
     }
+  }
+
+  // ==================== Shadow Mode ====================
+
+  private setShadowStripVisible(visible: boolean): void {
+    const strip = this.container.querySelector('#dgrepShadowStrip') as HTMLElement;
+    const btn = this.container.querySelector('#dgrepShadowToggle') as HTMLButtonElement;
+    if (strip) strip.style.display = visible ? '' : 'none';
+    if (btn) btn.classList.toggle('active', visible);
+  }
+
+  private toggleShadowMode(): void {
+    if (this.shadowMode) {
+      this.shadowCancel();
+      return;
+    }
+    this.shadowMode = true;
+    this.shadowId = Date.now().toString(36);
+    this.shadowLog = [];
+    this.shadowPendingClientQuery = '';
+    this.shadowExpandedLines.clear();
+    this.setShadowStripVisible(true);
+    this.updateShadowCount();
+  }
+
+  private updateShadowCount(): void {
+    const el = this.container.querySelector('#dgrepShadowCount');
+    if (el) el.textContent = String(this.shadowLog.length);
+  }
+
+  /** Log a shadow action and save a CSV snapshot of current results. */
+  private async shadowLogAction(
+    type: 'server_search' | 'client_query',
+    description: string,
+    params: Record<string, any>,
+    resultCount: number,
+  ): Promise<void> {
+    if (!this.shadowMode) return;
+
+    const columns = this.resultsTable.getColumns();
+    const rows = this.resultsTable.getFilteredRows();
+    const stepIndex = this.shadowLog.length;
+
+    let csvPath = '';
+    try {
+      csvPath = await (window as any).electronAPI?.dgrepAIShadowSaveCsv?.(
+        this.shadowId, stepIndex, columns, rows.slice(0, 50000)
+      ) ?? '';
+    } catch (err) {
+      console.error('Shadow CSV save failed:', err);
+    }
+
+    // Attach expanded lines from the previous step (lines viewed before this action)
+    const expandedLines = [...this.shadowExpandedLines].sort((a, b) => a - b);
+    this.shadowExpandedLines.clear();
+
+    this.shadowLog.push({
+      timestamp: new Date().toISOString(),
+      type,
+      description,
+      params,
+      csvPath,
+      resultCount,
+      expandedLines,
+    });
+    this.updateShadowCount();
+  }
+
+  private async shadowLearn(): Promise<void> {
+    if (this.shadowLog.length === 0) {
+      this.shadowCancel();
+      return;
+    }
+
+    this.shadowMode = false;
+    this.setShadowStripVisible(false);
+
+    this.chatPanel.resetSession();
+    this.chatPanel.show();
+
+    const linkedService = this.getLinkedService();
+    const queryContext = this.buildChatQueryContext();
+    const columns = this.resultsTable.getColumns();
+    const rows = this.resultsTable.getFilteredRows();
+
+    try {
+      const chatSessionId = await (window as any).electronAPI?.dgrepAILearningCreate?.(
+        this.activeSessionId,
+        columns, rows.slice(0, 2000),
+        this.shadowLog,
+        linkedService?.repoPath, linkedService?.name, queryContext
+      ) ?? '';
+
+      if (chatSessionId) {
+        this.chatPanel.setExternalSession(chatSessionId);
+        this.shadowLog = [];
+      } else {
+        this.chatPanel.resetSession();
+      }
+    } catch (err) {
+      console.error('Failed to create learning session:', err);
+    }
+  }
+
+  private shadowCancel(): void {
+    this.shadowMode = false;
+    this.shadowLog = [];
+    this.setShadowStripVisible(false);
   }
 
   async populateFromUrl(url: string): Promise<void> {
@@ -598,6 +734,16 @@ export class DGrepSearchView {
             <span style="flex:1"></span>
             <button class="btn btn-sm btn-secondary" id="dgrepAISummarizeBtn" disabled>Summarize</button>
             <button class="btn btn-sm btn-secondary" id="dgrepAIChatBtn" disabled>AI Chat</button>
+            <button class="btn btn-sm btn-secondary" id="dgrepShadowToggle" disabled>Shadow</button>
+          </div>
+
+          <!-- Shadow mode indicator -->
+          <div class="dgrep-shadow-strip" id="dgrepShadowStrip" style="display:none">
+            <span class="dgrep-shadow-indicator"></span>
+            <span>Shadow mode — recording actions (<span id="dgrepShadowCount">0</span> steps)</span>
+            <span style="flex:1"></span>
+            <button class="btn btn-xs btn-primary" id="dgrepShadowLearn">Learn</button>
+            <button class="btn btn-xs btn-ghost" id="dgrepShadowCancel">Cancel</button>
           </div>
 
           <!-- AI Summary Panel -->
@@ -660,6 +806,11 @@ export class DGrepSearchView {
     this.resultsTable.onDataChange((columns, _allRows, filteredRows) => {
       this.facetedSidebar.setData(columns, filteredRows);
       this.updateHistogram(columns, filteredRows);
+    });
+
+    // Track row expansions for shadow mode
+    this.resultsTable.onRowExpand((rowIndex) => {
+      if (this.shadowMode) this.shadowExpandedLines.add(rowIndex);
     });
 
     // Initialize AI panels
@@ -734,6 +885,17 @@ export class DGrepSearchView {
         const cols = this.resultsTable.getColumns();
         this.chatPanel.initSession(cols, rows);
       }
+    });
+
+    // Shadow mode buttons
+    this.container.querySelector('#dgrepShadowToggle')?.addEventListener('click', () => {
+      this.toggleShadowMode();
+    });
+    this.container.querySelector('#dgrepShadowLearn')?.addEventListener('click', () => {
+      this.shadowLearn();
+    });
+    this.container.querySelector('#dgrepShadowCancel')?.addEventListener('click', () => {
+      this.shadowCancel();
     });
 
     // Initialize time histogram
@@ -1241,6 +1403,8 @@ export class DGrepSearchView {
       return;
     }
 
+    if (this.shadowMode) this.shadowPendingClientQuery = clientQuery;
+
     this.searching = true;
     this.updateSearchButtons();
     this.updateStatusBar('Running client query...', 0);
@@ -1510,6 +1674,8 @@ export class DGrepSearchView {
     const aiChatBtn = this.container.querySelector('#dgrepAIChatBtn') as HTMLButtonElement;
     if (aiSumBtn) aiSumBtn.disabled = !enabled;
     if (aiChatBtn) aiChatBtn.disabled = !enabled;
+    const shadowBtn = this.container.querySelector('#dgrepShadowToggle') as HTMLButtonElement;
+    if (shadowBtn) shadowBtn.disabled = !enabled;
   }
 
   private collapseQueryPanel(): void {

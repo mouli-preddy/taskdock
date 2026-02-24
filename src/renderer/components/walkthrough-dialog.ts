@@ -56,7 +56,7 @@ export async function showWalkthroughDialog(options: WalkthroughDialogOptions): 
     ];
 
     // Find first available provider
-    const defaultProvider = providerInfos.find(p => p.available)?.value ?? 'claude-terminal';
+    const defaultProvider = providerInfos.find(p => p.available)?.value ?? 'copilot-sdk';
 
     // Create backdrop
     const backdrop = document.createElement('div');

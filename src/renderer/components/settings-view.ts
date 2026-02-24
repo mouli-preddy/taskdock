@@ -1027,13 +1027,13 @@ export class SettingsView {
     if (enableWorkIQ) enableWorkIQ.checked = this.consoleReviewSettings.enableWorkIQ ?? true;
 
     // Analyze Comments form values
-    const analyzeComments = this.consoleReviewSettings.analyzeComments || { provider: 'claude-sdk', showTerminal: false, timeoutMinutes: 5 };
+    const analyzeComments = this.consoleReviewSettings.analyzeComments || { provider: 'copilot-sdk', showTerminal: false, timeoutMinutes: 5 };
     if (analyzeCommentsProvider) analyzeCommentsProvider.value = analyzeComments.provider;
     if (analyzeCommentsShowTerminal) analyzeCommentsShowTerminal.checked = analyzeComments.showTerminal;
     if (analyzeCommentsTimeout) analyzeCommentsTimeout.value = String(analyzeComments.timeoutMinutes);
 
     // Apply Changes form values
-    const applyChanges = this.consoleReviewSettings.applyChanges || { provider: 'claude-terminal', showTerminal: false, timeoutMinutes: 5 };
+    const applyChanges = this.consoleReviewSettings.applyChanges || { provider: 'copilot-sdk', showTerminal: false, timeoutMinutes: 5 };
     if (applyChangesProvider) applyChangesProvider.value = applyChanges.provider;
     if (applyChangesShowTerminal) applyChangesShowTerminal.checked = applyChanges.showTerminal;
     if (applyChangesTimeout) applyChangesTimeout.value = String(applyChanges.timeoutMinutes);
@@ -1043,7 +1043,7 @@ export class SettingsView {
     if (defaultChatAI) defaultChatAI.value = this.consoleReviewSettings.defaultChatAI || 'copilot';
 
     // DGrep Analysis settings
-    const dgrepAnalysis = this.consoleReviewSettings.dgrepAnalysis || { provider: 'claude-sdk', sourceRepository: '' };
+    const dgrepAnalysis = this.consoleReviewSettings.dgrepAnalysis || { provider: 'copilot-sdk', sourceRepository: '' };
     const dgrepAnalysisProvider = this.container.querySelector('#dgrepAnalysisProvider') as HTMLSelectElement;
     if (dgrepAnalysisProvider) dgrepAnalysisProvider.value = dgrepAnalysis.provider;
 
