@@ -3223,6 +3223,38 @@
   margin-bottom: var(--space-2);
 }
 
+.dgrep-ai-issues-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-1);
+}
+
+.dgrep-ai-issue-filters {
+  display: flex;
+  gap: 4px;
+}
+
+.dgrep-ai-issue-filter-pill {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.dgrep-ai-issue-filter-pill:hover {
+  border-color: var(--pill-color);
+  color: var(--pill-color);
+}
+.dgrep-ai-issue-filter-pill.active {
+  background: var(--pill-color);
+  border-color: var(--pill-color);
+  color: #fff;
+}
+
 .dgrep-ai-issue-row {
   padding: var(--space-2);
   border: 1px solid var(--border-color-muted);

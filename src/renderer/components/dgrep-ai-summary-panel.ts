@@ -29,6 +29,7 @@ export class DGrepAISummaryPanel {
   private cachedSessionId: string | null = null;
   private contentHeight = 300;
   private detailView = false;
+  private issueFilterSeverities: Set<string> = new Set(['critical', 'error']);
 
   onSummarize: ((columns: string[], rows: any[], patterns?: string[]) => void) | null = null;
 
@@ -122,8 +123,9 @@ export class DGrepAISummaryPanel {
         </div>
         <div class="dgrep-ai-summary-header-right">
           <select class="dgrep-ai-analysis-level">
-            <option value="quick">Quick</option>
-            <option value="detailed" selected>Detailed</option>
+            <option value="quick">Quick (3-5)</option>
+            <option value="standard" selected>Standard (5-10)</option>
+            <option value="detailed">Detailed (all)</option>
             <option value="custom">Custom...</option>
           </select>
           <button class="btn btn-xs btn-primary dgrep-ai-summarize-btn">
@@ -200,9 +202,9 @@ export class DGrepAISummaryPanel {
     }
   }
 
-  getAnalysisLevel(): { level: 'quick' | 'detailed' | 'custom'; customPrompt?: string } {
+  getAnalysisLevel(): { level: 'quick' | 'standard' | 'detailed' | 'custom'; customPrompt?: string } {
     const select = this.el.querySelector('.dgrep-ai-analysis-level') as HTMLSelectElement;
-    const level = (select?.value || 'detailed') as 'quick' | 'detailed' | 'custom';
+    const level = (select?.value || 'standard') as 'quick' | 'standard' | 'detailed' | 'custom';
     if (level === 'custom') {
       const input = this.el.querySelector('.dgrep-ai-custom-prompt-input') as HTMLInputElement;
       return { level, customPrompt: input?.value || '' };
@@ -257,12 +259,43 @@ export class DGrepAISummaryPanel {
 
     let html = '';
 
-    // Issues list (primary view)
+    // Issues list with severity filter pills
     const issues = summary.issues;
     if (issues && issues.length > 0) {
-      html += '<div class="dgrep-ai-issues-section">';
-      html += '<div class="dgrep-ai-summary-bar-label">Issues Found</div>';
+      // Count by severity
+      const sevCounts: Record<string, number> = {};
       for (const issue of issues) {
+        sevCounts[issue.severity] = (sevCounts[issue.severity] || 0) + 1;
+      }
+
+      // Sort: by severity order (critical > error > warning > info), then by occurrences desc
+      const sevOrder: Record<string, number> = { critical: 0, error: 1, warning: 2, info: 3 };
+      const sorted = [...issues].sort((a, b) => {
+        const sevDiff = (sevOrder[a.severity] ?? 9) - (sevOrder[b.severity] ?? 9);
+        if (sevDiff !== 0) return sevDiff;
+        return b.occurrences - a.occurrences;
+      });
+
+      // Filter pills
+      const allSevs = ['critical', 'error', 'warning', 'info'];
+      html += '<div class="dgrep-ai-issues-section">';
+      html += '<div class="dgrep-ai-issues-header">';
+      html += '<span class="dgrep-ai-summary-bar-label">Issues Found</span>';
+      html += '<div class="dgrep-ai-issue-filters">';
+      for (const sev of allSevs) {
+        const count = sevCounts[sev] || 0;
+        if (count === 0) continue;
+        const active = this.issueFilterSeverities.has(sev);
+        const color = SEVERITY_COLORS[sev] || '#6e7681';
+        html += `<button class="dgrep-ai-issue-filter-pill${active ? ' active' : ''}" data-severity="${sev}" style="--pill-color:${color}">
+          ${sev} (${count})
+        </button>`;
+      }
+      html += '</div></div>';
+
+      // Filtered issue rows
+      const filtered = sorted.filter(i => this.issueFilterSeverities.has(i.severity));
+      for (const issue of filtered) {
         const color = SEVERITY_COLORS[issue.severity] || '#6e7681';
         html += `<div class="dgrep-ai-issue-row" data-issue-path="${escapeHtml(issue.detailedAnalysisPath || '')}">
           <div class="dgrep-ai-issue-header">
@@ -273,6 +306,9 @@ export class DGrepAISummaryPanel {
           <div class="dgrep-ai-issue-cause">${escapeHtml(issue.briefRootCause)}</div>
           ${issue.detailedAnalysisPath ? '<button class="btn btn-ghost btn-xs dgrep-ai-issue-details-btn">View Details</button>' : ''}
         </div>`;
+      }
+      if (filtered.length === 0) {
+        html += '<div class="dgrep-ai-summary-empty">No issues match the selected filters.</div>';
       }
       html += '</div>';
     }
@@ -315,6 +351,7 @@ export class DGrepAISummaryPanel {
   }
 
   private attachIssueDetailListeners() {
+    // Detail view buttons
     this.el.querySelectorAll('.dgrep-ai-issue-details-btn').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
@@ -322,6 +359,22 @@ export class DGrepAISummaryPanel {
         const filePath = row?.dataset.issuePath;
         if (!filePath) return;
         await this.showDetailView(filePath);
+      });
+    });
+
+    // Severity filter pills
+    this.el.querySelectorAll('.dgrep-ai-issue-filter-pill').forEach(pill => {
+      pill.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const sev = (pill as HTMLElement).dataset.severity;
+        if (!sev) return;
+        if (this.issueFilterSeverities.has(sev)) {
+          this.issueFilterSeverities.delete(sev);
+        } else {
+          this.issueFilterSeverities.add(sev);
+        }
+        // Re-render with updated filters
+        if (this.cachedSummary) this.renderComplete(this.cachedSummary);
       });
     });
   }

@@ -29,7 +29,7 @@ export interface AnalysisMetadata {
   startTime: string;
   endTime: string;
   totalRows: number;
-  analysisLevel?: 'quick' | 'detailed' | 'custom';
+  analysisLevel?: 'quick' | 'standard' | 'detailed' | 'custom';
   customPrompt?: string;
 }
 
@@ -134,6 +134,8 @@ Wait for it to finish. Read \`${ws}/error-categories.md\`. Create a task for eac
 ### Phase 3: Investigate (parallel subagents)
 ${meta.analysisLevel === 'quick' ? `
 **QUICK MODE:** From the categorized list, pick the top 3-5 categories most likely to be user-impacting — things like retry exhaustion, terminal HTTP errors, unhandled exceptions, timeouts, service unavailable. Skip obvious noise (library logging, auth refreshes, health checks). Only launch subagents for your selected categories.
+` : meta.analysisLevel === 'standard' ? `
+**STANDARD MODE:** From the categorized list, pick the top 5-10 categories that are most likely to matter — real failures first, then warnings that could indicate degradation. Skip categories that are clearly noise (verbose library logging, routine auth refreshes). Launch subagents for your selected categories.
 ` : meta.analysisLevel === 'custom' && meta.customPrompt ? `
 **CUSTOM FOCUS:** The user wants you to focus on: "${meta.customPrompt}". Prioritize investigating categories related to this concern. You may skip unrelated categories.
 ` : `
