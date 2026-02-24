@@ -723,6 +723,8 @@ export const tauriAPI = {
     invoke('dgrep-ai:read-file', filePath),
   dgrepAIDetectAnomalies: (sessionId: string, columns: string[], rows: any[]) =>
     invoke('dgrep-ai:detect-anomalies', sessionId, columns, rows),
+  dgrepAIImproveDisplay: (sessionId: string, columns: string[], rows: any[], metadata: any) =>
+    invoke('dgrep-ai:improve-display', sessionId, columns, rows, metadata),
   dgrepAIChatCreate: (sessionId: string, columns: string[], rows: any[], sourceRepoPath?: string, serviceName?: string, queryContext?: any) =>
     invoke('dgrep-ai:chat-create', sessionId, columns, rows, sourceRepoPath, serviceName, queryContext),
   dgrepAIChatSend: (chatSessionId: string, message: string) =>
@@ -741,6 +743,8 @@ export const tauriAPI = {
   onDgrepAIRCAComplete: (callback: (event: any) => void) => subscribe('dgrep:ai:rca-complete', callback),
   onDgrepAIChatEvent: (callback: (event: any) => void) => subscribe('dgrep:ai:chat-event', callback),
   onDgrepAIClientQueryUpdate: (callback: (event: any) => void) => subscribe('dgrep:ai:client-query-update', callback),
+  onDgrepAIImproveDisplayProgress: (callback: (event: any) => void) => subscribe('dgrep:ai:improve-display-progress', callback),
+  onDgrepAIImproveDisplayComplete: (callback: (event: any) => void) => subscribe('dgrep:ai:improve-display-complete', callback),
 };
 
 // Initialize connection when module loads

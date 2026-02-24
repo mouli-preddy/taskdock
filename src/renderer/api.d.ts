@@ -545,6 +545,7 @@ export interface ElectronAPI {
   dgrepAIAnalyzeRootCause: (sessionId: string, targetRow: any, targetIndex: number, contextRows: any[], columns: string[], metadata: { endpoint: string; namespace: string; events: string[]; startTime: string; endTime: string; totalRows: number }) => Promise<void>;
   dgrepAIReadFile: (filePath: string) => Promise<string>;
   dgrepAIDetectAnomalies: (sessionId: string, columns: string[], rows: any[]) => Promise<import('../shared/dgrep-ai-types.js').DGrepAnomalyResult | null>;
+  dgrepAIImproveDisplay: (sessionId: string, columns: string[], rows: any[], metadata: any) => Promise<void>;
   dgrepAIChatCreate: (sessionId: string, columns: string[], rows: any[], sourceRepoPath?: string, serviceName?: string, queryContext?: { endpoint: string; namespace: string; events: string[]; startTime: string; endTime: string; serverQuery: string; clientQuery: string }) => Promise<string>;
   dgrepAIChatSend: (chatSessionId: string, message: string) => Promise<void>;
   dgrepAIChatDestroy: (chatSessionId: string) => Promise<void>;
@@ -558,6 +559,8 @@ export interface ElectronAPI {
   onDgrepAIRCAComplete: (callback: (event: { sessionId: string; analysis?: import('../shared/dgrep-ai-types.js').DGrepRootCauseAnalysis; raw?: string; error?: string }) => void) => () => void;
   onDgrepAIChatEvent: (callback: (event: import('../shared/dgrep-ai-types.js').DGrepChatEvent) => void) => () => void;
   onDgrepAIClientQueryUpdate: (callback: (event: { chatSessionId: string; dgrepSessionId: string; kql: string }) => void) => () => void;
+  onDgrepAIImproveDisplayProgress: (callback: (event: { sessionId: string; text: string }) => void) => () => void;
+  onDgrepAIImproveDisplayComplete: (callback: (event: { sessionId: string; result?: import('../shared/dgrep-ai-types.js').ImproveDisplayResult; error?: string }) => void) => () => void;
 }
 
 declare global {
