@@ -426,6 +426,7 @@ export class DGrepAIService extends EventEmitter {
   ): Promise<void> {
     const client = await this.getClient();
     const self = this;
+    let errorEmitted = false;
 
     const session = await client.createSession({
       model: 'gpt-5.3-codex',
@@ -520,6 +521,7 @@ export class DGrepAIService extends EventEmitter {
           }
           case 'session.error': {
             const error = event.data?.message || 'Unknown error';
+            errorEmitted = true;
             self.emit('ai:improve-display-complete', { sessionId, error });
             session.destroy().catch(() => {});
             resolve();
@@ -531,10 +533,13 @@ export class DGrepAIService extends EventEmitter {
       session.send({
         prompt: `Analyze the CSV data file at ${workspace.dataPath.replace(/\\/g, '/')} and provide display improvement recommendations. Use the read_file and search_file tools to explore the data. Return your final answer as the JSON object described in your instructions.`,
       }).catch((err: any) => {
+        errorEmitted = true;
         self.emit('ai:improve-display-complete', { sessionId, error: err?.message || 'Send failed' });
         resolve();
       });
     });
+
+    if (errorEmitted) return;
 
     if (fullContent) {
       const parsed = this.tryParseJSON(fullContent);
@@ -555,6 +560,10 @@ export class DGrepAIService extends EventEmitter {
       }
       const raw = fs.readFileSync(outputPath, 'utf-8');
       const result = JSON.parse(raw);
+      if (!Array.isArray(result?.columns) || !Array.isArray(result?.formatters)) {
+        this.emit('ai:improve-display-complete', { sessionId, error: 'Invalid output format: missing columns or formatters array' });
+        return;
+      }
       this.emit('ai:improve-display-complete', { sessionId, result });
       logger.info(LOG_CATEGORY, 'Improve display complete', { sessionId });
     } catch (err: any) {

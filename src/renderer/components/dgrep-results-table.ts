@@ -1806,6 +1806,11 @@ export class DGrepResultsTable {
     for (const c of orderedCols) {
       if (this.columns.includes(c)) newVisible.add(c);
     }
+    if (newVisible.size === 0) {
+      // Agent produced no valid visible columns — keep current visibility
+      this.preImproveColumns = null;
+      return;
+    }
     this.visibleColumns = newVisible;
 
     const reordered: string[] = [];
@@ -1825,8 +1830,21 @@ export class DGrepResultsTable {
 
     this.compiledFormatters.clear();
     for (const fmt of result.formatters) {
+      if (!this.columns.includes(fmt.column)) continue; // skip non-existent columns
       try {
-        const fn = new Function('text', fmt.jsFunction.replace(/^function\s*\([^)]*\)\s*\{/, '').replace(/\}$/, '')) as (text: string) => string;
+        let body = fmt.jsFunction.trim();
+        // Extract body from "function(...) { ... }" wrapper
+        const funcMatch = body.match(/^function\s*\([^)]*\)\s*\{([\s\S]*)\}$/);
+        if (funcMatch) {
+          body = funcMatch[1];
+        } else {
+          // Try arrow function: "(text) => expr" or "(text) => { ... }"
+          const arrowMatch = body.match(/^\(?[^)]*\)?\s*=>\s*(?:\{([\s\S]*)\}|([\s\S]+))$/);
+          if (arrowMatch) {
+            body = arrowMatch[1] ? arrowMatch[1] : `return ${arrowMatch[2]}`;
+          }
+        }
+        const fn = new Function('text', body) as (text: string) => string;
         this.compiledFormatters.set(fmt.column, (text: string) => {
           const raw = fn(text);
           return this.sanitizeFormatterHtml(raw);
@@ -1858,18 +1876,22 @@ export class DGrepResultsTable {
   }
 
   private sanitizeFormatterHtml(html: string): string {
+    const ALLOWED_TAGS = new Set(['span', 'div', 'b', 'strong', 'em', 'i', 'br', 'mark', 'code', 'pre', 'small']);
     const div = document.createElement('div');
     div.innerHTML = html;
 
-    for (const tag of ['script', 'iframe', 'object', 'embed', 'form', 'link', 'meta']) {
-      for (const el of div.querySelectorAll(tag)) el.remove();
-    }
-
-    const allEls = div.querySelectorAll('*');
+    // Replace disallowed tags with their child nodes (allowlist approach)
+    const allEls = [...div.querySelectorAll('*')];
     for (const el of allEls) {
+      if (!ALLOWED_TAGS.has(el.tagName.toLowerCase())) {
+        el.replaceWith(...el.childNodes);
+        continue;
+      }
+      // Strip dangerous attributes from allowed tags
       const attrs = [...el.attributes];
       for (const attr of attrs) {
-        if (attr.name.startsWith('on') || attr.value.includes('javascript:')) {
+        const lowerVal = attr.value.replace(/[\s\x00-\x1f]/g, '').toLowerCase();
+        if (attr.name.startsWith('on') || lowerVal.includes('javascript:') || lowerVal.includes('data:text/html')) {
           el.removeAttribute(attr.name);
         }
       }
