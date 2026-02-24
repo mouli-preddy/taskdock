@@ -96,13 +96,20 @@ Source code is at \`${sourceRepoPath}\` (current working directory). Subagents c
 
 Create a task: "Extract errors and warnings from logs"
 
-1. Run \`node ${ws}/query-logs.mjs --head 3\` to see column names and sample rows.
-2. Use the query tool to find all errors, exceptions, failures, and warnings:
-   - \`node ${ws}/query-logs.mjs "Error" --limit 200\`
-   - \`node ${ws}/query-logs.mjs "exception|fail|timeout|retry|refused|exceeded|fatal|unreachable|5[0-9][0-9]" --limit 200\`
-   - Search for whatever else seems relevant based on the columns you see.
-3. Write ALL found error/warning rows to \`${ws}/errors-extracted.md\` — one entry per row with its row number, timestamp, severity, and full message.
-4. Mark the task completed.
+Launch a subagent (Task tool, subagent_type "general-purpose") with this instruction:
+
+> You are extracting errors and warnings from log data.
+>
+> **Workspace:** \`${ws}\`
+>
+> 1. Run \`node ${ws}/query-logs.mjs --head 3\` to see column names and sample rows.
+> 2. Use the query tool to find all errors, exceptions, failures, and warnings:
+>    - \`node ${ws}/query-logs.mjs "Error" --limit 200\`
+>    - \`node ${ws}/query-logs.mjs "exception|fail|timeout|retry|refused|exceeded|fatal|unreachable|5[0-9][0-9]" --limit 200\`
+>    - Search for whatever else seems relevant based on the columns you see.
+> 3. Write ALL found error/warning rows to \`${ws}/errors-extracted.md\` — one entry per row with its row number, timestamp, severity, and full message.
+
+Wait for it to finish. Mark the task completed.
 
 ### Phase 2: Categorize
 
