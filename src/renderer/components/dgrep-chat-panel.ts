@@ -164,8 +164,12 @@ export class DGrepChatPanel {
     this.render();
   }
 
+  private chatWidth = 400;
+
   private render() {
+    this.el.style.width = `${this.chatWidth}px`;
     this.el.innerHTML = `
+      <div class="dgrep-chat-resize"></div>
       <div class="dgrep-chat-header">
         <span class="dgrep-chat-header-title">${iconHtml(MessageCircle, { size: 14 })} Log Assistant</span>
         <button class="btn btn-ghost btn-xs dgrep-chat-close-btn">${iconHtml(X, { size: 14 })}</button>
@@ -189,6 +193,33 @@ export class DGrepChatPanel {
   }
 
   private attachListeners() {
+    // Resize handle on left edge
+    const resizeHandle = this.el.querySelector('.dgrep-chat-resize') as HTMLElement;
+    if (resizeHandle) {
+      let startX = 0;
+      let startWidth = 0;
+      const onMouseMove = (e: MouseEvent) => {
+        const delta = startX - e.clientX;
+        this.chatWidth = Math.max(280, Math.min(800, startWidth + delta));
+        this.el.style.width = `${this.chatWidth}px`;
+      };
+      const onMouseUp = () => {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+      resizeHandle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        startX = e.clientX;
+        startWidth = this.chatWidth;
+        document.body.style.cursor = 'ew-resize';
+        document.body.style.userSelect = 'none';
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+      });
+    }
+
     const closeBtn = this.el.querySelector('.dgrep-chat-close-btn');
     closeBtn?.addEventListener('click', () => this.hide());
 

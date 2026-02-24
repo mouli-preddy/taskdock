@@ -2501,13 +2501,28 @@
   right: 0;
   top: 0;
   bottom: 0;
-  width: 350px;
+  width: 400px;
   background: var(--bg-secondary);
   border-left: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
   z-index: 50;
   box-shadow: -4px 0 16px rgba(0, 0, 0, 0.2);
+}
+
+.dgrep-chat-resize {
+  position: absolute;
+  left: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  cursor: ew-resize;
+  background: transparent;
+  z-index: 1;
+  transition: background 0.15s;
+}
+.dgrep-chat-resize:hover {
+  background: var(--accent-blue);
 }
 
 .dgrep-chat-header {
