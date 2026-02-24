@@ -180,6 +180,7 @@ export class DGrepVirtualScroller {
   /** Set custom cell formatter functions (column name → fn that returns HTML) */
   setCellFormatters(formatters: Map<string, (text: string) => string>): void {
     this.cellFormatters = formatters;
+    console.log('[VScroller] setCellFormatters called, columns with formatters:', [...formatters.keys()]);
     this.clearRenderedRows();
     this.renderVisibleRows();
   }
@@ -345,12 +346,14 @@ export class DGrepVirtualScroller {
         cell.classList.add('dgrep-td-wrap');
       }
 
-      // Set HTML content with optional highlight
+      // Set HTML content with optional highlight or custom formatter
       const formatter = this.cellFormatters.get(col);
       if (formatter) {
         try {
-          cell.innerHTML = formatter(str);
-        } catch {
+          const html = formatter(str);
+          cell.innerHTML = html;
+        } catch (err) {
+          console.warn('[VScroller] Formatter error for', col, err);
           const escaped = this.escapeHtml(display);
           cell.innerHTML = this.highlightMatch(escaped);
         }

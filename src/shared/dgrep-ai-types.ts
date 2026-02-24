@@ -150,4 +150,6 @@ export interface ImproveDisplayFormatter {
 export interface ImproveDisplayResult {
   columns: ImproveDisplayColumn[];
   formatters: ImproveDisplayFormatter[];
+  /** Pre-formatted values computed on the backend. Maps column name → { rawValue → formattedText } */
+  formattedLookup?: Record<string, Record<string, string>>;
 }

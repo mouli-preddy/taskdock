@@ -104,20 +104,24 @@ You have tools to read and search a CSV log file. Use them to understand the dat
 
 Your job is to return a JSON object that tells the UI:
 1. Which columns to show, in what order (hide noisy/internal columns, prioritize useful ones)
-2. For columns with complex/multi-line/long values, provide a JavaScript function that formats the cell text into cleaner HTML.
+2. For columns with complex/multi-line/long values, provide a JavaScript function that extracts the most useful single-line summary from the raw cell text.
+
+The user sees ONE LINE per row in a table and needs to scan logs quickly. Your formatter must distill each cell into the most scannable single-line text possible.
 
 Formatter function guidelines:
 - The function receives the raw cell text as a string parameter named "text"
-- Return an HTML string that will be placed inside a <div> cell
-- Use <span> with inline styles for coloring, bolding, badges
-- For multi-line content: extract a meaningful summary as the first line
-- For HTTP request/response logs: extract method, path, status code as colored badges
-- For stack traces: show the top frame with the exception type highlighted
-- For JSON blobs: show a compact key=value summary
-- For GUIDs/correlation IDs: abbreviate to first 8 chars with a dimmed style
-- Keep the output concise — the cell is typically 150-500px wide
-- Use colors sparingly: red for errors/5xx, green for success/2xx, amber for warnings/4xx, blue for info
-- Do NOT use any external libraries or DOM APIs — just string concatenation returning HTML
+- Return a PLAIN TEXT string (NOT HTML) — a single concise line the user can scan at a glance
+- For the Message column (most important):
+  - Extract the operation/method name from bracket prefixes like [ClassName,Method.cs(line) ...]
+  - If there's an HTTP method+path+status, show: "GET /api/path → 200" or "POST /endpoint → 500 InternalServerError"
+  - If there's an exception, show: "ExceptionType at ClassName.Method()"
+  - Otherwise show: "OperationName: <key detail from the message>"
+  - Strip GUIDs, correlation IDs, timestamps, and noise that repeats across rows
+  - Keep under 120 chars
+- For GUIDs/correlation IDs: abbreviate to first 8 chars (e.g. "e7575c71…")
+- For timestamps: show just the time portion "HH:MM:SS.mmm" (drop the date)
+- Do NOT return HTML tags, do NOT return multi-line text
+- Focus on what makes each row DIFFERENT from other rows — strip repetitive noise
 
 Respond with ONLY a valid JSON object matching this schema:
 \`\`\`json
@@ -547,8 +551,46 @@ export class DGrepAIService extends EventEmitter {
         this.emit('ai:improve-display-complete', { sessionId, error: 'Invalid output format: missing columns or formatters array' });
         return;
       }
+
+      // Compile and execute formatters on the backend (Node.js has no CSP restrictions)
+      // Pre-format unique values per column and send a lookup map to the frontend
+      const formattedLookup: Record<string, Record<string, string>> = {};
+      const dgrepService = getDGrepService();
+      const sessionResults = dgrepService.getResults(sessionId);
+      const rows = sessionResults?.rows || [];
+
+      for (const fmt of result.formatters) {
+        try {
+          // Extract function body
+          let body = fmt.jsFunction.trim();
+          const funcMatch = body.match(/^function\s*\([^)]*\)\s*\{([\s\S]*)\}$/);
+          if (funcMatch) body = funcMatch[1];
+          const fn = new Function('text', body) as (text: string) => string;
+
+          // Build lookup: rawValue → formattedValue (deduplicated)
+          const lookup: Record<string, string> = {};
+          for (const row of rows) {
+            const rawVal = String(row[fmt.column] ?? '');
+            if (rawVal in lookup) continue; // already formatted this value
+            try {
+              lookup[rawVal] = fn(rawVal);
+            } catch {
+              lookup[rawVal] = rawVal; // fallback to raw on error
+            }
+          }
+          formattedLookup[fmt.column] = lookup;
+        } catch (err: any) {
+          logger.warn(LOG_CATEGORY, `Failed to compile formatter for ${fmt.column}`, { error: err?.message });
+        }
+      }
+
+      result.formattedLookup = formattedLookup;
       this.emit('ai:improve-display-complete', { sessionId, result });
-      logger.info(LOG_CATEGORY, 'Improve display complete', { sessionId });
+      logger.info(LOG_CATEGORY, 'Improve display complete', {
+        sessionId,
+        formattedColumns: Object.keys(formattedLookup).length,
+        totalUniqueValues: Object.values(formattedLookup).reduce((sum, m) => sum + Object.keys(m).length, 0),
+      });
     } catch (err: any) {
       logger.error(LOG_CATEGORY, 'Failed to read improve display output', { sessionId, error: err?.message });
       this.emit('ai:improve-display-complete', { sessionId, error: `Failed to read output: ${err?.message}` });

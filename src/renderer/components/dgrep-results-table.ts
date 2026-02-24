@@ -1827,16 +1827,15 @@ export class DGrepResultsTable {
       }
     }
 
-    // Compile formatter functions
+    // Use pre-formatted lookup from backend (avoids CSP restrictions on new Function)
     this.compiledFormatters.clear();
-    for (const fmt of result.formatters) {
-      if (!existingColumns.has(fmt.column)) continue;
-      const fn = this.compileFormatterFunction(fmt.jsFunction);
-      if (fn) {
-        this.compiledFormatters.set(fmt.column, (text: string) =>
-          this.sanitizeFormatterHtml(fn(text))
-        );
-      }
+    const lookup = result.formattedLookup || {};
+    for (const [column, valueMap] of Object.entries(lookup)) {
+      if (!existingColumns.has(column)) continue;
+      this.compiledFormatters.set(column, (text: string) => {
+        const formatted = valueMap[text];
+        return formatted !== undefined ? this.escapeHtml(formatted) : this.escapeHtml(text);
+      });
     }
 
     this.activePreset = 'custom';
@@ -1845,26 +1844,6 @@ export class DGrepResultsTable {
     this.renderToolbar();
   }
 
-  /** Parse a formatter function string (function or arrow syntax) into a callable function, or null on failure. */
-  private compileFormatterFunction(jsFunction: string): ((text: string) => string) | null {
-    try {
-      let body = jsFunction.trim();
-      // Extract body from "function(...) { ... }" wrapper
-      const funcMatch = body.match(/^function\s*\([^)]*\)\s*\{([\s\S]*)\}$/);
-      if (funcMatch) {
-        body = funcMatch[1];
-      } else {
-        // Try arrow function: "(text) => expr" or "(text) => { ... }"
-        const arrowMatch = body.match(/^\(?[^)]*\)?\s*=>\s*(?:\{([\s\S]*)\}|([\s\S]+))$/);
-        if (arrowMatch) {
-          body = arrowMatch[1] ?? `return ${arrowMatch[2]}`;
-        }
-      }
-      return new Function('text', body) as (text: string) => string;
-    } catch {
-      return null;
-    }
-  }
 
   private revertImproveDisplay(): void {
     if (!this.preImproveColumns) return;
@@ -1881,30 +1860,6 @@ export class DGrepResultsTable {
     this.renderToolbar();
   }
 
-  private sanitizeFormatterHtml(html: string): string {
-    const ALLOWED_TAGS = new Set(['span', 'div', 'b', 'strong', 'em', 'i', 'br', 'mark', 'code', 'pre', 'small']);
-    const div = document.createElement('div');
-    div.innerHTML = html;
-
-    // Replace disallowed tags with their child nodes (allowlist approach)
-    const allEls = [...div.querySelectorAll('*')];
-    for (const el of allEls) {
-      if (!ALLOWED_TAGS.has(el.tagName.toLowerCase())) {
-        el.replaceWith(...el.childNodes);
-        continue;
-      }
-      // Strip dangerous attributes from allowed tags
-      const attrs = [...el.attributes];
-      for (const attr of attrs) {
-        const lowerVal = attr.value.replace(/[\s\x00-\x1f]/g, '').toLowerCase();
-        if (attr.name.startsWith('on') || lowerVal.includes('javascript:') || lowerVal.includes('data:text/html')) {
-          el.removeAttribute(attr.name);
-        }
-      }
-    }
-
-    return div.innerHTML;
-  }
 
   private escapeHtml(text: string): string {
     const div = document.createElement('div');
