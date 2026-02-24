@@ -1252,8 +1252,22 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
     }
     case 'dgrep-ai:detect-anomalies':
       return dgrepAIService.detectAnomalies(params[0], params[1], params[2]);
-    case 'dgrep-ai:chat-create':
-      return dgrepAIService.createChatSession(params[0], params[1], params[2]);
+    case 'dgrep-ai:chat-create': {
+      // params: [dgrepSessionId, columns, rows, sourceRepoPath?, serviceName?]
+      // Use full rows from session cache
+      const chatFullResults = dgrepService.getResults(params[0]);
+      const chatColumns = chatFullResults?.columns || params[1];
+      const chatRows = chatFullResults?.rows || params[2];
+      const chatSourceRepo = params[3] || null;
+      const chatServiceName = params[4] || null;
+      // Configure provider
+      const chatDgrepSettings = loadStoreData().consoleReview?.dgrepAnalysis;
+      if (chatDgrepSettings) {
+        dgrepAIService.setProvider(chatDgrepSettings.provider);
+        dgrepAIService.setSourceRepo(chatSourceRepo || chatDgrepSettings.sourceRepository || null);
+      }
+      return dgrepAIService.createChatSession(params[0], chatColumns, chatRows, chatSourceRepo, chatServiceName);
+    }
     case 'dgrep-ai:chat-send':
       await dgrepAIService.sendChatMessage(params[0], params[1]);
       return;

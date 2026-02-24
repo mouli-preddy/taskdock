@@ -723,8 +723,8 @@ export const tauriAPI = {
     invoke('dgrep-ai:read-file', filePath),
   dgrepAIDetectAnomalies: (sessionId: string, columns: string[], rows: any[]) =>
     invoke('dgrep-ai:detect-anomalies', sessionId, columns, rows),
-  dgrepAIChatCreate: (sessionId: string, columns: string[], rows: any[]) =>
-    invoke('dgrep-ai:chat-create', sessionId, columns, rows),
+  dgrepAIChatCreate: (sessionId: string, columns: string[], rows: any[], sourceRepoPath?: string, serviceName?: string) =>
+    invoke('dgrep-ai:chat-create', sessionId, columns, rows, sourceRepoPath, serviceName),
   dgrepAIChatSend: (chatSessionId: string, message: string) =>
     invoke('dgrep-ai:chat-send', chatSessionId, message),
   dgrepAIChatDestroy: (chatSessionId: string) =>

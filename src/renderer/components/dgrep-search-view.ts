@@ -690,7 +690,11 @@ export class DGrepSearchView {
     const chatSlot = this.container.querySelector('#dgrepChatPanelSlot') as HTMLElement;
     this.chatPanel = new DGrepChatPanel(chatSlot);
     this.chatPanel.onCreateSession = async (columns, rows) => {
-      return await (window as any).electronAPI?.dgrepAIChatCreate?.(this.activeSessionId, columns, rows.slice(0, 2000)) ?? '';
+      const linkedService = this.getLinkedService();
+      return await (window as any).electronAPI?.dgrepAIChatCreate?.(
+        this.activeSessionId, columns, rows.slice(0, 2000),
+        linkedService?.repoPath, linkedService?.name
+      ) ?? '';
     };
     this.chatPanel.onSendMessage = async (chatSessionId, message) => {
       await (window as any).electronAPI?.dgrepAIChatSend?.(chatSessionId, message);

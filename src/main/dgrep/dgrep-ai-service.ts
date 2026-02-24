@@ -97,12 +97,18 @@ When referencing specific rows, mention their index number so the user can find 
 interface ChatSession {
   id: string;
   dgrepSessionId: string;
-  columns: string[];
-  rows: Record<string, any>[];
-  session: any; // CopilotClient session
+  workspacePath: string;
+  sourceRepoPath: string | null;
+  serviceName: string | null;
+  // Claude SDK: message queue for multi-turn
+  messageQueue: string[];
+  messageReady: (() => void) | null;
+  closed: boolean;
+  // Copilot SDK fallback
+  copilotSession: any | null;
+  // Shared
   messages: DGrepChatMessage[];
   currentMessageId: string | null;
-  isFirstMessage: boolean;
 }
 
 // ==================== Service ====================
@@ -649,13 +655,177 @@ Perform root cause analysis. Respond with ONLY a JSON object:
   async createChatSession(
     dgrepSessionId: string,
     columns: string[],
-    rows: Record<string, any>[]
+    rows: Record<string, any>[],
+    sourceRepoPath?: string,
+    serviceName?: string
   ): Promise<string> {
     const logger = getLogger();
     const chatSessionId = uuidv4();
 
-    const client = await this.getClient();
+    // Create workspace with CSV + query tool (same as summarize)
+    const metadata: AnalysisMetadata = {
+      endpoint: '',
+      namespace: '',
+      events: [],
+      startTime: '',
+      endTime: '',
+      totalRows: rows.length,
+    };
+    const workspace = createAnalysisWorkspace(
+      `chat-${chatSessionId}`, columns, rows, [], metadata
+    );
 
+    const ws = workspace.basePath.replace(/\\/g, '/');
+
+    const chatSession: ChatSession = {
+      id: chatSessionId,
+      dgrepSessionId,
+      workspacePath: ws,
+      sourceRepoPath: sourceRepoPath || null,
+      serviceName: serviceName || null,
+      messageQueue: [],
+      messageReady: null,
+      closed: false,
+      copilotSession: null,
+      messages: [],
+      currentMessageId: null,
+    };
+
+    this.chatSessions.set(chatSessionId, chatSession);
+
+    if (this.provider === 'claude-sdk') {
+      this.startClaudeChatSession(chatSessionId, ws, sourceRepoPath, serviceName);
+    } else {
+      await this.startCopilotChatSession(chatSessionId, columns, rows);
+    }
+
+    logger.info(LOG_CATEGORY, 'Chat session created', {
+      chatSessionId, dgrepSessionId, provider: this.provider, workspace: ws,
+    });
+    return chatSessionId;
+  }
+
+  private startClaudeChatSession(
+    chatSessionId: string,
+    ws: string,
+    sourceRepoPath?: string,
+    serviceName?: string
+  ): void {
+    const initialPrompt = this.buildChatPrompt(ws, sourceRepoPath, serviceName);
+    const cwd = sourceRepoPath || ws;
+
+    // Create async generator that yields user messages on demand
+    const self = this;
+    async function* messageStream(): AsyncGenerator<any, void> {
+      // First message: system context
+      yield {
+        type: 'user' as const,
+        message: { role: 'user' as const, content: initialPrompt },
+        session_id: '',
+        parent_tool_use_id: null,
+      };
+
+      const session = self.chatSessions.get(chatSessionId);
+      if (!session) return;
+
+      while (!session.closed) {
+        // Wait for a message to be queued
+        if (session.messageQueue.length === 0) {
+          await new Promise<void>(resolve => { session.messageReady = resolve; });
+          session.messageReady = null;
+        }
+        if (session.closed) break;
+
+        // Drain queue — combine if multiple messages queued while agent was busy
+        const queued = session.messageQueue.splice(0);
+        if (queued.length === 0) continue;
+        const combined = queued.join('\n\n');
+
+        yield {
+          type: 'user' as const,
+          message: { role: 'user' as const, content: combined },
+          session_id: '',
+          parent_tool_use_id: null,
+        };
+      }
+    }
+
+    // Launch query in background — streams responses via events
+    const response = query({
+      prompt: messageStream(),
+      options: {
+        model: 'opus',
+        maxTurns: 200,
+        cwd,
+        permissionMode: 'bypassPermissions',
+        allowDangerouslySkipPermissions: true,
+      },
+    });
+
+    // Process response stream in background
+    (async () => {
+      try {
+        for await (const message of response) {
+          const session = this.chatSessions.get(chatSessionId);
+          if (!session || session.closed) break;
+
+          if (message.type === 'assistant') {
+            const text = this.extractTextContent(message);
+            if (text) {
+              const msgId = session.currentMessageId;
+              const currentMsg = session.messages.find(m => m.id === msgId);
+              if (currentMsg) currentMsg.content += text;
+              this.emitChatEvent({
+                chatSessionId,
+                type: 'delta',
+                messageId: msgId || undefined,
+                deltaContent: text,
+              });
+            }
+            // Stream tool usage
+            const toolUses = this.extractToolUses(message);
+            for (const tool of toolUses) {
+              const summary = this.summarizeToolUse(tool);
+              this.emitChatEvent({
+                chatSessionId,
+                type: 'tool_call',
+                toolName: summary,
+              });
+            }
+          }
+
+          if (message.type === 'result') {
+            const session2 = this.chatSessions.get(chatSessionId);
+            if (session2) {
+              const msgId = session2.currentMessageId;
+              const currentMsg = session2.messages.find(m => m.id === msgId);
+              if (currentMsg) currentMsg.status = 'complete';
+              session2.currentMessageId = null;
+              this.emitChatEvent({
+                chatSessionId,
+                type: 'idle',
+                messageId: msgId || undefined,
+              });
+            }
+          }
+        }
+      } catch (err: any) {
+        getLogger().error(LOG_CATEGORY, 'Chat stream error', { chatSessionId, error: err?.message });
+        this.emitChatEvent({
+          chatSessionId,
+          type: 'error',
+          error: err?.message || 'Chat stream failed',
+        });
+      }
+    })();
+  }
+
+  private async startCopilotChatSession(
+    chatSessionId: string,
+    columns: string[],
+    rows: Record<string, any>[]
+  ): Promise<void> {
+    const client = await this.getClient();
     const sampleRows = rows.slice(0, 50);
     const contextInfo = [
       `\n## Current Log Dataset`,
@@ -664,19 +834,6 @@ Perform root cause analysis. Respond with ONLY a JSON object:
       `\n## Sample Rows (first 50)`,
       JSON.stringify(sampleRows, null, 0),
     ].join('\n');
-
-    const chatSession: ChatSession = {
-      id: chatSessionId,
-      dgrepSessionId,
-      columns,
-      rows,
-      session: null,
-      messages: [],
-      currentMessageId: null,
-      isFirstMessage: true,
-    };
-
-    this.chatSessions.set(chatSessionId, chatSession);
 
     const session = await client.createSession({
       model: 'claude-opus-4.6',
@@ -687,20 +844,48 @@ Perform root cause analysis. Respond with ONLY a JSON object:
       },
     });
 
-    chatSession.session = session;
+    const chatSession = this.chatSessions.get(chatSessionId);
+    if (chatSession) chatSession.copilotSession = session;
 
     session.on((event: any) => {
-      this.handleChatSessionEvent(chatSessionId, event);
+      this.handleCopilotChatEvent(chatSessionId, event);
     });
+  }
 
-    logger.info(LOG_CATEGORY, 'Chat session created', { chatSessionId, dgrepSessionId });
-    return chatSessionId;
+  private buildChatPrompt(ws: string, sourceRepoPath?: string, serviceName?: string): string {
+    return `You are a log analysis assistant. The user is looking at service logs and will ask you questions about them. Answer thoroughly using the tools available.
+
+## Workspace: ${ws}
+- \`data.csv\` — Log data with \`_row\` column. **Do NOT read this file end-to-end.** Use the query tool.
+- \`query-logs.mjs\` — CSV-aware search tool (run via Bash).
+- \`metadata.json\` — Query parameters.
+
+## Query Tool Usage
+\`\`\`
+node ${ws}/query-logs.mjs "pattern"              Search rows matching regex
+node ${ws}/query-logs.mjs "pattern" --count       Count matches
+node ${ws}/query-logs.mjs --row 100 --context 10  Context around a row
+node ${ws}/query-logs.mjs --rows 50-60            Row range
+node ${ws}/query-logs.mjs --head 5                First few rows
+\`\`\`
+${sourceRepoPath ? `
+## Source Code
+${serviceName ? `**${serviceName}**` : 'Service'} source code is at \`${sourceRepoPath}\`.
+Read source files to trace error origins, understand retry/fallback logic, and correlate log messages with code paths.
+` : ''}
+## Instructions
+- Start by running \`node ${ws}/query-logs.mjs --head 3\` to understand the data shape.
+- Use the query tool to search for relevant data before answering.
+- Be specific — reference row numbers, timestamps, and correlation IDs.
+- When the user asks about an error, get the context around it.
+- When the user asks to trace something, grep for the correlation/request ID.`;
   }
 
   async sendChatMessage(chatSessionId: string, message: string): Promise<void> {
     const chatSession = this.chatSessions.get(chatSessionId);
     if (!chatSession) throw new Error(`Chat session not found: ${chatSessionId}`);
 
+    // Add user message to history
     const userMsg: DGrepChatMessage = {
       id: uuidv4(),
       role: 'user',
@@ -710,18 +895,25 @@ Perform root cause analysis. Respond with ONLY a JSON object:
     };
     chatSession.messages.push(userMsg);
 
+    // Prepare assistant message placeholder
     const assistantMsgId = uuidv4();
     chatSession.currentMessageId = assistantMsgId;
-    const assistantMsg: DGrepChatMessage = {
+    chatSession.messages.push({
       id: assistantMsgId,
       role: 'assistant',
       content: '',
       timestamp: new Date().toISOString(),
       status: 'streaming',
-    };
-    chatSession.messages.push(assistantMsg);
+    });
 
-    await chatSession.session.send({ prompt: message });
+    if (chatSession.copilotSession) {
+      // Copilot SDK: send directly
+      await chatSession.copilotSession.send({ prompt: message });
+    } else {
+      // Claude SDK: push to queue, generator will pick it up
+      chatSession.messageQueue.push(message);
+      chatSession.messageReady?.();
+    }
   }
 
   getChatHistory(chatSessionId: string): DGrepChatMessage[] {
@@ -734,8 +926,11 @@ Perform root cause analysis. Respond with ONLY a JSON object:
     const chatSession = this.chatSessions.get(chatSessionId);
     if (!chatSession) return;
 
+    chatSession.closed = true;
+    chatSession.messageReady?.(); // unblock generator if waiting
+
     try {
-      await chatSession.session?.destroy();
+      await chatSession.copilotSession?.destroy();
     } catch {
       // Ignore destroy errors
     }
@@ -758,7 +953,7 @@ Perform root cause analysis. Respond with ONLY a JSON object:
 
   // ==================== Chat Event Handling ====================
 
-  private handleChatSessionEvent(chatSessionId: string, event: any): void {
+  private handleCopilotChatEvent(chatSessionId: string, event: any): void {
     const chatSession = this.chatSessions.get(chatSessionId);
     if (!chatSession) return;
 
