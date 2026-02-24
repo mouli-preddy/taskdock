@@ -98,6 +98,45 @@ Help the user understand their logs by:
 Use markdown formatting for clarity. Be concise and actionable.
 When referencing specific rows, mention their index number so the user can find them.`;
 
+const IMPROVE_DISPLAY_SYSTEM_PROMPT = `You are an expert at analyzing log data and improving its display for readability.
+
+You have tools to read and search a CSV log file. Use them to understand the data shape, column contents, and value patterns.
+
+Your job is to return a JSON object that tells the UI:
+1. Which columns to show, in what order (hide noisy/internal columns, prioritize useful ones)
+2. For columns with complex/multi-line/long values, provide a JavaScript function that formats the cell text into cleaner HTML.
+
+Formatter function guidelines:
+- The function receives the raw cell text as a string parameter named "text"
+- Return an HTML string that will be placed inside a <div> cell
+- Use <span> with inline styles for coloring, bolding, badges
+- For multi-line content: extract a meaningful summary as the first line
+- For HTTP request/response logs: extract method, path, status code as colored badges
+- For stack traces: show the top frame with the exception type highlighted
+- For JSON blobs: show a compact key=value summary
+- For GUIDs/correlation IDs: abbreviate to first 8 chars with a dimmed style
+- Keep the output concise — the cell is typically 150-500px wide
+- Use colors sparingly: red for errors/5xx, green for success/2xx, amber for warnings/4xx, blue for info
+- Do NOT use any external libraries or DOM APIs — just string concatenation returning HTML
+
+Respond with ONLY a valid JSON object matching this schema:
+\`\`\`json
+{
+  "columns": [
+    { "name": "ColumnName", "visible": true, "order": 0, "width": 200 }
+  ],
+  "formatters": [
+    { "column": "ColumnName", "description": "What this formatter does", "jsFunction": "function(text) { return text; }" }
+  ]
+}
+\`\`\`
+
+IMPORTANT:
+- Include ALL columns in the columns array, even hidden ones (with visible: false)
+- Order determines display position (0 = leftmost)
+- Only provide formatters for columns that genuinely benefit from formatting
+- Width is optional — omit if the default is fine`;
+
 // ==================== Chat Session ====================
 
 interface ChatQueryContext {
@@ -229,6 +268,298 @@ export class DGrepAIService extends EventEmitter {
     } catch (err: any) {
       logger.error(LOG_CATEGORY, 'RCA failed', { sessionId, error: err?.message });
       this.emit('ai:rca-complete', { sessionId, error: err?.message || 'Root cause analysis failed' });
+    }
+  }
+
+  // ==================== Improve Display (Agent Executor) ====================
+
+  async improveDisplay(
+    sessionId: string,
+    columns: string[],
+    rows: Record<string, any>[],
+    metadata: AnalysisMetadata,
+  ): Promise<void> {
+    const logger = getLogger();
+    logger.info(LOG_CATEGORY, 'Starting improve display analysis', {
+      sessionId, rowCount: rows.length, provider: this.provider,
+    });
+
+    try {
+      const workspace = createAnalysisWorkspace(sessionId + '-display', columns, rows, [], metadata);
+      const outputPath = path.join(workspace.basePath, 'improve-display-output.json');
+
+      if (this.provider === 'claude-sdk') {
+        await this.executeImproveDisplayClaude(sessionId, workspace, outputPath);
+      } else {
+        await this.executeImproveDisplayCopilot(sessionId, workspace, columns, rows, outputPath);
+      }
+    } catch (err: any) {
+      logger.error(LOG_CATEGORY, 'Improve display failed', { sessionId, error: err?.message });
+      this.emit('ai:improve-display-complete', { sessionId, error: err?.message || 'Improve display analysis failed' });
+    }
+  }
+
+  private async executeImproveDisplayClaude(
+    sessionId: string,
+    workspace: AnalysisWorkspace,
+    outputPath: string,
+  ): Promise<void> {
+    const ws = workspace.basePath.replace(/\\/g, '/');
+    const dataPath = workspace.dataPath.replace(/\\/g, '/');
+    const outPath = outputPath.replace(/\\/g, '/');
+
+    const prompt = `${IMPROVE_DISPLAY_SYSTEM_PROMPT}
+
+## Workspace
+- CSV data file: \`${dataPath}\`
+- Write your JSON output to: \`${outPath}\`
+
+## Instructions
+1. Use the read_file tool to examine the CSV data. Start by reading the first 50-100 lines to understand columns and data shape.
+2. If needed, use search_file to look for patterns in specific columns (e.g., multi-line content, HTTP status codes, JSON blobs).
+3. Read more of the file if needed to understand value distributions.
+4. Decide which columns to show/hide and their order.
+5. For columns with complex values, write JavaScript formatter functions.
+6. Write the final JSON to \`${outPath}\`.`;
+
+    const mcpServer = createSdkMcpServer({
+      name: 'dgrep-display',
+      version: '1.0.0',
+      tools: [
+        tool(
+          'read_file',
+          'Read lines from the CSV data file. Use offset and limit to read in chunks.',
+          {
+            offset: z.number().optional().default(0).describe('Line number to start reading from (0-based)'),
+            limit: z.number().optional().default(200).describe('Max number of lines to read'),
+          },
+          async (args: { offset?: number; limit?: number }) => {
+            try {
+              const content = fs.readFileSync(workspace.dataPath, 'utf-8');
+              const lines = content.split('\n');
+              const start = args.offset ?? 0;
+              const end = Math.min(start + (args.limit ?? 200), lines.length);
+              const slice = lines.slice(start, end);
+              return {
+                content: [{
+                  type: 'text' as const,
+                  text: `Lines ${start}-${end - 1} of ${lines.length} total:\n${slice.join('\n')}`,
+                }],
+              };
+            } catch (err: any) {
+              return { content: [{ type: 'text' as const, text: `Error: ${err?.message}` }], isError: true };
+            }
+          }
+        ),
+        tool(
+          'search_file',
+          'Search the CSV data file for lines matching a regex pattern.',
+          {
+            pattern: z.string().describe('Regex pattern to search for'),
+            max_results: z.number().optional().default(50).describe('Max matching lines to return'),
+          },
+          async (args: { pattern: string; max_results?: number }) => {
+            try {
+              const content = fs.readFileSync(workspace.dataPath, 'utf-8');
+              const lines = content.split('\n');
+              const regex = new RegExp(args.pattern, 'i');
+              const matches: string[] = [];
+              for (let i = 0; i < lines.length && matches.length < (args.max_results ?? 50); i++) {
+                if (regex.test(lines[i])) {
+                  matches.push(`[line ${i}] ${lines[i]}`);
+                }
+              }
+              return {
+                content: [{
+                  type: 'text' as const,
+                  text: `${matches.length} matches for /${args.pattern}/i:\n${matches.join('\n')}`,
+                }],
+              };
+            } catch (err: any) {
+              return { content: [{ type: 'text' as const, text: `Error: ${err?.message}` }], isError: true };
+            }
+          }
+        ),
+      ],
+    });
+
+    const response = query({
+      prompt,
+      options: {
+        model: 'opus',
+        maxTurns: 20,
+        cwd: workspace.basePath,
+        permissionMode: 'bypassPermissions',
+        allowDangerouslySkipPermissions: true,
+        mcpServers: { 'dgrep-display': mcpServer },
+      },
+    });
+
+    for await (const message of response) {
+      if (message.type === 'assistant') {
+        const text = this.extractTextContent(message);
+        if (text) {
+          this.emit('ai:improve-display-progress', { sessionId, text });
+        }
+        const toolUses = this.extractToolUses(message);
+        for (const t of toolUses) {
+          const summary = this.summarizeToolUse(t);
+          this.emit('ai:improve-display-progress', { sessionId, text: summary });
+        }
+      }
+      if (message.type === 'result' && (message as any).is_error) {
+        const errorMsg = (message as any).error || 'Agent execution failed';
+        this.emit('ai:improve-display-complete', { sessionId, error: errorMsg });
+        return;
+      }
+    }
+
+    this.readAndEmitImproveDisplayOutput(sessionId, outputPath);
+  }
+
+  private async executeImproveDisplayCopilot(
+    sessionId: string,
+    workspace: AnalysisWorkspace,
+    columns: string[],
+    rows: Record<string, any>[],
+    outputPath: string,
+  ): Promise<void> {
+    const client = await this.getClient();
+    const self = this;
+
+    const session = await client.createSession({
+      model: 'gpt-5.3-codex',
+      streaming: true,
+      systemMessage: {
+        mode: 'append',
+        content: IMPROVE_DISPLAY_SYSTEM_PROMPT,
+      },
+      tools: [
+        {
+          name: 'read_file',
+          description: 'Read lines from the CSV data file. Use offset and limit to read in chunks.',
+          parameters: {
+            type: 'object',
+            properties: {
+              offset: { type: 'number', description: 'Line number to start from (0-based)', default: 0 },
+              limit: { type: 'number', description: 'Max lines to read', default: 200 },
+            },
+          },
+          handler: async (args: any) => {
+            try {
+              const content = fs.readFileSync(workspace.dataPath, 'utf-8');
+              const lines = content.split('\n');
+              const start = args.offset ?? 0;
+              const end = Math.min(start + (args.limit ?? 200), lines.length);
+              const slice = lines.slice(start, end);
+              return `Lines ${start}-${end - 1} of ${lines.length} total:\n${slice.join('\n')}`;
+            } catch (err: any) {
+              return `Error: ${err?.message}`;
+            }
+          },
+        },
+        {
+          name: 'search_file',
+          description: 'Search the CSV for lines matching a regex pattern.',
+          parameters: {
+            type: 'object',
+            properties: {
+              pattern: { type: 'string', description: 'Regex pattern to search for' },
+              max_results: { type: 'number', description: 'Max matches to return', default: 50 },
+            },
+            required: ['pattern'],
+          },
+          handler: async (args: any) => {
+            try {
+              const content = fs.readFileSync(workspace.dataPath, 'utf-8');
+              const lines = content.split('\n');
+              const regex = new RegExp(args.pattern, 'i');
+              const matches: string[] = [];
+              for (let i = 0; i < lines.length && matches.length < (args.max_results ?? 50); i++) {
+                if (regex.test(lines[i])) {
+                  matches.push(`[line ${i}] ${lines[i]}`);
+                }
+              }
+              return `${matches.length} matches for /${args.pattern}/i:\n${matches.join('\n')}`;
+            } catch (err: any) {
+              return `Error: ${err?.message}`;
+            }
+          },
+        },
+      ],
+    });
+
+    let fullContent = '';
+
+    await new Promise<void>((resolve) => {
+      session.on((event: any) => {
+        switch (event.type) {
+          case 'assistant.message_delta': {
+            const delta = event.data?.deltaContent || '';
+            fullContent += delta;
+            if (delta) self.emit('ai:improve-display-progress', { sessionId, text: delta });
+            break;
+          }
+          case 'assistant.message': {
+            fullContent = event.data?.content || fullContent;
+            break;
+          }
+          case 'tool.execution_start': {
+            const toolName = event.data?.toolName || event.data?.name || 'tool';
+            self.emit('ai:improve-display-progress', { sessionId, text: `[Tool] ${toolName}` });
+            break;
+          }
+          case 'tool.execution_end': {
+            self.emit('ai:improve-display-progress', { sessionId, text: '[Tool done]' });
+            break;
+          }
+          case 'session.idle': {
+            session.destroy().catch(() => {});
+            resolve();
+            break;
+          }
+          case 'session.error': {
+            const error = event.data?.message || 'Unknown error';
+            self.emit('ai:improve-display-complete', { sessionId, error });
+            session.destroy().catch(() => {});
+            resolve();
+            break;
+          }
+        }
+      });
+
+      session.send({
+        prompt: `Analyze the CSV data file at ${workspace.dataPath.replace(/\\/g, '/')} and provide display improvement recommendations. Use the read_file and search_file tools to explore the data. Return your final answer as the JSON object described in your instructions.`,
+      }).catch((err: any) => {
+        self.emit('ai:improve-display-complete', { sessionId, error: err?.message || 'Send failed' });
+        resolve();
+      });
+    });
+
+    if (fullContent) {
+      const parsed = this.tryParseJSON(fullContent);
+      if (parsed) {
+        try { fs.writeFileSync(outputPath, JSON.stringify(parsed, null, 2), 'utf-8'); } catch { /* ignore */ }
+      }
+    }
+
+    this.readAndEmitImproveDisplayOutput(sessionId, outputPath);
+  }
+
+  private readAndEmitImproveDisplayOutput(sessionId: string, outputPath: string): void {
+    const logger = getLogger();
+    try {
+      if (!fs.existsSync(outputPath)) {
+        this.emit('ai:improve-display-complete', { sessionId, error: 'Agent did not produce output' });
+        return;
+      }
+      const raw = fs.readFileSync(outputPath, 'utf-8');
+      const result = JSON.parse(raw);
+      this.emit('ai:improve-display-complete', { sessionId, result });
+      logger.info(LOG_CATEGORY, 'Improve display complete', { sessionId });
+    } catch (err: any) {
+      logger.error(LOG_CATEGORY, 'Failed to read improve display output', { sessionId, error: err?.message });
+      this.emit('ai:improve-display-complete', { sessionId, error: `Failed to read output: ${err?.message}` });
     }
   }
 
