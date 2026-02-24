@@ -4,6 +4,7 @@ import { DGrepContextViewer } from './dgrep-context-viewer.js';
 import { DGrepVirtualScroller } from './dgrep-virtual-scroller.js';
 import { DGrepBookmarkManager } from './dgrep-bookmark-manager.js';
 import { DGrepLiveTail } from './dgrep-live-tail.js';
+import type { ImproveDisplayResult } from '../../shared/dgrep-ai-types.js';
 
 const MAX_CELL_CHARS = 200;
 
@@ -138,6 +139,14 @@ export class DGrepResultsTable {
   // Column preset tracking
   private activePreset: 'essential' | 'all' | 'custom' = 'essential';
 
+  // Improve Display state
+  private improveDisplayResult: ImproveDisplayResult | null = null;
+  private improveDisplayActive = false;
+  private preImproveColumns: { visibleColumns: Set<string>; columnWidths: Map<string, number>; columnOrder: string[]; activePreset: 'essential' | 'all' | 'custom' } | null = null;
+  private compiledFormatters: Map<string, (text: string) => string> = new Map();
+  private improveDisplayLoading = false;
+  private improveDisplayProgressEl: HTMLElement | null = null;
+
   // Pattern detection state
   private patterns: DetectedPattern[] = [];
   private patternsDropdownOpen = false;
@@ -179,6 +188,7 @@ export class DGrepResultsTable {
   // Callback for summary panel data
   private onDataChangeCallback: ((columns: string[], rows: Record<string, any>[], filteredRows: Record<string, any>[]) => void) | null = null;
   private onRowExpandCallback: ((rowIndex: number) => void) | null = null;
+  private onImproveDisplayRequestCallback: (() => void) | null = null;
 
   // Bound handlers for document-level listeners (to allow cleanup)
   private boundDocMouseDown: ((e: MouseEvent) => void) | null = null;
@@ -243,6 +253,39 @@ export class DGrepResultsTable {
     this.onRowExpandCallback = cb;
   }
 
+  /** Register callback to request improve display analysis from backend */
+  onImproveDisplayRequest(cb: () => void): void {
+    this.onImproveDisplayRequestCallback = cb;
+  }
+
+  /** Called when improve display analysis completes */
+  setImproveDisplayResult(result: ImproveDisplayResult): void {
+    this.improveDisplayResult = result;
+    this.improveDisplayLoading = false;
+    this.hideImproveDisplayProgress();
+    if (this.improveDisplayActive) {
+      this.applyImproveDisplay();
+    }
+  }
+
+  /** Called when improve display analysis fails */
+  setImproveDisplayError(error: string): void {
+    this.improveDisplayLoading = false;
+    this.improveDisplayActive = false;
+    this.hideImproveDisplayProgress();
+    this.renderToolbar();
+  }
+
+  /** Called to show streaming progress text */
+  showImproveDisplayProgress(text: string): void {
+    if (!this.improveDisplayProgressEl) return;
+    const existing = this.improveDisplayProgressEl.querySelector('.dgrep-improve-display-text');
+    if (existing) {
+      const clean = text.replace(/\n/g, ' ').trim();
+      if (clean) existing.textContent = clean;
+    }
+  }
+
   setData(columns: string[], rows: Record<string, any>[]): void {
     const isNewQuery = this.columns.length === 0 ||
       columns.join(',') !== this.columns.join(',');
@@ -271,6 +314,14 @@ export class DGrepResultsTable {
       this.activeFilters = [];
       this.conditions = [];
       this.highlightColorIndex = 0;
+
+      // Clear improve display cache on new query
+      this.improveDisplayResult = null;
+      this.improveDisplayActive = false;
+      this.preImproveColumns = null;
+      this.compiledFormatters.clear();
+      this.scroller.setCellFormatters(this.compiledFormatters);
+      this.hideImproveDisplayProgress();
     }
 
     // Detect patterns whenever data changes
@@ -966,6 +1017,7 @@ export class DGrepResultsTable {
           ` : ''}
           <button class="btn btn-xs btn-secondary dgrep-preset-btn${this.activePreset === 'essential' ? ' active' : ''}" data-preset="essential" title="Show only essential columns">Essential</button>
           <button class="btn btn-xs btn-secondary dgrep-preset-btn${this.activePreset === 'all' ? ' active' : ''}" data-preset="all" title="Show all columns">All</button>
+          <button class="btn btn-xs btn-secondary dgrep-improve-display-btn${this.improveDisplayActive ? ' active' : ''}${this.improveDisplayLoading ? ' loading' : ''}" title="AI-powered display improvements">&#10024; Improve Display</button>
           <div class="dgrep-column-picker">
             <button class="btn btn-sm btn-secondary dgrep-column-btn" title="Column visibility">Columns</button>
             <div class="dgrep-column-dropdown ${this.columnDropdownOpen ? '' : 'hidden'}">
@@ -1414,6 +1466,11 @@ export class DGrepResultsTable {
       });
     }
 
+    // Improve Display toggle
+    this.toolbarEl.querySelector('.dgrep-improve-display-btn')?.addEventListener('click', () => {
+      this.onImproveDisplayToggle();
+    });
+
     // Pattern detection dropdown
     this.attachPatternEvents();
   }
@@ -1686,6 +1743,139 @@ export class DGrepResultsTable {
     this.scroller.scrollToRow(index);
     this.renderDetailPanel();
     this.initDetailViewComponents();
+  }
+
+  // ==================== Improve Display ====================
+
+  private onImproveDisplayToggle(): void {
+    if (this.improveDisplayLoading) return;
+
+    this.improveDisplayActive = !this.improveDisplayActive;
+    this.renderToolbar();
+
+    if (this.improveDisplayActive) {
+      if (this.improveDisplayResult) {
+        this.applyImproveDisplay();
+      } else {
+        this.improveDisplayLoading = true;
+        this.showImproveDisplayProgressBar();
+        this.onImproveDisplayRequestCallback?.();
+      }
+    } else {
+      this.revertImproveDisplay();
+    }
+  }
+
+  private showImproveDisplayProgressBar(): void {
+    if (this.improveDisplayProgressEl) return;
+    const el = document.createElement('div');
+    el.className = 'dgrep-improve-display-progress';
+    el.innerHTML = `
+      <span class="dgrep-improve-display-icon">&#10024;</span>
+      <span class="dgrep-improve-display-text">Analyzing log structure...</span>
+      <span class="dgrep-ai-loading-dots"></span>
+    `;
+    this.toolbarEl.insertAdjacentElement('afterend', el);
+    this.improveDisplayProgressEl = el;
+  }
+
+  private hideImproveDisplayProgress(): void {
+    if (this.improveDisplayProgressEl) {
+      this.improveDisplayProgressEl.remove();
+      this.improveDisplayProgressEl = null;
+    }
+  }
+
+  private applyImproveDisplay(): void {
+    const result = this.improveDisplayResult;
+    if (!result) return;
+
+    this.preImproveColumns = {
+      visibleColumns: new Set(this.visibleColumns),
+      columnWidths: new Map(this.columnWidths),
+      columnOrder: [...this.columns],
+      activePreset: this.activePreset,
+    };
+
+    const newVisible = new Set<string>();
+    const orderedCols = result.columns
+      .filter(c => c.visible)
+      .sort((a, b) => a.order - b.order)
+      .map(c => c.name);
+
+    for (const c of orderedCols) {
+      if (this.columns.includes(c)) newVisible.add(c);
+    }
+    this.visibleColumns = newVisible;
+
+    const reordered: string[] = [];
+    for (const name of orderedCols) {
+      if (this.columns.includes(name)) reordered.push(name);
+    }
+    for (const c of this.columns) {
+      if (!reordered.includes(c)) reordered.push(c);
+    }
+    this.columns = reordered;
+
+    for (const col of result.columns) {
+      if (col.width && this.columns.includes(col.name)) {
+        this.columnWidths.set(col.name, col.width);
+      }
+    }
+
+    this.compiledFormatters.clear();
+    for (const fmt of result.formatters) {
+      try {
+        const fn = new Function('text', fmt.jsFunction.replace(/^function\s*\([^)]*\)\s*\{/, '').replace(/\}$/, '')) as (text: string) => string;
+        this.compiledFormatters.set(fmt.column, (text: string) => {
+          const raw = fn(text);
+          return this.sanitizeFormatterHtml(raw);
+        });
+      } catch {
+        // Skip invalid formatters
+      }
+    }
+
+    this.activePreset = 'custom';
+    this.scroller.setCellFormatters(this.compiledFormatters);
+    this.updateScroller();
+    this.renderToolbar();
+  }
+
+  private revertImproveDisplay(): void {
+    if (!this.preImproveColumns) return;
+
+    this.visibleColumns = this.preImproveColumns.visibleColumns;
+    this.columnWidths = this.preImproveColumns.columnWidths;
+    this.columns = this.preImproveColumns.columnOrder;
+    this.activePreset = this.preImproveColumns.activePreset;
+    this.preImproveColumns = null;
+
+    this.compiledFormatters.clear();
+    this.scroller.setCellFormatters(this.compiledFormatters);
+    this.updateScroller();
+    this.renderToolbar();
+  }
+
+  private sanitizeFormatterHtml(html: string): string {
+    const div = document.createElement('div');
+    div.innerHTML = html;
+
+    for (const tag of ['script', 'iframe', 'object', 'embed', 'form', 'link', 'meta']) {
+      for (const el of div.querySelectorAll(tag)) el.remove();
+    }
+
+    const allEls = div.querySelectorAll('*');
+    for (const el of allEls) {
+      const attrs = [...el.attributes];
+      for (const attr of attrs) {
+        if (attr.name.startsWith('on') || attr.value.includes('javascript:')) {
+          el.removeAttribute(attr.name);
+        }
+      }
+    }
+
+    return div.innerHTML;
   }
 
   private escapeHtml(text: string): string {
