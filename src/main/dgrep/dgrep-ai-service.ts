@@ -110,14 +110,15 @@ The user sees ONE LINE per row in a table and needs to scan logs quickly. Your f
 
 Formatter function guidelines:
 - The function receives the raw cell text as a string parameter named "text"
-- Return a PLAIN TEXT string (NOT HTML) — a single concise line the user can scan at a glance
+- Return a PLAIN TEXT string (NOT HTML) — a single line the user can scan at a glance
+- Do NOT truncate or limit the output length — the UI handles overflow. Include all useful information.
 - For the Message column (most important):
   - Extract the operation/method name from bracket prefixes like [ClassName,Method.cs(line) ...]
   - If there's an HTTP method+path+status, show: "GET /api/path → 200" or "POST /endpoint → 500 InternalServerError"
   - If there's an exception, show: "ExceptionType at ClassName.Method()"
   - Otherwise show: "OperationName: <key detail from the message>"
   - Strip GUIDs, correlation IDs, timestamps, and noise that repeats across rows
-  - Keep under 120 chars
+  - Include all meaningful content — do NOT cut off or add "..." unless the raw text is truly multi-line
 - For GUIDs/correlation IDs: abbreviate to first 8 chars (e.g. "e7575c71…")
 - For timestamps: show just the time portion "HH:MM:SS.mmm" (drop the date)
 - Do NOT return HTML tags, do NOT return multi-line text
