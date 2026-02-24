@@ -269,6 +269,7 @@ dgrepAIService.on('ai:summary-complete', (event) => broadcast('dgrep:ai:summary-
 dgrepAIService.on('ai:rca-progress', (event) => broadcast('dgrep:ai:rca-progress', event));
 dgrepAIService.on('ai:rca-complete', (event) => broadcast('dgrep:ai:rca-complete', event));
 dgrepAIService.on('ai:chat-event', (event) => broadcast('dgrep:ai:chat-event', event));
+dgrepAIService.on('ai:client-query-update', (event) => broadcast('dgrep:ai:client-query-update', event));
 
 // Warm up provider cache asynchronously at startup
 // This runs in the background so dialogs open instantly
@@ -1253,20 +1254,21 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
     case 'dgrep-ai:detect-anomalies':
       return dgrepAIService.detectAnomalies(params[0], params[1], params[2]);
     case 'dgrep-ai:chat-create': {
-      // params: [dgrepSessionId, columns, rows, sourceRepoPath?, serviceName?]
+      // params: [dgrepSessionId, columns, rows, sourceRepoPath?, serviceName?, queryContext?]
       // Use full rows from session cache
       const chatFullResults = dgrepService.getResults(params[0]);
       const chatColumns = chatFullResults?.columns || params[1];
       const chatRows = chatFullResults?.rows || params[2];
       const chatSourceRepo = params[3] || null;
       const chatServiceName = params[4] || null;
+      const chatQueryContext = params[5] || null;
       // Configure provider
       const chatDgrepSettings = loadStoreData().consoleReview?.dgrepAnalysis;
       if (chatDgrepSettings) {
         dgrepAIService.setProvider(chatDgrepSettings.provider);
         dgrepAIService.setSourceRepo(chatSourceRepo || chatDgrepSettings.sourceRepository || null);
       }
-      return dgrepAIService.createChatSession(params[0], chatColumns, chatRows, chatSourceRepo, chatServiceName);
+      return dgrepAIService.createChatSession(params[0], chatColumns, chatRows, chatSourceRepo, chatServiceName, chatQueryContext);
     }
     case 'dgrep-ai:chat-send':
       await dgrepAIService.sendChatMessage(params[0], params[1]);
@@ -1274,7 +1276,6 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
     case 'dgrep-ai:chat-destroy':
       await dgrepAIService.destroyChatSession(params[0]);
       return;
-
     default:
       throw new Error(`Unknown method: ${method}`);
   }

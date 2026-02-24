@@ -47,10 +47,12 @@ export class DGrepTimeHistogram {
 
   // Callbacks
   private timeRangeSelectCallback: ((start: Date, end: Date) => void) | null = null;
+  private bucketClickCallback: ((time: Date) => void) | null = null;
 
   private resizeObserver: ResizeObserver;
   private rafId = 0;
   private destroyed = false;
+  private lastBucketWidth = 0;  // track width used for bucket computation
 
   // Layout constants
   private readonly PADDING_TOP = 4;
@@ -87,6 +89,10 @@ export class DGrepTimeHistogram {
 
   onTimeRangeSelect(cb: (start: Date, end: Date) => void): void {
     this.timeRangeSelectCallback = cb;
+  }
+
+  onBucketClick(cb: (time: Date) => void): void {
+    this.bucketClickCallback = cb;
   }
 
   setData(rows: Record<string, any>[], timeColumn: string, severityColumn: string): void {
@@ -140,9 +146,10 @@ export class DGrepTimeHistogram {
 
   // ==================== Bucket computation ====================
 
-  private computeBuckets(): void {
-    const chartWidth = this.canvas.clientWidth - this.PADDING_LEFT - this.PADDING_RIGHT;
-    const numBuckets = Math.max(10, Math.min(120, Math.floor(chartWidth / 4)));
+  private computeBuckets(overrideWidth?: number): void {
+    const chartWidth = overrideWidth ?? Math.max(0, this.canvas.clientWidth - this.PADDING_LEFT - this.PADDING_RIGHT);
+    this.lastBucketWidth = chartWidth;
+    const numBuckets = Math.max(10, Math.min(120, Math.floor(chartWidth / 4) || 10));
     const range = this.viewEnd - this.viewStart;
     if (range <= 0) {
       this.buckets = [];
@@ -197,6 +204,12 @@ export class DGrepTimeHistogram {
     this.canvas.style.width = `${w}px`;
     this.canvas.style.height = `${h}px`;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    // Recompute buckets if canvas width changed enough to affect bucket count
+    const currentChartWidth = Math.max(0, Math.round(w - this.PADDING_LEFT - this.PADDING_RIGHT));
+    if (this.rows.length > 0 && Math.abs(currentChartWidth - this.lastBucketWidth) >= 4) {
+      this.computeBuckets(currentChartWidth);
+    }
 
     const ctx = this.ctx;
     ctx.clearRect(0, 0, w, h);
@@ -269,20 +282,35 @@ export class DGrepTimeHistogram {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
 
-    // Determine label format
+    // Adaptive label format based on visible time range
+    let labelWidth: number;
     const formatTime = (ms: number): string => {
       const d = new Date(ms);
-      if (range < 60 * 1000) {
-        return `${d.getUTCHours().toString().padStart(2, '0')}:${d.getUTCMinutes().toString().padStart(2, '0')}:${d.getUTCSeconds().toString().padStart(2, '0')}`;
+      const hh = d.getUTCHours().toString().padStart(2, '0');
+      const mm = d.getUTCMinutes().toString().padStart(2, '0');
+      const ss = d.getUTCSeconds().toString().padStart(2, '0');
+      if (range < 10 * 1000) {
+        // < 10 seconds: show milliseconds
+        const ms3 = d.getUTCMilliseconds().toString().padStart(3, '0');
+        return `${hh}:${mm}:${ss}.${ms3}`;
+      } else if (range < 10 * 60 * 1000) {
+        // < 10 minutes: show seconds
+        return `${hh}:${mm}:${ss}`;
       } else if (range < 24 * 60 * 60 * 1000) {
-        return `${d.getUTCHours().toString().padStart(2, '0')}:${d.getUTCMinutes().toString().padStart(2, '0')}`;
+        // < 1 day: show hours:minutes
+        return `${hh}:${mm}`;
       } else {
-        return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${d.getUTCHours().toString().padStart(2, '0')}:${d.getUTCMinutes().toString().padStart(2, '0')}`;
+        return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${hh}:${mm}`;
       }
     };
 
-    // Draw 4-6 labels
-    const numLabels = Math.min(6, Math.max(2, Math.floor(w / 90)));
+    // Wider labels need more spacing
+    if (range < 10 * 1000) labelWidth = 110;
+    else if (range < 10 * 60 * 1000) labelWidth = 80;
+    else if (range < 24 * 60 * 60 * 1000) labelWidth = 65;
+    else labelWidth = 100;
+
+    const numLabels = Math.min(6, Math.max(2, Math.floor(w / labelWidth)));
     for (let i = 0; i <= numLabels; i++) {
       const t = this.viewStart + (range * i) / numLabels;
       const lx = x + (w * i) / numLabels;
@@ -409,8 +437,11 @@ export class DGrepTimeHistogram {
     this.dragStart = null;
     this.dragEnd = null;
 
-    // Only trigger if drag was meaningful (at least 5px)
+    // If drag was tiny (< 5px), treat as a click → scroll to that time
     if (Math.abs(endFrac - startFrac) * chartW < 5) {
+      const clickFrac = (startFrac + endFrac) / 2;
+      const clickTime = this.viewStart + range * clickFrac;
+      this.bucketClickCallback?.(new Date(clickTime));
       this.scheduleRender();
       return;
     }

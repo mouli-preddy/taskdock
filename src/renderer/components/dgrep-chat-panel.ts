@@ -96,6 +96,11 @@ export class DGrepChatPanel {
       }
 
       case 'tool_call': {
+        // Finalize any in-progress assistant bubble so the next delta starts a new one
+        const currentBubble = messagesArea.querySelector('.dgrep-chat-msg-assistant.streaming') as HTMLElement;
+        if (currentBubble && currentBubble.getAttribute('data-raw')) {
+          currentBubble.classList.remove('streaming');
+        }
         const toolName = event.toolName || 'data';
         this.showToolStatus(`Searching ${toolName}...`);
         break;

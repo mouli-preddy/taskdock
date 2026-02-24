@@ -3421,3 +3421,38 @@
   border-bottom: 1px solid var(--border-color-muted);
   color: var(--text-secondary);
 }
+
+/* ==================== Go to Row ==================== */
+.dgrep-goto-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 100;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 60px;
+}
+.dgrep-goto-dialog {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.dgrep-goto-dialog label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.dgrep-goto-input {
+  width: 120px;
+  font-size: 13px;
+  padding: 4px 8px;
+}

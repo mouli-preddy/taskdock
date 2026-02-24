@@ -1127,6 +1127,9 @@ class PRReviewApp {
     window.electronAPI.onDgrepAIChatEvent((event: any) => {
       this.dgrepSearchView.handleAIChatEvent(event);
     });
+    window.electronAPI.onDgrepAIClientQueryUpdate((event: any) => {
+      this.dgrepSearchView.handleAIClientQueryUpdate(event);
+    });
   }
 
   private async handleTerminalReviewComplete(event: { sessionId: string; result: any }) {

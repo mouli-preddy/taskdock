@@ -133,7 +133,7 @@ export class DGrepResultsTable {
   private columnDropdownOpen = false;
   private columnSearchText = '';
   private selectedRowIndex: number | null = null; // For detail panel
-  private wrapMessage = false;
+  private gotoRowOpen = false;
 
   // Column preset tracking
   private activePreset: 'essential' | 'all' | 'custom' = 'essential';
@@ -254,7 +254,11 @@ export class DGrepResultsTable {
       for (const col of columns) {
         this.columnWidths.set(col, COLUMN_WIDTHS[col] ?? this.guessColumnWidth(col));
       }
-      this.sortColumn = null;
+      // Default sort by timestamp column when available
+      const timeCol = columns.find(c => c === 'PreciseTimeStamp')
+        || columns.find(c => c === 'TIMESTAMP')
+        || columns.find(c => c.toLowerCase().includes('timestamp'));
+      this.sortColumn = timeCol ?? null;
       this.sortDir = 'asc';
       this.selectedRowIndex = null;
       this.activePatternFilter = null;
@@ -308,9 +312,33 @@ export class DGrepResultsTable {
   }
 
   private findTimeColumn(): string | null {
-    return this.columns.find(c =>
-      c === 'PreciseTimeStamp' || c === 'TIMESTAMP' || c.toLowerCase().includes('timestamp')
-    ) || null;
+    return this.columns.find(c => c === 'PreciseTimeStamp')
+      || this.columns.find(c => c === 'TIMESTAMP')
+      || this.columns.find(c => c.toLowerCase().includes('timestamp'))
+      || null;
+  }
+
+  /** Scroll to the first row at or after the given time */
+  scrollToTime(time: Date): void {
+    const col = this.findTimeColumn();
+    if (!col || this.filteredRows.length === 0) return;
+    const target = time.getTime();
+    // Binary search for first row >= target (rows are sorted by timestamp)
+    let lo = 0, hi = this.filteredRows.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      const d = new Date(String(this.filteredRows[mid][col] ?? ''));
+      if (!isNaN(d.getTime()) && d.getTime() < target) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    const bestIndex = Math.min(lo, this.filteredRows.length - 1);
+    this.selectedRowIndex = bestIndex;
+    this.scroller.setSelectedRow(bestIndex);
+    this.scroller.scrollToRow(bestIndex);
+    this.renderDetailPanel();
   }
 
   getRowCount(): number {
@@ -804,10 +832,17 @@ export class DGrepResultsTable {
         this.renderDetailPanel();
         this.initDetailViewComponents();
       } else if (ke.key === 'Escape') {
-        this.selectedRowIndex = null;
-        this.scroller.setSelectedRow(null);
-        this.contextViewer?.hide();
-        this.renderDetailPanel();
+        if (this.gotoRowOpen) {
+          this.closeGotoRow();
+        } else {
+          this.selectedRowIndex = null;
+          this.scroller.setSelectedRow(null);
+          this.contextViewer?.hide();
+          this.renderDetailPanel();
+        }
+      } else if (ke.key === 'g' && ke.ctrlKey && !ke.shiftKey) {
+        ke.preventDefault();
+        this.openGotoRow();
       }
     });
   }
@@ -882,6 +917,8 @@ export class DGrepResultsTable {
     this.scroller.setHighlightConditions(highlights);
     // Sync active column filter icons in header
     this.scroller.setActiveColumnFilters(new Set(this.columnFilters.keys()));
+    // Sync sort indicator
+    this.scroller.setSortIndicator(this.sortColumn, this.sortDir);
   }
 
   // ==================== Toolbar Rendering ====================
@@ -893,6 +930,7 @@ export class DGrepResultsTable {
       <div class="dgrep-results-toolbar">
         <div class="dgrep-results-info">
           ${this.filteredRows.length.toLocaleString()} row${this.filteredRows.length !== 1 ? 's' : ''}${this.clientFilter || hasActiveFilters ? ' (filtered)' : ''}
+          <button class="btn btn-xs btn-ghost dgrep-goto-row-btn" title="Go to row (Ctrl+G)" style="margin-left:6px;font-size:10px;padding:1px 5px;opacity:0.7;">Go to</button>
         </div>
         <div class="dgrep-results-actions">
           <div class="dgrep-live-tail-slot"></div>
@@ -921,7 +959,6 @@ export class DGrepResultsTable {
           ` : ''}
           <button class="btn btn-xs btn-secondary dgrep-preset-btn${this.activePreset === 'essential' ? ' active' : ''}" data-preset="essential" title="Show only essential columns">Essential</button>
           <button class="btn btn-xs btn-secondary dgrep-preset-btn${this.activePreset === 'all' ? ' active' : ''}" data-preset="all" title="Show all columns">All</button>
-          <button class="btn btn-xs btn-secondary dgrep-wrap-btn${this.wrapMessage ? ' active' : ''}" title="Toggle word wrap on Message column">Wrap</button>
           <div class="dgrep-column-picker">
             <button class="btn btn-sm btn-secondary dgrep-column-btn" title="Column visibility">Columns</button>
             <div class="dgrep-column-dropdown ${this.columnDropdownOpen ? '' : 'hidden'}">
@@ -1302,11 +1339,9 @@ export class DGrepResultsTable {
       });
     });
 
-    // Wrap toggle
-    this.toolbarEl.querySelector('.dgrep-wrap-btn')?.addEventListener('click', () => {
-      this.wrapMessage = !this.wrapMessage;
-      this.scroller.setWrapMessage(this.wrapMessage);
-      this.renderToolbar();
+    // Go to Row button
+    this.toolbarEl.querySelector('.dgrep-goto-row-btn')?.addEventListener('click', () => {
+      this.openGotoRow();
     });
 
     // Column visibility toggle
@@ -1594,6 +1629,56 @@ export class DGrepResultsTable {
     }
     document.body.appendChild(hint);
     setTimeout(() => hint.remove(), 1000);
+  }
+
+  // ==================== Go to Row ====================
+
+  private openGotoRow(): void {
+    if (this.gotoRowOpen || this.filteredRows.length === 0) return;
+    this.gotoRowOpen = true;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'dgrep-goto-overlay';
+    overlay.innerHTML = `
+      <div class="dgrep-goto-dialog">
+        <label>Go to row (1-${this.filteredRows.length.toLocaleString()}):</label>
+        <input type="number" class="dgrep-input dgrep-goto-input" min="1" max="${this.filteredRows.length}" placeholder="Row number" autofocus>
+      </div>
+    `;
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) this.closeGotoRow();
+    });
+
+    const input = overlay.querySelector('.dgrep-goto-input') as HTMLInputElement;
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const val = parseInt(input.value, 10);
+        if (val >= 1 && val <= this.filteredRows.length) {
+          this.gotoRow(val - 1); // 0-indexed internally
+        }
+        this.closeGotoRow();
+      } else if (e.key === 'Escape') {
+        this.closeGotoRow();
+      }
+    });
+
+    this.container.appendChild(overlay);
+    input.focus();
+  }
+
+  private closeGotoRow(): void {
+    this.gotoRowOpen = false;
+    this.container.querySelector('.dgrep-goto-overlay')?.remove();
+  }
+
+  private gotoRow(index: number): void {
+    if (index < 0 || index >= this.filteredRows.length) return;
+    this.selectedRowIndex = index;
+    this.scroller.setSelectedRow(index);
+    this.scroller.scrollToRow(index);
+    this.renderDetailPanel();
+    this.initDetailViewComponents();
   }
 
   private escapeHtml(text: string): string {

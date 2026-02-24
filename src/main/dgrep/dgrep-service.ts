@@ -337,6 +337,23 @@ export class DGrepService extends EventEmitter {
     }
   }
 
+  /** Run a client query without updating session state or emitting UI events. Returns results directly. */
+  async runClientQueryDetached(sessionId: string, clientQuery: string): Promise<{ columns: string[]; rows: Record<string, any>[]; totalCount: number }> {
+    await this.ensureInitialized();
+
+    const session = this.sessions.get(sessionId);
+    if (!session) throw new Error(`Session not found: ${sessionId}`);
+    if (!session.queryId) throw new Error('Session has no queryId — server search may not have completed');
+    if (!session.endpoint) throw new Error('Session has no endpoint');
+
+    return this.client.runClientQuery(
+      session.queryId,
+      session.endpoint,
+      clientQuery,
+      session.maxResults,
+    );
+  }
+
   // ==================== URL Generation ====================
 
   generateQueryUrl(

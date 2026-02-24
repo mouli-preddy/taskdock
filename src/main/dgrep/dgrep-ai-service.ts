@@ -12,7 +12,8 @@
 import { EventEmitter } from 'node:events';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-import { query } from '@anthropic-ai/claude-agent-sdk';
+import { query, tool, createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk';
+import { z } from 'zod';
 import { CopilotClient } from '@github/copilot-sdk';
 import {
   createAnalysisWorkspace,
@@ -22,6 +23,7 @@ import {
   type AnalysisWorkspace,
 } from './dgrep-analysis-workspace.js';
 import { getDGrepService } from './dgrep-service.js';
+import { resolveMemoryKey, readMemories, addMemory } from './dgrep-memory-service.js';
 import { getLogger } from '../services/logger-service.js';
 import type {
   DGrepAISummary,
@@ -94,12 +96,24 @@ When referencing specific rows, mention their index number so the user can find 
 
 // ==================== Chat Session ====================
 
+interface ChatQueryContext {
+  endpoint: string;
+  namespace: string;
+  events: string[];
+  startTime: string;
+  endTime: string;
+  serverQuery: string;
+  clientQuery: string;
+}
+
 interface ChatSession {
   id: string;
   dgrepSessionId: string;
   workspacePath: string;
   sourceRepoPath: string | null;
   serviceName: string | null;
+  queryContext: ChatQueryContext | null;
+  memoryKey: string;
   // Claude SDK: message queue for multi-turn
   messageQueue: string[];
   messageReady: (() => void) | null;
@@ -657,19 +671,22 @@ Perform root cause analysis. Respond with ONLY a JSON object:
     columns: string[],
     rows: Record<string, any>[],
     sourceRepoPath?: string,
-    serviceName?: string
+    serviceName?: string,
+    queryContext?: ChatQueryContext
   ): Promise<string> {
     const logger = getLogger();
     const chatSessionId = uuidv4();
 
     // Create workspace with CSV + query tool (same as summarize)
     const metadata: AnalysisMetadata = {
-      endpoint: '',
-      namespace: '',
-      events: [],
-      startTime: '',
-      endTime: '',
+      endpoint: queryContext?.endpoint || '',
+      namespace: queryContext?.namespace || '',
+      events: queryContext?.events || [],
+      startTime: queryContext?.startTime || '',
+      endTime: queryContext?.endTime || '',
       totalRows: rows.length,
+      serverQuery: queryContext?.serverQuery,
+      clientQuery: queryContext?.clientQuery,
     };
     const workspace = createAnalysisWorkspace(
       `chat-${chatSessionId}`, columns, rows, [], metadata
@@ -677,12 +694,21 @@ Perform root cause analysis. Respond with ONLY a JSON object:
 
     const ws = workspace.basePath.replace(/\\/g, '/');
 
+    // Write chatSessionId into metadata so the client query tool can read it
+    const metaContent = JSON.parse(fs.readFileSync(workspace.metadataPath, 'utf-8'));
+    metaContent.chatSessionId = chatSessionId;
+    fs.writeFileSync(workspace.metadataPath, JSON.stringify(metaContent, null, 2), 'utf-8');
+
+    const memoryKey = resolveMemoryKey(serviceName, queryContext?.namespace);
+
     const chatSession: ChatSession = {
       id: chatSessionId,
       dgrepSessionId,
       workspacePath: ws,
       sourceRepoPath: sourceRepoPath || null,
       serviceName: serviceName || null,
+      queryContext: queryContext || null,
+      memoryKey,
       messageQueue: [],
       messageReady: null,
       closed: false,
@@ -694,7 +720,7 @@ Perform root cause analysis. Respond with ONLY a JSON object:
     this.chatSessions.set(chatSessionId, chatSession);
 
     if (this.provider === 'claude-sdk') {
-      this.startClaudeChatSession(chatSessionId, ws, sourceRepoPath, serviceName);
+      this.startClaudeChatSession(chatSessionId, ws, sourceRepoPath, serviceName, queryContext);
     } else {
       await this.startCopilotChatSession(chatSessionId, columns, rows);
     }
@@ -709,9 +735,10 @@ Perform root cause analysis. Respond with ONLY a JSON object:
     chatSessionId: string,
     ws: string,
     sourceRepoPath?: string,
-    serviceName?: string
+    serviceName?: string,
+    queryContext?: ChatQueryContext
   ): void {
-    const initialPrompt = this.buildChatPrompt(ws, sourceRepoPath, serviceName);
+    const initialPrompt = this.buildChatPrompt(ws, sourceRepoPath, serviceName, queryContext);
     const cwd = sourceRepoPath || ws;
 
     // Create async generator that yields user messages on demand
@@ -750,6 +777,9 @@ Perform root cause analysis. Respond with ONLY a JSON object:
       }
     }
 
+    // Create MCP server with custom tools for the chat agent
+    const dgrepToolServer = this.createChatToolServer(chatSessionId);
+
     // Launch query in background — streams responses via events
     const response = query({
       prompt: messageStream(),
@@ -759,6 +789,9 @@ Perform root cause analysis. Respond with ONLY a JSON object:
         cwd,
         permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
+        mcpServers: {
+          dgrep: dgrepToolServer,
+        },
       },
     });
 
@@ -835,6 +868,7 @@ Perform root cause analysis. Respond with ONLY a JSON object:
       JSON.stringify(sampleRows, null, 0),
     ].join('\n');
 
+    const self = this;
     const session = await client.createSession({
       model: 'claude-opus-4.6',
       streaming: true,
@@ -842,6 +876,67 @@ Perform root cause analysis. Respond with ONLY a JSON object:
         mode: 'append',
         content: CHAT_SYSTEM_PROMPT + contextInfo,
       },
+      tools: [
+        {
+          name: 'run_client_query',
+          description: `Execute a KQL client query against the full DGrep server results. Two modes:
+- Silent (silent=true, default): runs in background without changing the user's UI. Use for your own exploration.
+- Show (silent=false): updates the user's UI with the query results. Only use when the user asks to show/display results.
+Both modes save filtered results to a CSV and return the path + line count.`,
+          parameters: {
+            type: 'object',
+            properties: {
+              kql: { type: 'string', description: 'The KQL query, e.g. "source | where Message contains \'error\'"' },
+              silent: { type: 'boolean', description: 'If true (default), run in background without updating the UI. Set to false to update the user\'s UI with the query results.', default: true },
+            },
+            required: ['kql'],
+          },
+          handler: async (args: any) => {
+            try {
+              const result = await self.runChatClientQuery(chatSessionId, args.kql, args.silent ?? true);
+              const mode = args.silent ? ' (silent — UI not updated)' : '';
+              return `Client query completed. ${result.lineCount} lines filtered.${mode}\nCSV path: ${result.csvPath}`;
+            } catch (err: any) {
+              return `Client query failed: ${err?.message || String(err)}`;
+            }
+          },
+        },
+        {
+          name: 'read_memory',
+          description: `Read saved memories/learnings about this service's logs. Returns all previously saved insights, patterns, corrections, and knowledge. IMPORTANT: Always call this via a subagent (Task tool) to filter the returned memories down to what is relevant for your current question.`,
+          parameters: {
+            type: 'object',
+            properties: {
+              query: { type: 'string', description: 'Optional: a topic or question to help the subagent filter relevant memories' },
+            },
+          },
+          handler: async (_args: any) => {
+            const session = self.chatSessions.get(chatSessionId);
+            if (!session) return 'No session found.';
+            const memories = readMemories(session.memoryKey);
+            if (memories.length === 0) return 'No memories saved yet for this service.';
+            return `${memories.length} memories for "${session.memoryKey}":\n\n${memories.map((m: string, i: number) => `${i + 1}. ${m}`).join('\n')}`;
+          },
+        },
+        {
+          name: 'add_memory',
+          description: `Save a learning or insight about this service's logs for future sessions. Use this to remember error patterns, user corrections, service-specific knowledge, thresholds, or any insight you'd want next time.`,
+          parameters: {
+            type: 'object',
+            properties: {
+              memory: { type: 'string', description: 'The learning/insight to save. Be specific and actionable.' },
+            },
+            required: ['memory'],
+          },
+          handler: async (args: any) => {
+            const session = self.chatSessions.get(chatSessionId);
+            if (!session) return 'No session found.';
+            const result = addMemory(session.memoryKey, args.memory);
+            if (!result.added) return 'Memory already exists (duplicate). Total: ' + result.total;
+            return `Memory saved. Total memories for "${session.memoryKey}": ${result.total}`;
+          },
+        },
+      ],
     });
 
     const chatSession = this.chatSessions.get(chatSessionId);
@@ -852,12 +947,115 @@ Perform root cause analysis. Respond with ONLY a JSON object:
     });
   }
 
-  private buildChatPrompt(ws: string, sourceRepoPath?: string, serviceName?: string): string {
-    return `You are a log analysis assistant. The user is looking at service logs and will ask you questions about them. Answer thoroughly using the tools available.
+  private createChatToolServer(chatSessionId: string): ReturnType<typeof createSdkMcpServer> {
+    const self = this;
+    return createSdkMcpServer({
+      name: 'dgrep',
+      version: '1.0.0',
+      tools: [
+        tool(
+          'run_client_query',
+          `Execute a KQL client query against the full DGrep server results. Two modes:
+- Silent (silent=true, default): runs the query in the background without changing the user's UI. Use for your own exploration.
+- Show (silent=false): updates the user's UI with the query results. Only use when the user asks to show/display results.
 
+Both modes save filtered results to a CSV and return the path + line count.
+Read kql-guidelines.md in the workspace before writing KQL queries.`,
+          {
+            kql: z.string().describe('The KQL query to execute, e.g. "source | where Message contains \'error\'"'),
+            silent: z.boolean().optional().default(true).describe('If true (default), run in background without updating the UI. Set to false to update the user\'s UI with the query results.'),
+          },
+          async (args: { kql: string; silent?: boolean }) => {
+            try {
+              const result = await self.runChatClientQuery(chatSessionId, args.kql, args.silent ?? true);
+              const mode = args.silent ? ' (silent — UI not updated)' : '';
+              return {
+                content: [{
+                  type: 'text' as const,
+                  text: `Client query completed. ${result.lineCount} lines filtered.${mode}\nCSV path: ${result.csvPath}`,
+                }],
+              };
+            } catch (err: any) {
+              return {
+                content: [{
+                  type: 'text' as const,
+                  text: `Client query failed: ${err?.message || String(err)}`,
+                }],
+                isError: true,
+              };
+            }
+          }
+        ),
+        tool(
+          'read_memory',
+          `Read saved memories/learnings about this service's logs. Returns all previously saved insights, patterns, corrections, and knowledge.
+
+IMPORTANT: Always call this via a subagent (Task tool) to filter the returned memories down to what is relevant for your current question. Do not read memories directly — launch a subagent that reads them and returns only the relevant ones.`,
+          {
+            query: z.string().optional().describe('Optional: a topic or question to help the subagent filter relevant memories'),
+          },
+          async (_args: { query?: string }) => {
+            const session = self.chatSessions.get(chatSessionId);
+            if (!session) return { content: [{ type: 'text' as const, text: 'No session found.' }], isError: true };
+            const memories = readMemories(session.memoryKey);
+            if (memories.length === 0) {
+              return { content: [{ type: 'text' as const, text: 'No memories saved yet for this service.' }] };
+            }
+            return {
+              content: [{
+                type: 'text' as const,
+                text: `${memories.length} memories for "${session.memoryKey}":\n\n${memories.map((m, i) => `${i + 1}. ${m}`).join('\n')}`,
+              }],
+            };
+          }
+        ),
+        tool(
+          'add_memory',
+          `Save a learning or insight about this service's logs for future sessions. Use this to remember:
+- Error patterns and their root causes
+- Corrections from the user (e.g. "X is actually noise, not a real error")
+- Service-specific knowledge (e.g. "retry errors from ServiceX are always noise")
+- Important thresholds or baselines
+- Any insight you would want to know next time you analyze this service's logs`,
+          {
+            memory: z.string().describe('The learning/insight to save. Be specific and actionable.'),
+          },
+          async (args: { memory: string }) => {
+            const session = self.chatSessions.get(chatSessionId);
+            if (!session) return { content: [{ type: 'text' as const, text: 'No session found.' }], isError: true };
+            const result = addMemory(session.memoryKey, args.memory);
+            if (!result.added) {
+              return { content: [{ type: 'text' as const, text: 'Memory already exists (duplicate). Total: ' + result.total }] };
+            }
+            return {
+              content: [{
+                type: 'text' as const,
+                text: `Memory saved. Total memories for "${session.memoryKey}": ${result.total}`,
+              }],
+            };
+          }
+        ),
+      ],
+    });
+  }
+
+  private buildChatPrompt(ws: string, sourceRepoPath?: string, serviceName?: string, queryContext?: ChatQueryContext | null): string {
+    const queryCtxSection = queryContext ? `
+## Query Context
+- Endpoint: ${queryContext.endpoint || 'N/A'}
+- Namespace: ${queryContext.namespace || 'N/A'}
+- Events: ${queryContext.events?.join(', ') || 'N/A'}
+- Time range: ${queryContext.startTime || '?'} to ${queryContext.endTime || '?'}
+- Server query: ${queryContext.serverQuery || 'none'}
+- Active client query: ${queryContext.clientQuery || 'none'}
+` : '';
+
+    return `You are a log analysis assistant. The user is looking at service logs and will ask you questions about them. Answer thoroughly using the tools available.
+${queryCtxSection}
 ## Workspace: ${ws}
 - \`data.csv\` — Log data with \`_row\` column. **Do NOT read this file end-to-end.** Use the query tool.
 - \`query-logs.mjs\` — CSV-aware search tool (run via Bash).
+- \`kql-guidelines.md\` — KQL language reference for DGrep.
 - \`metadata.json\` — Query parameters.
 
 ## Query Tool Usage
@@ -868,14 +1066,32 @@ node ${ws}/query-logs.mjs --row 100 --context 10  Context around a row
 node ${ws}/query-logs.mjs --rows 50-60            Row range
 node ${ws}/query-logs.mjs --head 5                First few rows
 \`\`\`
+
+## Client Query Tool — \`run_client_query\`
+You have a \`run_client_query\` tool to execute KQL client queries against the full DGrep server results. Two modes:
+
+**Silent (silent=true, default for your own analysis):** Runs the query in the background without changing the user's UI. Use this whenever you need to search, filter, or aggregate data as part of your analysis.
+**Show (silent=false):** Runs the query AND updates the user's UI — the client query editor and results table refresh live so the user immediately sees the filtered results. Only use this when the user explicitly asks to see, show, or display filtered results.
+
+Both modes save filtered results to a CSV file and return the path + line count.
+
+**Read \`${ws}/kql-guidelines.md\` before writing KQL queries** to understand the supported DGrep KQL syntax.
 ${sourceRepoPath ? `
 ## Source Code
 ${serviceName ? `**${serviceName}**` : 'Service'} source code is at \`${sourceRepoPath}\`.
 Read source files to trace error origins, understand retry/fallback logic, and correlate log messages with code paths.
 ` : ''}
+## Memory
+You have \`read_memory\` and \`add_memory\` tools to persist learnings across sessions.
+- **At the start of a new topic**, use \`read_memory\` via a subagent to fetch relevant past learnings before diving in.
+- **When you discover something worth remembering**, use \`add_memory\` — error patterns, root causes, noise vs real failures, user corrections, service quirks, thresholds.
+- If the user corrects you ("that's not an error, it's expected"), save that correction so you don't repeat the mistake.
+
 ## Instructions
 - Start by running \`node ${ws}/query-logs.mjs --head 3\` to understand the data shape.
-- Use the query tool to search for relevant data before answering.
+- **Use \`run_client_query\` with silent=true freely** for your own exploration — counting errors, filtering by severity, aggregating by column, etc. This does not affect the user's view.
+- Only use \`run_client_query\` with silent=false when the user asks you to show, display, or apply a filter to their results view.
+- Use the query-logs.mjs tool for quick regex searches on the local CSV data.
 - Be specific — reference row numbers, timestamps, and correlation IDs.
 - When the user asks about an error, get the context around it.
 - When the user asks to trace something, grep for the correlation/request ID.`;
@@ -935,6 +1151,52 @@ Read source files to trace error origins, understand retry/fallback logic, and c
       // Ignore destroy errors
     }
     this.chatSessions.delete(chatSessionId);
+  }
+
+  // ==================== Client Query from Chat ====================
+
+  async runChatClientQuery(chatSessionId: string, kql: string, silent = false): Promise<{ csvPath: string; lineCount: number }> {
+    const logger = getLogger();
+    const chatSession = this.chatSessions.get(chatSessionId);
+    if (!chatSession) throw new Error(`Chat session not found: ${chatSessionId}`);
+
+    const dgrepSessionId = chatSession.dgrepSessionId;
+    logger.info(LOG_CATEGORY, 'Running client query from chat', { chatSessionId, dgrepSessionId, kql: kql.substring(0, 200), silent });
+
+    const dgrepService = getDGrepService();
+    let columns: string[];
+    let rows: Record<string, any>[];
+
+    if (silent) {
+      // Silent mode: run query without updating session state or UI
+      const result = await dgrepService.runClientQueryDetached(dgrepSessionId, kql);
+      columns = result.columns;
+      rows = result.rows;
+    } else {
+      // Normal mode: update UI (client query editor + results table)
+      this.emit('ai:client-query-update', { chatSessionId, dgrepSessionId, kql });
+      await dgrepService.runClientQuery(dgrepSessionId, kql);
+      const results = dgrepService.getResults(dgrepSessionId);
+      columns = results?.columns || [];
+      rows = results?.rows || [];
+    }
+
+    // Write filtered results to CSV in the workspace (even if empty — include headers)
+    const csvFileName = `client-query-results-${Date.now()}.csv`;
+    const csvPath = `${chatSession.workspacePath}/${csvFileName}`;
+    const header = columns.map(c => csvEscapeField(c)).join(',');
+    const csvRows = rows.map(row =>
+      columns.map(c => csvEscapeField(String(row[c] ?? ''))).join(',')
+    );
+    fs.writeFileSync(csvPath, [header, ...csvRows].join('\n'), 'utf-8');
+
+    logger.info(LOG_CATEGORY, 'Client query CSV saved', { chatSessionId, csvPath, lineCount: rows.length });
+
+    return { csvPath, lineCount: rows.length };
+  }
+
+  getChatSession(chatSessionId: string): ChatSession | undefined {
+    return this.chatSessions.get(chatSessionId);
   }
 
   // ==================== Disposal ====================
@@ -1079,6 +1341,15 @@ Read source files to trace error origins, understand retry/fallback logic, and c
       return null;
     }
   }
+}
+
+// ==================== Helpers ====================
+
+function csvEscapeField(value: string): string {
+  if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+    return '"' + value.replace(/"/g, '""') + '"';
+  }
+  return value;
 }
 
 // ==================== Singleton ====================

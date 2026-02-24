@@ -16,6 +16,7 @@ export interface AnalysisWorkspace {
   basePath: string;
   dataPath: string;
   queryToolPath: string;
+  kqlGuidelinesPath: string;
   metadataPath: string;
   summaryOutputPath: string;
   rcaOutputPath: string;
@@ -34,6 +35,8 @@ export interface AnalysisMetadata {
   sourceRepoPath?: string;
   serviceName?: string;
   serviceDescription?: string;
+  serverQuery?: string;
+  clientQuery?: string;
 }
 
 export function createAnalysisWorkspace(
@@ -59,6 +62,10 @@ export function createAnalysisWorkspace(
   const queryToolPath = path.join(basePath, 'query-logs.mjs');
   fs.writeFileSync(queryToolPath, getQueryToolSource(), 'utf-8');
 
+  // Write KQL guidelines
+  const kqlGuidelinesPath = path.join(basePath, 'kql-guidelines.md');
+  fs.writeFileSync(kqlGuidelinesPath, getKqlGuidelines(), 'utf-8');
+
   // Write metadata
   const metadataPath = path.join(basePath, 'metadata.json');
   fs.writeFileSync(metadataPath, JSON.stringify({ ...metadata, columns }, null, 2), 'utf-8');
@@ -67,6 +74,7 @@ export function createAnalysisWorkspace(
     basePath,
     dataPath,
     queryToolPath,
+    kqlGuidelinesPath,
     metadataPath,
     summaryOutputPath: path.join(basePath, 'summary-output.json'),
     rcaOutputPath: path.join(basePath, 'rca-output.json'),
@@ -289,6 +297,74 @@ ${JSON.stringify(targetRow, null, 2)}
   "additionalFindings": "real issue or noise? one-off or systemic?"
 }
 \`\`\``;
+}
+
+export function getKqlGuidelines(): string {
+  return `# KQL Reference for DGrep
+
+KQL is the query language used in DGrep. In a client query, \`source\` represents the data produced by the server query.
+
+## Example
+
+\`\`\`
+source
+| where ActivityId == "383112e4-a7a8-4b94-a701-4266dfc18e41"
+| project PreciseTimeStamp, Message
+\`\`\`
+
+## Tabular Operators
+- \`where\` — Filter rows
+- \`project\` — Select/rename columns
+- \`project-away\` — Remove columns
+- \`project-rename\` — Rename columns
+- \`extend\` — Add computed columns
+- \`summarize\` — Aggregate (count, avg, sum, min, max, dcount, etc.)
+- \`order\` / \`sort\` — Sort rows
+- \`limit\` / \`take\` — Limit row count
+- \`parse\` — Extract fields from strings
+- \`join\` — Inner join only: \`| join kind=inner (...) on Key\`
+- \`print\` — Produce a single row
+- \`mvexpand\` — Expand dynamic arrays (use \`mvexpand\`, not \`mv-expand\`)
+- \`columnifexists\` — Safe column reference (use \`columnifexists\`, not \`column_ifexists\`)
+
+## String Operators
+- \`==\`, \`!=\`, \`=~\`, \`!~\`
+- \`contains\`, \`!contains\`, \`contains_cs\`, \`!contains_cs\`
+- \`startswith\`, \`!startswith\`, \`startswith_cs\`, \`!startswith_cs\`
+- \`endswith\`, \`!endswith\`, \`endswith_cs\`, \`!endswith_cs\`
+- \`matches regex\`
+- \`in\`, \`!in\`
+
+## Aggregation Functions
+\`count()\`, \`countif()\`, \`avg()\`, \`sum()\`, \`min()\`, \`max()\`,
+\`dcount()\` (100% accurate, no Accuracy arg), \`dcountif()\`,
+\`makeset()\`, \`percentile()\`, \`any()\` (single arg only)
+
+## Scalar Functions
+- **String:** \`strlen\`, \`substring\`, \`indexof\`, \`split\`, \`strcat\`, \`strcat_delim\`, \`tolower\`, \`toupper\`, \`extract\`, \`extractall\` (not extract_all), \`countof\`, \`isempty\`, \`isnotempty\`, \`parse_json\`, \`parse_xml\`, \`base64_encodestring\` (not base64_encode_tostring), \`base64_decodestring\` (not base64_decode_tostring), \`hash_sha256\`
+- **DateTime:** \`ago\`, \`now\`, \`datetime_add\`, \`datetime_diff\`, \`datetime_part\`, \`dayofmonth\`, \`dayofweek\`, \`dayofyear\`, \`getmonth\`, \`getyear\`, \`hourofday\`, \`startofday\`, \`startofmonth\`, \`startofweek\`, \`startofyear\`, \`endofday\`, \`endofmonth\`, \`endofweek\`, \`endofyear\`, \`weekofyear\`, \`make_datetime\`, \`make_timespan\`, \`todatetime\`, \`totimespan\`
+- **Conversion:** \`tobool\`, \`todatetime\`, \`todouble\`/\`toreal\`, \`toguid\`, \`toint\`, \`tolong\`, \`tostring\`, \`totimespan\`
+- **Math:** \`abs\`, \`bin\`/\`floor\`, \`ceiling\`, \`exp\`, \`exp2\`, \`exp10\`, \`log\`, \`log2\`, \`log10\`, \`pow\`, \`round\`, \`sign\`
+- **Conditional:** \`case\`, \`iif\`, \`max_of\`, \`min_of\`
+- **Dynamic:** \`array_concat\`, \`array_length\`, \`pack_array\`, \`pack\`, \`parse_json\`, \`zip\`
+- **Type:** \`gettype\`, \`isnull\`, \`isnotnull\`
+
+## let statements
+\`\`\`
+let threshold = 100;
+source | where Duration > threshold
+\`\`\`
+
+## Key Differences from Kusto
+- No \`dynamic({})\` literals — use \`parse_json('...')\` instead
+- Only inner join supported
+- Use \`mvexpand\` not \`mv-expand\`
+- Use \`columnifexists\` not \`column_ifexists\`
+- Use \`extractall\` not \`extract_all\`
+- Use \`base64_encodestring\`/\`base64_decodestring\` not \`base64_encode_tostring\`/\`base64_decode_tostring\`
+- \`dcount\` is always 100% accurate (no Accuracy argument)
+- \`any()\` supports only one argument
+`;
 }
 
 function csvEscape(value: string): string {

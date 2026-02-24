@@ -267,7 +267,7 @@ export class DGrepSearchView {
       this.columnPresetApplied = true;
       this.applySavedColumnPreset();
     }
-    this.updateHistogram(columns, rows);
+    // Histogram/minimap updated automatically via onDataChange
   }
 
   // AI event handlers (called from app.ts when bridge events arrive)
@@ -298,6 +298,11 @@ export class DGrepSearchView {
   }
   handleAIChatEvent(event: DGrepChatEvent): void {
     this.chatPanel?.handleChatEvent?.(event);
+  }
+  handleAIClientQueryUpdate(event: { chatSessionId: string; dgrepSessionId: string; kql: string }): void {
+    if (event.dgrepSessionId === this.activeSessionId) {
+      this.clientQueryEditor.setValue(event.kql);
+    }
   }
 
   async populateFromUrl(url: string): Promise<void> {
@@ -589,7 +594,6 @@ export class DGrepSearchView {
               ${getIcon(Download, 14)} CSV
             </button>
             <button class="btn btn-sm btn-secondary" id="dgrepOpenGeneva" disabled>Open in Geneva</button>
-            <button class="btn btn-sm btn-secondary" id="dgrepCopyQueryId" disabled>Copy Query ID</button>
             <button class="btn btn-sm btn-secondary dgrep-facets-btn" id="dgrepFacetsToggle">Facets</button>
             <span style="flex:1"></span>
             <button class="btn btn-sm btn-secondary" id="dgrepAISummarizeBtn" disabled>Summarize</button>
@@ -655,6 +659,7 @@ export class DGrepSearchView {
     // Wire data flow to faceted sidebar
     this.resultsTable.onDataChange((columns, _allRows, filteredRows) => {
       this.facetedSidebar.setData(columns, filteredRows);
+      this.updateHistogram(columns, filteredRows);
     });
 
     // Initialize AI panels
@@ -691,9 +696,10 @@ export class DGrepSearchView {
     this.chatPanel = new DGrepChatPanel(chatSlot);
     this.chatPanel.onCreateSession = async (columns, rows) => {
       const linkedService = this.getLinkedService();
+      const queryContext = this.buildChatQueryContext();
       return await (window as any).electronAPI?.dgrepAIChatCreate?.(
         this.activeSessionId, columns, rows.slice(0, 2000),
-        linkedService?.repoPath, linkedService?.name
+        linkedService?.repoPath, linkedService?.name, queryContext
       ) ?? '';
     };
     this.chatPanel.onSendMessage = async (chatSessionId, message) => {
@@ -735,6 +741,9 @@ export class DGrepSearchView {
     this.histogram = new DGrepTimeHistogram(histogramContainer as HTMLElement);
     this.histogram.onTimeRangeSelect((start, end) => {
       this.resultsTable.setTimeRangeFilter(start, end);
+    });
+    this.histogram.onBucketClick((time) => {
+      this.resultsTable.scrollToTime(time);
     });
 
     // Initialize NL input
@@ -1008,13 +1017,6 @@ export class DGrepSearchView {
     this.container.querySelector('#dgrepOpenGeneva')?.addEventListener('click', () => {
       const url = buildDGrepUrl(this.buildFormState());
       this.onOpenInGenevaCallback?.(url);
-    });
-
-    // Copy Query ID
-    this.container.querySelector('#dgrepCopyQueryId')?.addEventListener('click', () => {
-      if (this.activeSessionId) {
-        navigator.clipboard.writeText(this.activeSessionId);
-      }
     });
 
     // Facets toggle
@@ -1335,6 +1337,23 @@ export class DGrepSearchView {
     };
   }
 
+  private buildChatQueryContext(): { endpoint: string; namespace: string; events: string[]; startTime: string; endTime: string; serverQuery: string; clientQuery: string } {
+    const endpointSelect = this.container.querySelector('#dgrepEndpoint') as HTMLSelectElement;
+    const endpointName = endpointSelect?.value || '';
+    const namespace = this.namespaceSelect?.getValue() || '';
+    const events = Array.from(this.selectedEvents);
+    const timeRange = this.computeTimeRange();
+    return {
+      endpoint: endpointName,
+      namespace,
+      events,
+      startTime: timeRange.startTime || '',
+      endTime: timeRange.endTime || '',
+      serverQuery: this.serverQueryEditor.getValue() || '',
+      clientQuery: this.clientQueryEditor.getValue() || '',
+    };
+  }
+
   getFormState(): DGrepFormState { return this.buildFormState(); }
 
   async loadFormState(s: DGrepFormState): Promise<void> {
@@ -1483,11 +1502,9 @@ export class DGrepSearchView {
   private enableActionButtons(enabled: boolean): void {
     const csvBtn = this.container.querySelector('#dgrepDownloadCsv') as HTMLButtonElement;
     const genevaBtn = this.container.querySelector('#dgrepOpenGeneva') as HTMLButtonElement;
-    const copyBtn = this.container.querySelector('#dgrepCopyQueryId') as HTMLButtonElement;
 
     if (csvBtn) csvBtn.disabled = !enabled;
     if (genevaBtn) genevaBtn.disabled = !enabled;
-    if (copyBtn) copyBtn.disabled = !enabled;
     // Enable AI buttons when results are available
     const aiSumBtn = this.container.querySelector('#dgrepAISummarizeBtn') as HTMLButtonElement;
     const aiChatBtn = this.container.querySelector('#dgrepAIChatBtn') as HTMLButtonElement;
@@ -1529,7 +1546,6 @@ export class DGrepSearchView {
           }
           this.enableActionButtons(true);
           this.updateStatusBar(`Complete: ${results.rows.length.toLocaleString()} results`, 100, results.rows.length);
-          this.updateHistogram(results.columns, results.rows);
         }
         return;
       }
@@ -1547,7 +1563,6 @@ export class DGrepSearchView {
 
       if (totalCount <= pageSize) {
         this.updateStatusBar(`Complete: ${totalCount.toLocaleString()} results`, 100, totalCount);
-        this.updateHistogram(columns, allRows);
         return;
       }
 
@@ -1570,7 +1585,6 @@ export class DGrepSearchView {
       }
 
       this.updateStatusBar(`Complete: ${allRows.length.toLocaleString()} results`, 100, allRows.length);
-      this.updateHistogram(columns, allRows);
     } catch (err: any) {
       console.error('Failed to load results:', err);
       this.updateStatusBar(`Error loading results: ${err.message}`, undefined, undefined, true);
@@ -1578,13 +1592,16 @@ export class DGrepSearchView {
   }
 
   private updateHistogram(columns: string[], rows: Record<string, any>[]): void {
-    const timeCol = columns.find(c =>
-      c === 'PreciseTimeStamp' || c === 'TIMESTAMP' || c.toLowerCase().includes('timestamp')
-    ) || '';
+    // Priority: PreciseTimeStamp (sub-second) > TIMESTAMP (minute-resolution) > any *timestamp* column
+    const timeCol = columns.find(c => c === 'PreciseTimeStamp')
+      || columns.find(c => c === 'TIMESTAMP')
+      || columns.find(c => c.toLowerCase().includes('timestamp'))
+      || '';
     // Prefer text-based severity columns (severityText=Information/Error/Warning) over numeric Level
-    const sevCol = columns.find(c =>
-      c === 'severityText' || c === 'Severity' || c === 'level' || c === 'Level'
-    ) || '';
+    const sevCol = columns.find(c => c === 'severityText')
+      || columns.find(c => c === 'Severity')
+      || columns.find(c => c === 'level' || c === 'Level')
+      || '';
     if (timeCol) {
       this.histogram.setData(rows, timeCol, sevCol);
     }
