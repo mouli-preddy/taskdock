@@ -135,12 +135,13 @@ export class DGrepSearchView {
     select.value = currentVal || '';
   }
 
-  private getLinkedServiceRepoPath(): string | null {
+  private getLinkedService(): { repoPath: string; name: string; description?: string } | null {
     const select = this.container.querySelector('#dgrepLinkedService') as HTMLSelectElement;
     const serviceId = select?.value;
     if (!serviceId) return null;
     const svc = this.services.find(s => s.id === serviceId);
-    return svc?.repoPath || null;
+    if (!svc?.repoPath) return null;
+    return { repoPath: svc.repoPath, name: svc.name, description: (svc as any).description };
   }
 
   private updateLinkedServiceFromNamespace(): void {
@@ -663,10 +664,17 @@ export class DGrepSearchView {
       if (this.activeSessionId) {
         const metadata = this.buildAnalysisMetadata(rows.length);
         const { level, customPrompt } = this.aiSummaryPanel.getAnalysisLevel();
-        const sourceRepoPath = this.getLinkedServiceRepoPath();
+        const linkedService = this.getLinkedService();
         await (window as any).electronAPI?.dgrepAISummarizeLogs?.(
           this.activeSessionId, columns, rows.slice(0, 2000), patterns || [],
-          { ...metadata, analysisLevel: level, customPrompt, sourceRepoPath }
+          {
+            ...metadata,
+            analysisLevel: level,
+            customPrompt,
+            sourceRepoPath: linkedService?.repoPath,
+            serviceName: linkedService?.name,
+            serviceDescription: linkedService?.description,
+          }
         );
       }
     };

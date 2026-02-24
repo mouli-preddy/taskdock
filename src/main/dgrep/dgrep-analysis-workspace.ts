@@ -32,6 +32,8 @@ export interface AnalysisMetadata {
   analysisLevel?: 'quick' | 'standard' | 'detailed' | 'custom';
   customPrompt?: string;
   sourceRepoPath?: string;
+  serviceName?: string;
+  serviceDescription?: string;
 }
 
 export function createAnalysisWorkspace(
@@ -78,18 +80,26 @@ export function buildSummaryPrompt(workspace: AnalysisWorkspace, sourceRepoPath?
   const ws = workspace.basePath.replace(/\\/g, '/');
   const outputPath = workspace.summaryOutputPath.replace(/\\/g, '/');
 
+  const serviceName = meta.serviceName || '';
+  const serviceDesc = meta.serviceDescription || '';
+
   return `# Log Analysis
 
 Analyze ${meta.totalRows} rows of service logs from ${meta.namespace} (${meta.events.join(', ')}).
 Time range: ${meta.startTime} to ${meta.endTime}.
+Endpoint: ${meta.endpoint}
+${serviceName ? `Service: **${serviceName}**${serviceDesc ? ` — ${serviceDesc}` : ''}` : ''}
 
 ## Workspace: ${ws}
 - \`data.csv\` — Log data with \`_row\` column. **Do NOT read end-to-end.** Use the query tool.
 - \`query-logs.mjs\` — CSV-aware search tool (run via Bash).
 - \`metadata.json\` — Query parameters.
 ${sourceRepoPath ? `
-## Source Code
-Source code is at \`${sourceRepoPath}\` (current working directory). Subagents can read source files to trace errors back to code.
+## Source Code Repository
+${serviceName ? `This is the source code for **${serviceName}**.` : 'Source code for this service is available.'}
+Repository path: \`${sourceRepoPath}\`
+
+Subagents should use this path as their working directory to read source files, trace error origins, understand retry/fallback logic, and correlate log messages with code paths.
 ` : ''}
 ## Process — Follow these 4 phases in order. Use TaskCreate to track progress.
 
@@ -157,7 +167,7 @@ Each subagent gets this instruction (fill in the specifics for that category):
 > - Use \`node ${ws}/query-logs.mjs --row N --context 15\` to see what happened around each error.
 > - Use \`node ${ws}/query-logs.mjs "some_id_from_the_row"\` to trace a request by its correlation/activity/trace ID.
 > - Use Grep on \`${ws}/data.csv\` for complex searches.
-${sourceRepoPath ? `> - Source code is at \`${sourceRepoPath}\`. Read source files to trace where the error originates and whether it is caught/retried/propagated.\n` : ''}
+${sourceRepoPath ? `> - Source code for ${serviceName ? `**${serviceName}**` : 'this service'} is at \`${sourceRepoPath}\`. Read source files to trace where the error originates and whether it is caught/retried/propagated.\n` : ''}
 > **Determine:**
 > 1. Is this a REAL failure or noise?
 >    - Retried and succeeded → noise
@@ -227,17 +237,25 @@ export function buildRCAPrompt(
   targetIndex: number,
   sourceRepoPath?: string
 ): string {
+  const meta = JSON.parse(fs.readFileSync(workspace.metadataPath, 'utf-8'));
+  const serviceName = meta.serviceName || '';
+  const serviceDesc = meta.serviceDescription || '';
+
   return `# Root Cause Analysis
 
 Investigate a specific log entry and trace what caused it.
+${serviceName ? `Service: **${serviceName}**${serviceDesc ? ` — ${serviceDesc}` : ''}` : ''}
 
 ## Files in ${workspace.basePath}
 - \`data.csv\` — Full log data with \`_row\` column for line numbers. Use the query tool, not sequential reading.
 - \`query-logs.mjs\` — CSV-aware search tool.
 - \`metadata.json\` — Query context.
 ${sourceRepoPath ? `
-## Source Code
-Source at current working directory. Find the code that emits this log message, trace its callers, understand retry/fallback logic.
+## Source Code Repository
+${serviceName ? `This is the source code for **${serviceName}**.` : 'Source code for this service is available.'}
+Repository path: \`${sourceRepoPath}\`
+
+Find the code that emits this log message, trace its callers, understand retry/fallback logic.
 ` : ''}
 ## Target Entry (Row ${targetIndex})
 \`\`\`json
