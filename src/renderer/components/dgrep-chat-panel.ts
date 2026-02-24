@@ -1,6 +1,7 @@
 import { escapeHtml } from '../utils/html-utils.js';
 import { MessageCircle, X, Send, Loader2 } from '../utils/icons.js';
 import { iconHtml } from '../utils/icons.js';
+import { marked } from 'marked';
 import type { DGrepChatMessage, DGrepChatEvent } from '../../shared/dgrep-ai-types.js';
 
 const SUGGESTIONS = [
@@ -325,18 +326,10 @@ export class DGrepChatPanel {
   }
 
   private renderMarkdown(text: string): string {
-    let html = escapeHtml(text);
-    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_m, _lang, code) => `<pre><code>${code}</code></pre>`);
-    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
-    html = html.replace(/^[\s]*[-*]\s+(.+)$/gm, '<li>$1</li>');
-    html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
-    html = html.replace(/^[\s]*\d+\.\s+(.+)$/gm, '<li>$1</li>');
-    html = html.replace(/\n\n/g, '</p><p>');
-    html = `<p>${html}</p>`;
-    html = html.replace(/<p>\s*<\/p>/g, '');
-    html = html.replace(/(?<!>)\n(?!<)/g, '<br>');
-    return html;
+    try {
+      return marked.parse(text, { async: false, gfm: true, breaks: true }) as string;
+    } catch {
+      return escapeHtml(text);
+    }
   }
 }
