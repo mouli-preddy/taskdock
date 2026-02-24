@@ -1,6 +1,7 @@
 import { escapeHtml } from '../utils/html-utils.js';
 import { Sparkles, ChevronDown, ChevronRight, ArrowLeft } from '../utils/icons.js';
 import { iconHtml } from '../utils/icons.js';
+import { marked } from 'marked';
 import type { DGrepAISummary, DGrepPatternTrend } from '../../shared/dgrep-ai-types.js';
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -467,28 +468,10 @@ export class DGrepAISummaryPanel {
   }
 
   private renderMarkdown(text: string): string {
-    let html = escapeHtml(text);
-    // Headers
-    html = html.replace(/^### (.+)$/gm, '<h4>$1</h4>');
-    html = html.replace(/^## (.+)$/gm, '<h3>$1</h3>');
-    html = html.replace(/^# (.+)$/gm, '<h2>$1</h2>');
-    // Code blocks
-    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_m, _lang, code) => `<pre><code>${code}</code></pre>`);
-    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-    // Bold/italic
-    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
-    // Lists
-    html = html.replace(/^[\s]*[-*]\s+(.+)$/gm, '<li>$1</li>');
-    html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
-    // Paragraphs
-    html = html.replace(/\n\n/g, '</p><p>');
-    html = `<p>${html}</p>`;
-    html = html.replace(/<p>\s*<\/p>/g, '');
-    html = html.replace(/(?<!>)\n(?!<)/g, '<br>');
-    // Clean up headers inside paragraphs
-    html = html.replace(/<p><(h[234])>/g, '<$1>');
-    html = html.replace(/<\/(h[234])><\/p>/g, '</$1>');
-    return html;
+    try {
+      return marked.parse(text, { async: false, gfm: true, breaks: true }) as string;
+    } catch {
+      return escapeHtml(text);
+    }
   }
 }

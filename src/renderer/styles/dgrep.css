@@ -3373,3 +3373,36 @@
   color: var(--text-secondary);
   padding: var(--space-2);
 }
+
+/* ==================== Markdown Tables (from marked) ==================== */
+.dgrep-ai-summary-narrative table,
+.dgrep-ai-detail-content table,
+.dgrep-rca-narrative table,
+.dgrep-rca-recommendation table,
+.dgrep-rca-findings table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  margin: var(--space-1) 0;
+}
+.dgrep-ai-summary-narrative th,
+.dgrep-ai-detail-content th,
+.dgrep-rca-narrative th,
+.dgrep-rca-recommendation th,
+.dgrep-rca-findings th {
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: 2px solid var(--border-color);
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+.dgrep-ai-summary-narrative td,
+.dgrep-ai-detail-content td,
+.dgrep-rca-narrative td,
+.dgrep-rca-recommendation td,
+.dgrep-rca-findings td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-color-muted);
+  color: var(--text-secondary);
+}
