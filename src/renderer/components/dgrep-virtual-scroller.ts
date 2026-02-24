@@ -68,6 +68,8 @@ export class DGrepVirtualScroller {
   // Active column filters (columns that currently have a filter applied)
   private activeColumnFilters: Set<string> = new Set();
 
+  private cellFormatters: Map<string, (text: string) => string> = new Map();
+
   // Column resize state
   private resizingCol: string | null = null;
   private resizeStartX = 0;
@@ -173,6 +175,13 @@ export class DGrepVirtualScroller {
   setActiveColumnFilters(columns: Set<string>): void {
     this.activeColumnFilters = columns;
     this.renderHeader();
+  }
+
+  /** Set custom cell formatter functions (column name → fn that returns HTML) */
+  setCellFormatters(formatters: Map<string, (text: string) => string>): void {
+    this.cellFormatters = formatters;
+    this.clearRenderedRows();
+    this.renderVisibleRows();
   }
 
   /** Check if a cell matches a highlight condition */
@@ -337,8 +346,18 @@ export class DGrepVirtualScroller {
       }
 
       // Set HTML content with optional highlight
-      const escaped = this.escapeHtml(display);
-      cell.innerHTML = this.highlightMatch(escaped);
+      const formatter = this.cellFormatters.get(col);
+      if (formatter) {
+        try {
+          cell.innerHTML = formatter(str);
+        } catch {
+          const escaped = this.escapeHtml(display);
+          cell.innerHTML = this.highlightMatch(escaped);
+        }
+      } else {
+        const escaped = this.escapeHtml(display);
+        cell.innerHTML = this.highlightMatch(escaped);
+      }
 
       // Apply highlight condition coloring
       for (const hc of this.highlightConditions) {
