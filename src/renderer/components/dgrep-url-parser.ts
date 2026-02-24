@@ -79,10 +79,18 @@ export function parseDGrepUrl(url: string): ParsedDGrepUrl | null {
         if (Array.isArray(parsed)) {
           for (const item of parsed) {
             if (Array.isArray(item) && item.length >= 3) {
+              // Format: [column, operator, value]
               scopingConditions.push({
                 column: item[0],
                 operator: item[1] as ScopingOperator,
                 value: item[2],
+              });
+            } else if (Array.isArray(item) && item.length === 2) {
+              // Geneva portal format: [column, value] - defaults to '=='
+              scopingConditions.push({
+                column: item[0],
+                operator: '==',
+                value: item[1],
               });
             }
           }
@@ -141,7 +149,10 @@ export function buildDGrepUrl(state: DGrepFormState): string {
   }
 
   if (state.scopingConditions.length > 0) {
-    const arr = state.scopingConditions.map(sc => [sc.column, sc.operator, sc.value]);
+    // Use Geneva portal format: [column, value] for == operator, [column, operator, value] for others
+    const arr = state.scopingConditions.map(sc =>
+      sc.operator === '==' ? [sc.column, sc.value] : [sc.column, sc.operator, sc.value]
+    );
     params.set('scopingConditions', JSON.stringify(arr));
   }
 

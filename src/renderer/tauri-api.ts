@@ -500,6 +500,16 @@ export const tauriAPI = {
     return invoke('set_notification_settings', { settings });
   },
 
+  // Services
+  getServices: async () => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke('get_services');
+  },
+  setServices: async (services: any) => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke('set_services', { services });
+  },
+
   // Apply Changes API
   applyChangesInitialize: (prId: number, contextDir: string, worktreePath: string, prTitle: string, prMetadata: any, hasLinkedRepo: boolean) =>
     invoke('apply-changes:initialize', prId, contextDir, worktreePath, prTitle, prMetadata, hasLinkedRepo),

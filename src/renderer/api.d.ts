@@ -363,6 +363,22 @@ export interface ElectronAPI {
     newIterations: boolean;
   }) => Promise<void>;
 
+  // Services
+  getServices: () => Promise<{
+    id: string;
+    name: string;
+    description: string;
+    repoPath: string;
+    linkedServiceIds: string[];
+  }[]>;
+  setServices: (services: {
+    id: string;
+    name: string;
+    description: string;
+    repoPath: string;
+    linkedServiceIds: string[];
+  }[]) => Promise<void>;
+
   // PR file cache API
   ensurePRContext: (
     prContext: any,

@@ -19,6 +19,7 @@ import type {
   LogId,
   SearchStatusResponse,
 } from '../../shared/dgrep-types.js';
+import { DGREP_FRONTEND_URLS, DGREP_ENDPOINT_URLS } from '../../shared/dgrep-types.js';
 
 const LOG_CATEGORY = 'DGrepService';
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -206,6 +207,34 @@ export class DGrepService extends EventEmitter {
 
   // ==================== Metadata (cached) ====================
 
+  // Cache of DGrepClients per frontend URL (gov clouds use different portals)
+  private clientCache: Map<string, DGrepClient> = new Map();
+
+  /** Get the correct DGrepClient for a given endpoint URL (gov clouds use different portals) */
+  private getClientForEndpoint(endpoint: string): DGrepClient {
+    // Find which endpoint name this URL belongs to, then get its frontend URL
+    let frontendUrl = DGREP_FRONTEND_URLS['Default'] || '';
+    for (const [name, url] of Object.entries(DGREP_ENDPOINT_URLS)) {
+      if (url === endpoint) {
+        frontendUrl = DGREP_FRONTEND_URLS[name] || frontendUrl;
+        break;
+      }
+    }
+
+    // Default portal - use existing client
+    if (!frontendUrl || frontendUrl === 'https://dgrepv2-frontend-prod.trafficmanager.net') {
+      return this.client;
+    }
+
+    // Gov cloud or other portal - use cached client
+    let client = this.clientCache.get(frontendUrl);
+    if (!client) {
+      client = new DGrepClient(frontendUrl);
+      this.clientCache.set(frontendUrl, client);
+    }
+    return client;
+  }
+
   async getNamespaces(endpoint: string): Promise<string[]> {
     await this.ensureInitialized();
 
@@ -217,7 +246,8 @@ export class DGrepService extends EventEmitter {
     const logger = getLogger();
     logger.info(LOG_CATEGORY, 'Fetching namespaces (cache miss)', { endpoint });
 
-    const namespaces = await this.client.getNamespaces(endpoint);
+    const client = this.getClientForEndpoint(endpoint);
+    const namespaces = await client.getNamespaces(endpoint);
     this.namespaceCache.set(endpoint, {
       data: namespaces,
       expiresAt: Date.now() + CACHE_TTL_MS,
@@ -238,7 +268,8 @@ export class DGrepService extends EventEmitter {
     const logger = getLogger();
     logger.info(LOG_CATEGORY, 'Fetching events (cache miss)', { endpoint, namespace });
 
-    const events = await this.client.getEvents(endpoint, namespace);
+    const client = this.getClientForEndpoint(endpoint);
+    const events = await client.getEvents(endpoint, namespace);
     this.eventsCache.set(cacheKey, {
       data: events,
       expiresAt: Date.now() + CACHE_TTL_MS,
@@ -489,7 +520,90 @@ export class DGrepService extends EventEmitter {
     this.emit('error', event);
   }
 
+  // ==================== Surrounding Docs ====================
+
+  getSurroundingDocs(
+    sessionId: string,
+    rowIndex: number,
+    count: number
+  ): { columns: string[]; rows: Record<string, any>[]; startIndex: number; endIndex: number } | undefined {
+    const session = this.sessions.get(sessionId);
+    if (!session || !session.results) return undefined;
+
+    const rows = session.results;
+    const start = Math.max(0, rowIndex - count);
+    const end = Math.min(rows.length, rowIndex + count + 1);
+
+    return {
+      columns: session.columns || [],
+      rows: rows.slice(start, end),
+      startIndex: start,
+      endIndex: end - 1,
+    };
+  }
+
+  // ==================== Live Tail ====================
+
+  private liveTailIntervals: Map<string, ReturnType<typeof setInterval>> = new Map();
+
+  startLiveTail(sessionId: string, intervalMs: number = 5000): void {
+    const logger = getLogger();
+    const session = this.sessions.get(sessionId);
+    if (!session) throw new Error(`Session not found: ${sessionId}`);
+    if (!session.endpoint || !session.namespaces || !session.eventNames) {
+      throw new Error('Session lacks endpoint/namespace/event info for live tail');
+    }
+
+    // Stop any existing live tail for this session
+    this.stopLiveTail(sessionId);
+
+    logger.info(LOG_CATEGORY, 'Starting live tail', { sessionId, intervalMs });
+
+    const interval = setInterval(async () => {
+      try {
+        await this.ensureInitialized();
+        const now = new Date();
+        const windowStart = new Date(now.getTime() - intervalMs * 2);
+
+        const result = await this.client.query({
+          endpoint: session.endpoint!,
+          namespaces: session.namespaces!,
+          eventNames: session.eventNames!,
+          startTime: windowStart.toISOString(),
+          endTime: now.toISOString(),
+          maxResults: 100,
+        });
+
+        if (result.rows.length > 0) {
+          this.emit('live-tail-data', {
+            sessionId,
+            columns: result.columns,
+            rows: result.rows,
+            timestamp: now.toISOString(),
+          });
+        }
+      } catch (err: any) {
+        logger.error(LOG_CATEGORY, 'Live tail poll error', { sessionId, error: err?.message });
+      }
+    }, intervalMs);
+
+    this.liveTailIntervals.set(sessionId, interval);
+  }
+
+  stopLiveTail(sessionId: string): void {
+    const interval = this.liveTailIntervals.get(sessionId);
+    if (interval) {
+      clearInterval(interval);
+      this.liveTailIntervals.delete(sessionId);
+      getLogger().info(LOG_CATEGORY, 'Stopped live tail', { sessionId });
+    }
+  }
+
   dispose(): void {
+    // Stop all live tails
+    for (const [sessionId] of this.liveTailIntervals) {
+      this.stopLiveTail(sessionId);
+    }
     for (const [sessionId] of this.abortControllers) {
       this.cancelSearch(sessionId);
     }

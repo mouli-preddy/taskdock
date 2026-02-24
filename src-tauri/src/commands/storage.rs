@@ -331,3 +331,35 @@ pub fn set_notification_settings(settings: NotificationSettings) -> Result<(), S
     save_store_data(&data)?;
     Ok(())
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ServiceEntry {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub repo_path: String,
+    pub linked_service_ids: Vec<String>,
+}
+
+#[tauri::command]
+pub fn get_services() -> Result<Vec<ServiceEntry>, String> {
+    let data = load_store_data()?;
+    let services_value = get_nested_value(&data, "services")
+        .unwrap_or(serde_json::Value::Array(vec![]));
+
+    let services: Vec<ServiceEntry> = serde_json::from_value(services_value)
+        .map_err(|e| format!("Failed to parse services: {}", e))?;
+
+    Ok(services)
+}
+
+#[tauri::command]
+pub fn set_services(services: Vec<ServiceEntry>) -> Result<(), String> {
+    let mut data = load_store_data()?;
+    let services_value = serde_json::to_value(services)
+        .map_err(|e| format!("Failed to serialize services: {}", e))?;
+    set_nested_value(&mut data, "services", services_value)?;
+    save_store_data(&data)?;
+    Ok(())
+}

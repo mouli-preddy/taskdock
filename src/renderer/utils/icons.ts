@@ -138,6 +138,7 @@ import Lightbulb from 'lucide-static/icons/lightbulb.svg?raw';
 import Target from 'lucide-static/icons/target.svg?raw';
 import Crosshair from 'lucide-static/icons/crosshair.svg?raw';
 import Cloud from 'lucide-static/icons/cloud.svg?raw';
+import Server from 'lucide-static/icons/server.svg?raw';
 
 // Re-export icon SVG strings
 export {
@@ -250,6 +251,7 @@ export {
   Target,
   Crosshair,
   Cloud,
+  Server,
   Smile,
   Activity,
   Siren,
@@ -302,7 +304,7 @@ const iconByName: Record<string, string> = {
   'eye': Eye, 'eye-off': EyeOff, 'lock': Lock, 'unlock': Unlock,
   'download': Download, 'upload': Upload, 'share': Share,
   'zap': Zap, 'lightbulb': Lightbulb, 'target': Target,
-  'crosshair': Crosshair, 'cloud': Cloud,
+  'crosshair': Crosshair, 'cloud': Cloud, 'server': Server,
   'smile': Smile, 'activity': Activity,
   'siren': Siren,
 };
