@@ -334,6 +334,7 @@ export class DGrepService extends EventEmitter {
       });
     } catch (error: any) {
       this.handleError(sessionId, error);
+      throw error; // Re-throw so callers (e.g., chat tool) can return the error to the agent
     }
   }
 

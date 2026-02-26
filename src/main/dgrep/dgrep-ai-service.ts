@@ -1346,7 +1346,7 @@ Both modes save filtered results to a CSV and return the path + line count.`,
               const mode = args.silent ? ' (silent — UI not updated)' : '';
               return `Client query completed. ${result.lineCount} lines filtered.${mode}\nCSV path: ${result.csvPath}`;
             } catch (err: any) {
-              return `Client query failed: ${err?.message || String(err)}`;
+              return `ERROR: Client query failed.\nQuery: ${args.kql}\nError: ${err?.message || String(err)}\n\nFix the query based on kql-guidelines.md and retry. Only use operators/functions documented there.`;
             }
           }),
         },
@@ -1430,7 +1430,7 @@ Read kql-guidelines.md in the workspace before writing KQL queries.`,
               return {
                 content: [{
                   type: 'text' as const,
-                  text: `Client query failed: ${err?.message || String(err)}`,
+                  text: `ERROR: Client query failed.\nQuery: ${args.kql}\nError: ${err?.message || String(err)}\n\nFix the query based on kql-guidelines.md and retry. Only use operators/functions documented there.`,
                 }],
                 isError: true,
               };
