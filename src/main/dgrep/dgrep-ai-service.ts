@@ -794,6 +794,13 @@ Perform root cause analysis. Respond with ONLY a JSON object:
         content: `You are a log analysis agent. Follow the instructions in the prompt. Use the built-in Read, Write, and Bash tools to read and analyze the data files.`,
       },
       onPermissionRequest: async () => ({ kind: 'approved' as const }),
+      hooks: {
+        onPreToolUse: async (input: any) => {
+          const summary = this.summarizeToolUse({ name: input.toolName, input: input.toolArgs });
+          this.emit(`ai:${taskType}-progress`, { sessionId, text: summary });
+          return { permissionDecision: 'allow' as const };
+        },
+      },
     });
 
     let fullContent = '';
@@ -814,15 +821,10 @@ Perform root cause analysis. Respond with ONLY a JSON object:
             fullContent = event.data?.content || fullContent;
             break;
           }
-          case 'tool.execution_start': {
-            const toolName = event.data?.toolName || event.data?.name || 'tool';
-            this.emit(`ai:${taskType}-progress`, { sessionId, text: `[Copilot tool] ${toolName}` });
+          case 'tool.execution_start':
+          case 'tool.execution_end':
+            // Tool progress is handled by onPreToolUse hook with richer detail
             break;
-          }
-          case 'tool.execution_end': {
-            this.emit(`ai:${taskType}-progress`, { sessionId, text: `[Tool done]` });
-            break;
-          }
           case 'session.idle': {
             session.destroy().catch(() => {});
             resolve();
@@ -930,8 +932,23 @@ Perform root cause analysis. Respond with ONLY a JSON object:
       }
       case 'Task':
         return `[Launching subagent] ${inp.description || ''}`;
+      // Copilot SDK built-in tool names
+      case 'powershell':
+      case 'shell': {
+        const cmd = String(inp.command || inp.script || '').substring(0, 150);
+        return `[Running] ${cmd}`;
+      }
+      case 'view':
+      case 'read_file':
+        return `[Reading] ${inp.file_path || inp.path || inp.filePath || ''}`;
+      case 'rg':
+        return `[Searching] "${inp.pattern || inp.query || ''}"`;
+      case 'sql':
+        return `[Query] ${String(inp.query || inp.sql || '').substring(0, 100)}`;
+      case 'report_intent':
+        return `[Planning] ${inp.intent || inp.description || ''}`;
       default:
-        return `[${tool.name}]`;
+        return `[${tool.name}] ${Object.values(inp).filter(v => typeof v === 'string').map(v => String(v).substring(0, 80)).join(' ') || ''}`.trim();
     }
   }
 
