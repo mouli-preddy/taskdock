@@ -796,6 +796,7 @@ Perform root cause analysis. Respond with ONLY a JSON object:
       onPermissionRequest: async () => ({ kind: 'approved' as const }),
       hooks: {
         onPreToolUse: async (input: any) => {
+          console.log(`[onPreToolUse] tool=${input.toolName} argKeys=${Object.keys(input.toolArgs || {}).join(',')}`);
           const summary = this.summarizeToolUse({ name: input.toolName, input: input.toolArgs });
           this.emit(`ai:${taskType}-progress`, { sessionId, text: summary });
           return { permissionDecision: 'allow' as const };
@@ -915,40 +916,44 @@ Perform root cause analysis. Respond with ONLY a JSON object:
 
   private summarizeToolUse(tool: { name: string; input?: any }): string {
     const inp = tool.input || {};
+    // Helper: find first non-empty string value from candidate keys
+    const pick = (...keys: string[]) => {
+      for (const k of keys) {
+        const v = inp[k];
+        if (v && typeof v === 'string') return v;
+      }
+      return '';
+    };
     switch (tool.name) {
       case 'Read':
-        return `[Reading] ${inp.file_path || ''}`;
-      case 'Write':
-        return `[Writing] ${inp.file_path || ''}`;
-      case 'Edit':
-        return `[Editing] ${inp.file_path || ''}`;
-      case 'Grep':
-        return `[Searching] "${inp.pattern || ''}" ${inp.path ? 'in ' + inp.path : ''}`;
-      case 'Glob':
-        return `[Finding files] ${inp.pattern || ''}`;
-      case 'Bash': {
-        const cmd = String(inp.command || '').substring(0, 150);
-        return `[Running] ${cmd}`;
-      }
-      case 'Task':
-        return `[Launching subagent] ${inp.description || ''}`;
-      // Copilot SDK built-in tool names
-      case 'powershell':
-      case 'shell': {
-        const cmd = String(inp.command || inp.script || '').substring(0, 150);
-        return `[Running] ${cmd}`;
-      }
       case 'view':
       case 'read_file':
-        return `[Reading] ${inp.file_path || inp.path || inp.filePath || ''}`;
+        return `[Reading] ${pick('file_path', 'path', 'filePath')}`;
+      case 'Write':
+        return `[Writing] ${pick('file_path', 'path', 'filePath')}`;
+      case 'Edit':
+        return `[Editing] ${pick('file_path', 'path', 'filePath')}`;
+      case 'Grep':
       case 'rg':
-        return `[Searching] "${inp.pattern || inp.query || ''}"`;
+        return `[Searching] "${pick('pattern', 'query', 'regex')}" ${pick('path', 'file_path') ? 'in ' + pick('path', 'file_path') : ''}`.trim();
+      case 'Glob':
+        return `[Finding files] ${pick('pattern', 'glob')}`;
+      case 'Bash':
+      case 'powershell':
+      case 'shell':
+        return `[Running] ${pick('command', 'script', 'cmd').substring(0, 150)}`;
+      case 'Task':
+      case 'task':
+        return `[Subagent] ${pick('description', 'prompt').substring(0, 100)}`;
       case 'sql':
-        return `[Query] ${String(inp.query || inp.sql || '').substring(0, 100)}`;
+        return `[Query] ${pick('query', 'sql', 'command').substring(0, 100)}`;
       case 'report_intent':
-        return `[Planning] ${inp.intent || inp.description || ''}`;
-      default:
-        return `[${tool.name}] ${Object.values(inp).filter(v => typeof v === 'string').map(v => String(v).substring(0, 80)).join(' ') || ''}`.trim();
+        return `[Planning] ${pick('intent', 'description', 'title', 'summary').substring(0, 100)}`;
+      default: {
+        // Show tool name + compact summary of args
+        const summary = pick('description', 'command', 'path', 'query', 'file_path', 'prompt');
+        return `[${tool.name}] ${summary.substring(0, 100)}`.trim();
+      }
     }
   }
 
