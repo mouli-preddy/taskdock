@@ -5897,6 +5897,16 @@ After this, respond with a simple text response to greet the user and ask them w
         }
       });
     });
+
+    // Context menu for Move to Workspace
+    tabBar.querySelectorAll('.icm-tab-btn').forEach(btn => {
+      const tabId = (btn as HTMLElement).dataset.tabId!;
+      if (tabId === 'list') return;
+      btn.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        this.showMoveToWorkspaceMenu(e as MouseEvent, 'icm', tabId);
+      });
+    });
   }
 
   private hideIcmTabs() {
