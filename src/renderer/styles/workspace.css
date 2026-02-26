@@ -219,6 +219,105 @@
   text-transform: uppercase;
 }
 
+/* New tab picker */
+.workspace-new-tab-picker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: var(--space-3);
+  color: var(--text-secondary);
+}
+
+.workspace-new-tab-title {
+  font-size: 14px;
+  color: var(--text-tertiary);
+}
+
+.workspace-new-tab-options {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.workspace-new-tab-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 24px 32px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  min-width: 140px;
+}
+
+.workspace-new-tab-option:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--accent-blue);
+}
+
+.workspace-new-tab-option-icon {
+  display: flex;
+  align-items: center;
+  opacity: 0.6;
+}
+
+.workspace-new-tab-option:hover .workspace-new-tab-option-icon {
+  opacity: 1;
+}
+
+.workspace-new-tab-option-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.workspace-new-tab-option-desc {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+/* ID input for CFV/ICM */
+.workspace-id-input-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.workspace-id-input {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 13px;
+  padding: 6px 12px;
+  outline: none;
+  width: 300px;
+}
+
+.workspace-id-input:focus {
+  border-color: var(--accent-blue);
+}
+
+.workspace-id-input-btn {
+  padding: 6px 16px;
+  border: 1px solid var(--accent-blue);
+  border-radius: var(--radius-sm);
+  background: var(--accent-blue);
+  color: white;
+  font-size: 13px;
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+
+.workspace-id-input-btn:hover {
+  opacity: 0.9;
+}
+
 /* Rename input */
 .workspace-rename-input {
   background: var(--bg-primary);

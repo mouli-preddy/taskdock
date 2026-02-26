@@ -12,6 +12,7 @@ const SUBTAB_ICONS: Record<WorkspaceSubtabType, string> = {
   cfv: getIcon(Activity, 14),
   dgrep: getIcon(Search, 14),
   icm: getIcon(AlertTriangle, 14),
+  new: getIcon(Plus, 14),
 };
 
 export class WorkspaceSection {
@@ -83,11 +84,12 @@ export class WorkspaceSection {
   // ── Workspace CRUD ──
 
   public createWorkspace(name?: string): Workspace {
+    const newTabId = generateId();
     const ws: Workspace = {
       id: generateId(),
       name: name || `Workspace ${this.workspaces.length + 1}`,
-      subtabs: [],
-      activeSubtabId: null,
+      subtabs: [{ id: newTabId, type: 'new', label: 'New Tab', state: {} }],
+      activeSubtabId: newTabId,
       createdAt: Date.now(),
     };
     this.workspaces.push(ws);
@@ -189,6 +191,12 @@ export class WorkspaceSection {
     this.saveWorkspaces();
   }
 
+  private addNewTabSubtab(): void {
+    const ws = this.getActiveWorkspace();
+    if (!ws) return;
+    this.addSubtab(ws.id, 'new', 'New Tab', {});
+  }
+
   // ── Public API for moving tabs from other sections ──
 
   public getWorkspaceList(): Array<{ id: string; name: string }> {
@@ -272,11 +280,12 @@ export class WorkspaceSection {
     if (!bar) return;
 
     const ws = this.getActiveWorkspace();
-    if (!ws || ws.subtabs.length === 0) {
+    if (!ws) {
       bar.style.display = 'none';
       return;
     }
 
+    // Always show subtab bar when a workspace is active (includes [+] button)
     bar.style.display = 'flex';
     bar.innerHTML = ws.subtabs.map(st => `
       <button class="workspace-subtab-btn ${st.id === ws.activeSubtabId ? 'active' : ''}" data-st-id="${st.id}">
@@ -284,7 +293,7 @@ export class WorkspaceSection {
         <span>${this.escapeHtml(st.label)}</span>
         <span class="workspace-subtab-close" data-st-id="${st.id}">&times;</span>
       </button>
-    `).join('');
+    `).join('') + `<button class="workspace-tab-add" title="New tab">${getIcon(Plus, 14)}</button>`;
 
     bar.querySelectorAll('.workspace-subtab-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -297,6 +306,10 @@ export class WorkspaceSection {
         const stId = (btn as HTMLElement).dataset.stId!;
         this.activateSubtab(stId);
       });
+    });
+
+    bar.querySelector('.workspace-tab-add')?.addEventListener('click', () => {
+      this.addNewTabSubtab();
     });
   }
 
@@ -347,8 +360,12 @@ export class WorkspaceSection {
     switch (subtab.type) {
       case 'cfv': {
         const state = subtab.state as CfvSubtabState;
-        const view = new CfvCallView(panel, state.callId);
-        this.viewInstances.set(subtab.id, view);
+        if (!state.callId) {
+          this.renderCfvIdInput(subtab, panel);
+        } else {
+          const view = new CfvCallView(panel, state.callId);
+          this.viewInstances.set(subtab.id, view);
+        }
         break;
       }
       case 'dgrep': {
@@ -359,19 +376,179 @@ export class WorkspaceSection {
       }
       case 'icm': {
         const state = subtab.state as IcmSubtabState;
-        const view = new IcmIncidentDetailView(panel);
-        this.onWireIcmView?.(view);
-        view.setLoading(true);
-        window.electronAPI.icmGetIncident(state.incidentId).then(incident => {
-          view.setIncident(incident);
-        }).catch(err => {
-          console.error('[workspace] Failed to load incident:', err);
-          view.setLoading(false);
-        });
-        this.viewInstances.set(subtab.id, view);
+        if (!state.incidentId) {
+          this.renderIcmIdInput(subtab, panel);
+        } else {
+          const view = new IcmIncidentDetailView(panel);
+          this.onWireIcmView?.(view);
+          view.setLoading(true);
+          window.electronAPI.icmGetIncident(state.incidentId).then(incident => {
+            view.setIncident(incident);
+          }).catch(err => {
+            console.error('[workspace] Failed to load incident:', err);
+            view.setLoading(false);
+          });
+          this.viewInstances.set(subtab.id, view);
+        }
+        break;
+      }
+      case 'new': {
+        this.renderNewTabPicker(subtab, panel);
         break;
       }
     }
+  }
+
+  private renderNewTabPicker(subtab: WorkspaceSubtab, panel: HTMLElement): void {
+    panel.innerHTML = `
+      <div class="workspace-new-tab-picker">
+        <div class="workspace-new-tab-title">What would you like to open?</div>
+        <div class="workspace-new-tab-options">
+          <button class="workspace-new-tab-option" data-type="cfv">
+            <div class="workspace-new-tab-option-icon">${getIcon(Activity, 32)}</div>
+            <div class="workspace-new-tab-option-label">Call Flow</div>
+            <div class="workspace-new-tab-option-desc">Visualize call flow sequences</div>
+          </button>
+          <button class="workspace-new-tab-option" data-type="dgrep">
+            <div class="workspace-new-tab-option-icon">${getIcon(Search, 32)}</div>
+            <div class="workspace-new-tab-option-label">Log Search</div>
+            <div class="workspace-new-tab-option-desc">Search and analyze logs</div>
+          </button>
+          <button class="workspace-new-tab-option" data-type="icm">
+            <div class="workspace-new-tab-option-icon">${getIcon(AlertTriangle, 32)}</div>
+            <div class="workspace-new-tab-option-label">Incidents</div>
+            <div class="workspace-new-tab-option-desc">View and manage ICM incidents</div>
+          </button>
+        </div>
+      </div>
+    `;
+
+    panel.querySelectorAll('.workspace-new-tab-option').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const type = (btn as HTMLElement).dataset.type as WorkspaceSubtabType;
+        this.convertNewTabToType(subtab.id, type);
+      });
+    });
+  }
+
+  private convertNewTabToType(subtabId: string, type: WorkspaceSubtabType): void {
+    const ws = this.getActiveWorkspace();
+    if (!ws) return;
+
+    const subtab = ws.subtabs.find(s => s.id === subtabId);
+    if (!subtab) return;
+
+    // Remove the picker panel
+    document.getElementById(`workspacePanel-${subtabId}`)?.remove();
+
+    // Update the subtab's type and state
+    const typeLabels: Record<string, string> = { cfv: 'Call Flow', dgrep: 'Log Search', icm: 'Incidents' };
+    subtab.type = type;
+    subtab.label = typeLabels[type] || type;
+
+    switch (type) {
+      case 'cfv':
+        // CFV needs a call ID - create a home-like view
+        // For now open as a DGrep-style fresh view that the user can interact with
+        subtab.state = { callId: '' };
+        break;
+      case 'dgrep':
+        subtab.state = { searchQuery: '', timeRange: { start: '', end: '' } };
+        break;
+      case 'icm':
+        subtab.state = { incidentId: 0 };
+        break;
+    }
+
+    // Re-create the panel with the actual view
+    const container = document.getElementById('workspacePanelsContainer')!;
+    const panel = document.createElement('div');
+    panel.id = `workspacePanel-${subtabId}`;
+    panel.className = 'workspace-panel active';
+    container.appendChild(panel);
+
+    // For CFV, we need the home view instead of a call view (no callId yet)
+    // For DGrep, create a fresh search view
+    // For ICM, we need the list view instead of detail view (no incidentId yet)
+    this.createViewForSubtab(subtab, panel);
+
+    this.renderSubtabBar();
+    this.saveWorkspaces();
+  }
+
+  private renderCfvIdInput(subtab: WorkspaceSubtab, panel: HTMLElement): void {
+    panel.innerHTML = `
+      <div class="workspace-new-tab-picker">
+        <div class="workspace-new-tab-title">${getIcon(Activity, 32)}</div>
+        <div class="workspace-new-tab-title">Enter a Call Flow ID</div>
+        <div class="workspace-id-input-row">
+          <input class="workspace-id-input" type="text" placeholder="Paste call ID..." />
+          <button class="workspace-id-input-btn">Load</button>
+        </div>
+      </div>
+    `;
+    const input = panel.querySelector('.workspace-id-input') as HTMLInputElement;
+    const btn = panel.querySelector('.workspace-id-input-btn') as HTMLButtonElement;
+    const load = () => {
+      const callId = input.value.trim();
+      if (!callId) return;
+      subtab.state = { callId };
+      const shortId = callId.length > 12 ? callId.slice(0, 8) + '...' : callId;
+      subtab.label = shortId;
+      document.getElementById(`workspacePanel-${subtab.id}`)?.remove();
+      const container = document.getElementById('workspacePanelsContainer')!;
+      const newPanel = document.createElement('div');
+      newPanel.id = `workspacePanel-${subtab.id}`;
+      newPanel.className = 'workspace-panel active';
+      container.appendChild(newPanel);
+      const view = new CfvCallView(newPanel, callId);
+      this.viewInstances.set(subtab.id, view);
+      this.renderSubtabBar();
+      this.saveWorkspaces();
+    };
+    btn.addEventListener('click', load);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') load(); });
+  }
+
+  private renderIcmIdInput(subtab: WorkspaceSubtab, panel: HTMLElement): void {
+    panel.innerHTML = `
+      <div class="workspace-new-tab-picker">
+        <div class="workspace-new-tab-title">${getIcon(AlertTriangle, 32)}</div>
+        <div class="workspace-new-tab-title">Enter an Incident ID</div>
+        <div class="workspace-id-input-row">
+          <input class="workspace-id-input" type="number" placeholder="Incident number..." />
+          <button class="workspace-id-input-btn">Load</button>
+        </div>
+      </div>
+    `;
+    const input = panel.querySelector('.workspace-id-input') as HTMLInputElement;
+    const btn = panel.querySelector('.workspace-id-input-btn') as HTMLButtonElement;
+    const load = () => {
+      const incidentId = parseInt(input.value.trim(), 10);
+      if (!incidentId) return;
+      subtab.state = { incidentId };
+      subtab.label = `#${incidentId}`;
+      document.getElementById(`workspacePanel-${subtab.id}`)?.remove();
+      const container = document.getElementById('workspacePanelsContainer')!;
+      const newPanel = document.createElement('div');
+      newPanel.id = `workspacePanel-${subtab.id}`;
+      newPanel.className = 'workspace-panel active';
+      container.appendChild(newPanel);
+      const view = new IcmIncidentDetailView(newPanel);
+      this.onWireIcmView?.(view);
+      view.setLoading(true);
+      window.electronAPI.icmGetIncident(incidentId).then(incident => {
+        view.setIncident(incident);
+      }).catch(err => {
+        console.error('[workspace] Failed to load incident:', err);
+        view.setLoading(false);
+      });
+      this.viewInstances.set(subtab.id, view);
+      this.renderSubtabBar();
+      this.saveWorkspaces();
+    };
+    btn.addEventListener('click', load);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') load(); });
   }
 
   private destroySubtabView(subtabId: string): void {

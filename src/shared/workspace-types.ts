@@ -1,4 +1,4 @@
-export type WorkspaceSubtabType = 'cfv' | 'dgrep' | 'icm';
+export type WorkspaceSubtabType = 'cfv' | 'dgrep' | 'icm' | 'new';
 
 export interface CfvSubtabState {
   callId: string;
@@ -13,7 +13,9 @@ export interface IcmSubtabState {
   incidentId: number;
 }
 
-export type WorkspaceSubtabState = CfvSubtabState | DgrepSubtabState | IcmSubtabState;
+export interface NewSubtabState {}
+
+export type WorkspaceSubtabState = CfvSubtabState | DgrepSubtabState | IcmSubtabState | NewSubtabState;
 
 export interface WorkspaceSubtab {
   id: string;
