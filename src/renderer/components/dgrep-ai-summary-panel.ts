@@ -31,6 +31,8 @@ export class DGrepAISummaryPanel {
   private contentHeight = 300;
   private detailView = false;
   private issueFilterSeverities: Set<string> = new Set(['critical', 'error']);
+  private selectedLevel: 'quick' | 'standard' | 'detailed' | 'custom' = 'standard';
+  private selectedCustomPrompt = '';
 
   onSummarize: ((columns: string[], rows: any[], patterns?: string[]) => void) | null = null;
 
@@ -187,12 +189,13 @@ export class DGrepAISummaryPanel {
       this.el.dispatchEvent(new CustomEvent('request-summarize', { bubbles: true }));
     });
 
-    // Analysis level dropdown
+    // Analysis level dropdown — store value immediately on change
     const levelSelect = this.el.querySelector('.dgrep-ai-analysis-level') as HTMLSelectElement;
     const customPromptEl = this.el.querySelector('.dgrep-ai-custom-prompt') as HTMLElement;
     levelSelect?.addEventListener('change', () => {
+      this.selectedLevel = (levelSelect.value || 'standard') as 'quick' | 'standard' | 'detailed' | 'custom';
       if (customPromptEl) {
-        customPromptEl.style.display = levelSelect.value === 'custom' ? '' : 'none';
+        customPromptEl.style.display = this.selectedLevel === 'custom' ? '' : 'none';
       }
     });
 
@@ -226,14 +229,11 @@ export class DGrepAISummaryPanel {
   }
 
   getAnalysisLevel(): { level: 'quick' | 'standard' | 'detailed' | 'custom'; customPrompt?: string } {
-    const select = this.el.querySelector('.dgrep-ai-analysis-level') as HTMLSelectElement;
-    console.log('[getAnalysisLevel] select element:', select, 'value:', select?.value, 'selectedIndex:', select?.selectedIndex, 'options:', select?.options?.length);
-    const level = (select?.value || 'standard') as 'quick' | 'standard' | 'detailed' | 'custom';
-    if (level === 'custom') {
+    if (this.selectedLevel === 'custom') {
       const input = this.el.querySelector('.dgrep-ai-custom-prompt-input') as HTMLInputElement;
-      return { level, customPrompt: input?.value || '' };
+      return { level: 'custom', customPrompt: input?.value || this.selectedCustomPrompt || '' };
     }
-    return { level };
+    return { level: this.selectedLevel };
   }
 
   private updateCollapsed() {
