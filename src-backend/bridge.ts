@@ -1215,6 +1215,18 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       return;
     }
 
+    // Workspaces
+    case 'workspaces:load': {
+      const storeData = loadStoreData();
+      return storeData.workspaces || { workspaces: [], activeWorkspaceId: null };
+    }
+    case 'workspaces:save': {
+      const storeData = loadStoreData();
+      storeData.workspaces = params[0];
+      saveStoreData(storeData);
+      return;
+    }
+
     // DGrep AI API
     case 'dgrep-ai:summarize-logs': {
       // params: [sessionId, columns, rows, patterns, metadata]

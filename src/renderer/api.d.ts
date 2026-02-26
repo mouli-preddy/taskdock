@@ -555,6 +555,10 @@ export interface ElectronAPI {
   dgrepLoadQueries: () => Promise<import('../shared/dgrep-ai-types.js').DGrepSavedQuery[]>;
   dgrepDeleteQuery: (queryId: string) => Promise<void>;
 
+  // Workspaces API
+  workspacesLoad(): Promise<import('../shared/workspace-types.js').WorkspacesData>;
+  workspacesSave(data: import('../shared/workspace-types.js').WorkspacesData): Promise<void>;
+
   // DGrep AI API
   dgrepAISummarizeLogs: (sessionId: string, columns: string[], rows: any[], patterns: any[], metadata: { endpoint: string; namespace: string; events: string[]; startTime: string; endTime: string; totalRows: number }) => Promise<void>;
   dgrepAINLToKQL: (prompt: string, columns: string[], sampleRows: any[]) => Promise<import('../shared/dgrep-ai-types.js').DGrepNLToKQLResult>;

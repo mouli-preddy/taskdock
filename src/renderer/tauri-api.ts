@@ -722,6 +722,12 @@ export const tauriAPI = {
   dgrepDeleteQuery: (queryId: string) =>
     invoke('dgrep:delete-query', queryId),
 
+  // Workspaces API
+  workspacesLoad: () =>
+    invoke('workspaces:load'),
+  workspacesSave: (data: any) =>
+    invoke('workspaces:save', data),
+
   // DGrep AI API
   dgrepAISummarizeLogs: (sessionId: string, columns: string[], rows: any[], patterns: any[], metadata: any) =>
     invoke('dgrep-ai:summarize-logs', sessionId, columns, rows, patterns, metadata),
