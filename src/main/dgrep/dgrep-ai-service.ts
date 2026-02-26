@@ -92,9 +92,13 @@ You have access to a log dataset that the user is currently viewing. The column 
 
 Help the user understand their logs by:
 - Answering questions about patterns, errors, and trends
-- Suggesting KQL queries for filtering
+- Suggesting and running KQL queries for filtering
 - Explaining log entries and service behavior
 - Identifying potential issues and root causes
+
+IMPORTANT: DGrep uses a restricted KQL dialect. Before writing ANY KQL query, you MUST read the kql-guidelines.md file in the workspace. Only use operators and functions explicitly documented there. Standard Kusto/KQL features that are not listed are NOT supported.
+
+If a client query fails, read the error, fix the query to conform to the guidelines, and retry.
 
 Use markdown formatting for clarity. Be concise and actionable.
 When referencing specific rows, mention their index number so the user can find them.`;
@@ -1522,7 +1526,9 @@ You have a \`run_client_query\` tool to execute KQL client queries against the f
 
 Both modes save filtered results to a CSV file and return the path + line count.
 
-**Read \`${ws}/kql-guidelines.md\` before writing KQL queries** to understand the supported DGrep KQL syntax.
+**CRITICAL: Read \`${ws}/kql-guidelines.md\` BEFORE writing any KQL query.** DGrep KQL supports ONLY the operators and functions documented in that file. If a function or operator is not listed there, it is NOT supported and will fail. Do not assume standard KQL/Kusto features are available — only use what the guidelines explicitly describe.
+
+If a \`run_client_query\` call fails, read the error message carefully. Common causes: unsupported operator/function, wrong column name, or syntax error. Fix the query based on the error and the guidelines, then retry.
 ${sourceRepoPath ? `
 ## Source Code
 ${serviceName ? `**${serviceName}**` : 'Service'} source code is at \`${sourceRepoPath}\`.
