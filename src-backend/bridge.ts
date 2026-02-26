@@ -1219,6 +1219,7 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
     case 'dgrep-ai:summarize-logs': {
       // params: [sessionId, columns, rows, patterns, metadata]
       const sumMetadata = params[4] || {};
+      console.log('[dgrep-ai:summarize-logs] analysisLevel:', sumMetadata.analysisLevel, 'customPrompt:', sumMetadata.customPrompt);
       // Re-read settings each call so provider changes take effect
       const sumStoreData = loadStoreData();
       const dgrepSettings = sumStoreData.consoleReview?.dgrepAnalysis;
