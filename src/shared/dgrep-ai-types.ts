@@ -153,3 +153,19 @@ export interface ImproveDisplayResult {
   /** Pre-formatted values computed on the backend. Maps column name → { rawValue → formattedText } */
   formattedLookup?: Record<string, Record<string, string>>;
 }
+
+// ==================== Scrub Layer ====================
+
+/** Token mapping entry for display in UI */
+export interface ScrubTokenEntry {
+  token: string;
+  originalValue: string;
+  patternType: string;
+}
+
+/** Scrub layer summary sent to frontend */
+export interface ScrubLayerInfo {
+  tokenCount: number;
+  patterns: Array<{ name: string; letter: string }>;
+  tokens?: ScrubTokenEntry[];
+}
