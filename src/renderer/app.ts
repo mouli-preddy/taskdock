@@ -388,6 +388,21 @@ class PRReviewApp {
     // Initialize Workspace section
     this.workspaceSection = new WorkspaceSection('workspacesPanel');
 
+    // Wire workspace cross-reference navigation
+    this.workspaceSection.onNavigateCfv = (callId: string) => {
+      const workspaces = this.workspaceSection.getWorkspaceList();
+      if (workspaces.length > 0) {
+        const shortId = callId.length > 12 ? callId.slice(0, 8) + '...' : callId;
+        this.workspaceSection.addSubtabToWorkspace(workspaces[0].id, 'cfv', shortId, { callId });
+      }
+    };
+    this.workspaceSection.onNavigateIcm = (incidentId: number) => {
+      const workspaces = this.workspaceSection.getWorkspaceList();
+      if (workspaces.length > 0) {
+        this.workspaceSection.addSubtabToWorkspace(workspaces[0].id, 'icm', `#${incidentId}`, { incidentId });
+      }
+    };
+
     // Initialize CFV home view
     this.cfvHomeView = new CfvHomeView('cfvHomePanel');
     this.cfvHomeView.onFetchCall((callId) => this.cfvFetchCall(callId));
