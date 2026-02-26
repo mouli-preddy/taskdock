@@ -74,9 +74,31 @@ export class DGrepAISummaryPanel {
 
   handleSummaryProgress(text: string) {
     if (!text) return;
-    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-    for (const line of lines) {
-      this.progressLines.push(line);
+    // Streaming deltas arrive as individual tokens (words/fragments).
+    // Accumulate into the current line; only start a new line on newlines or tool-use markers.
+    const isToolUse = text.startsWith('[');
+    if (isToolUse) {
+      this.progressLines.push(text.trim());
+    } else if (text.includes('\n')) {
+      const parts = text.split('\n');
+      // Append first part to current line
+      if (this.progressLines.length > 0 && !this.progressLines[this.progressLines.length - 1].startsWith('[')) {
+        this.progressLines[this.progressLines.length - 1] += parts[0];
+      } else if (parts[0].trim()) {
+        this.progressLines.push(parts[0]);
+      }
+      // Remaining parts become new lines
+      for (let i = 1; i < parts.length; i++) {
+        const part = parts[i].trim();
+        if (part) this.progressLines.push(part);
+      }
+    } else {
+      // Append to last non-tool line, or start a new one
+      if (this.progressLines.length > 0 && !this.progressLines[this.progressLines.length - 1].startsWith('[')) {
+        this.progressLines[this.progressLines.length - 1] += text;
+      } else {
+        this.progressLines.push(text);
+      }
     }
     if (this.progressLines.length > 50) {
       this.progressLines = this.progressLines.slice(-50);

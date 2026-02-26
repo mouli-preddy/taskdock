@@ -56,12 +56,29 @@ export class DGrepRCAPanel {
     }
   }
 
-  /** Agent progress text */
+  /** Agent progress text — accumulates streaming deltas into lines */
   handleRCAProgress(text: string) {
     if (!text) return;
-    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-    for (const line of lines) {
-      this.progressSteps.push(line);
+    const isToolUse = text.startsWith('[');
+    if (isToolUse) {
+      this.progressSteps.push(text.trim());
+    } else if (text.includes('\n')) {
+      const parts = text.split('\n');
+      if (this.progressSteps.length > 0 && !this.progressSteps[this.progressSteps.length - 1].startsWith('[')) {
+        this.progressSteps[this.progressSteps.length - 1] += parts[0];
+      } else if (parts[0].trim()) {
+        this.progressSteps.push(parts[0]);
+      }
+      for (let i = 1; i < parts.length; i++) {
+        const part = parts[i].trim();
+        if (part) this.progressSteps.push(part);
+      }
+    } else {
+      if (this.progressSteps.length > 0 && !this.progressSteps[this.progressSteps.length - 1].startsWith('[')) {
+        this.progressSteps[this.progressSteps.length - 1] += text;
+      } else {
+        this.progressSteps.push(text);
+      }
     }
     if (this.progressSteps.length > 20) {
       this.progressSteps = this.progressSteps.slice(-20);
