@@ -24,6 +24,7 @@ export class CfvService extends EventEmitter {
   private token: string = '';
   private outputBase: string;
   private tokenService: CfvTokenService | null = null;
+  private scrubSettings?: Array<{ name: string; letter: string; regex: string; enabled: boolean }>;
 
   constructor(outputBase?: string) {
     super();
@@ -38,6 +39,7 @@ export class CfvService extends EventEmitter {
       if (data.token) {
         this.token = data.token;
         this.client = new CfvClient({ token: this.token, outputBase: this.outputBase });
+        if (this.scrubSettings) this.client.setScrubSettings(this.scrubSettings);
       }
     } catch {
       // No saved token
@@ -47,12 +49,20 @@ export class CfvService extends EventEmitter {
   async setToken(token: string): Promise<void> {
     this.token = token;
     this.client = new CfvClient({ token, outputBase: this.outputBase });
+    if (this.scrubSettings) this.client.setScrubSettings(this.scrubSettings);
 
     // Persist token
     const { mkdir, writeFile } = require('node:fs/promises');
     const { dirname } = require('node:path');
     await mkdir(dirname(TOKEN_FILE), { recursive: true });
     await writeFile(TOKEN_FILE, JSON.stringify({ token, updatedAt: new Date().toISOString() }), 'utf-8');
+  }
+
+  setScrubSettings(settings: Array<{ name: string; letter: string; regex: string; enabled: boolean }> | undefined): void {
+    this.scrubSettings = settings;
+    if (this.client) {
+      this.client.setScrubSettings(settings);
+    }
   }
 
   async getTokenStatus(): Promise<{ valid: boolean; hasToken: boolean }> {

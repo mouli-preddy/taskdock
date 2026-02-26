@@ -47,7 +47,8 @@ export function createAnalysisWorkspace(
   columns: string[],
   rows: Record<string, any>[],
   _patterns: any[],
-  metadata: AnalysisMetadata
+  metadata: AnalysisMetadata,
+  scrubSettings?: Array<{ name: string; letter: string; regex: string; enabled: boolean }>
 ): AnalysisWorkspace {
   const basePath = path.join(DGREP_ANALYSIS_DIR, sessionId);
   fs.mkdirSync(basePath, { recursive: true });
@@ -62,7 +63,7 @@ export function createAnalysisWorkspace(
   const csvContent = [header, ...csvRows].join('\n');
 
   // Scrub sensitive values before writing to disk
-  const scrubLayer = ScrubLayer.createDefault();
+  const scrubLayer = scrubSettings ? ScrubLayer.fromSettings(scrubSettings) : ScrubLayer.createDefault();
   fs.writeFileSync(dataPath, scrubLayer.scrubText(csvContent), 'utf-8');
 
   // Write query tool

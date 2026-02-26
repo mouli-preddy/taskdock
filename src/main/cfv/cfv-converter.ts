@@ -7,12 +7,16 @@ import { ScrubLayer } from '../dgrep/scrub-layer.js';
 // Call Flow Conversion
 // ============================================================================
 
-export async function convertCallFlow(data: Record<string, unknown>, outputDir: string): Promise<number> {
+export async function convertCallFlow(
+  data: Record<string, unknown>,
+  outputDir: string,
+  scrubSettings?: Array<{ name: string; letter: string; regex: string; enabled: boolean }>
+): Promise<number> {
   const callflowDir = join(outputDir, 'callflow');
   const messagesDir = join(callflowDir, 'messages');
   await mkdir(messagesDir, { recursive: true });
 
-  const scrubLayer = ScrubLayer.createDefault();
+  const scrubLayer = scrubSettings ? ScrubLayer.fromSettings(scrubSettings) : ScrubLayer.createDefault();
 
   const nrt = (data.nrtStreamingIndexAugmentedCall ?? {}) as Record<string, unknown>;
   const fullFlow = (nrt.fullCallFlow ?? {}) as Record<string, unknown>;
@@ -142,11 +146,15 @@ Column Descriptions:
 // Call Details Conversion
 // ============================================================================
 
-export async function convertCallDetails(data: Record<string, unknown>, outputDir: string): Promise<number> {
+export async function convertCallDetails(
+  data: Record<string, unknown>,
+  outputDir: string,
+  scrubSettings?: Array<{ name: string; letter: string; regex: string; enabled: boolean }>
+): Promise<number> {
   const diagDir = join(outputDir, 'diagnostics');
   await mkdir(diagDir, { recursive: true });
 
-  const scrubLayer = ScrubLayer.createDefault();
+  const scrubLayer = scrubSettings ? ScrubLayer.fromSettings(scrubSettings) : ScrubLayer.createDefault();
 
   const details = (data.callDetails ?? {}) as Record<string, unknown>;
   if (!details || Object.keys(details).length === 0) return 0;
@@ -372,7 +380,8 @@ export async function writeMetadata(
   callId: string,
   rawFiles: string[],
   stats: { callflowMessages: number; diagnosticFiles: number },
-  outputDir: string
+  outputDir: string,
+  scrubSettings?: Array<{ name: string; letter: string; regex: string; enabled: boolean }>
 ): Promise<void> {
   const metadata = {
     call_id: callId,
@@ -400,7 +409,7 @@ export async function writeMetadata(
     },
   };
 
-  const scrubLayer = ScrubLayer.createDefault();
+  const scrubLayer = scrubSettings ? ScrubLayer.fromSettings(scrubSettings) : ScrubLayer.createDefault();
   const scrubbedMetadata = JSON.parse(scrubLayer.scrubText(JSON.stringify(metadata)));
   await writeFile(join(outputDir, 'metadata.toon'), encode(scrubbedMetadata), 'utf-8');
 }

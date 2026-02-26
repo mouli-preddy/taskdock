@@ -264,6 +264,15 @@ const dgrepAIService = getDGrepAIService();
   dgrepAIService.setSourceRepo(dgrepAnalysis.sourceRepository || null);
 }
 
+// Configure scrub patterns from settings
+{
+  const scrubPatterns = loadStoreData().scrubPatterns;
+  if (scrubPatterns) {
+    dgrepAIService.setScrubPatterns(scrubPatterns);
+    cfvService.setScrubSettings(scrubPatterns);
+  }
+}
+
 dgrepAIService.on('ai:summary-progress', (event) => broadcast('dgrep:ai:summary-progress', event));
 dgrepAIService.on('ai:summary-complete', (event) => broadcast('dgrep:ai:summary-complete', event));
 dgrepAIService.on('ai:rca-progress', (event) => broadcast('dgrep:ai:rca-progress', event));
@@ -977,8 +986,11 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       return cfvService.setToken(params[0]);
     case 'cfv:get-token-status':
       return cfvService.getTokenStatus();
-    case 'cfv:fetch-call':
+    case 'cfv:fetch-call': {
+      const cfvScrubPatterns = loadStoreData().scrubPatterns;
+      cfvService.setScrubSettings(cfvScrubPatterns ?? undefined);
       return cfvService.fetchCall(params[0]);
+    }
     case 'cfv:list-cached-calls':
       return cfvService.listCachedCalls();
     case 'cfv:get-callflow-data':
@@ -1208,10 +1220,13 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       // params: [sessionId, columns, rows, patterns, metadata]
       const sumMetadata = params[4] || {};
       // Re-read settings each call so provider changes take effect
-      const dgrepSettings = loadStoreData().consoleReview?.dgrepAnalysis;
+      const sumStoreData = loadStoreData();
+      const dgrepSettings = sumStoreData.consoleReview?.dgrepAnalysis;
       if (dgrepSettings) {
         dgrepAIService.setProvider(dgrepSettings.provider);
       }
+      const sumScrubPatterns = sumStoreData.scrubPatterns;
+      if (sumScrubPatterns) dgrepAIService.setScrubPatterns(sumScrubPatterns);
       // Use sourceRepoPath from metadata (linked service) if present, else fall back to global setting
       const sumSourceRepo = sumMetadata.sourceRepoPath || dgrepSettings?.sourceRepository || null;
       dgrepAIService.setSourceRepo(sumSourceRepo);
@@ -1227,10 +1242,13 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
     case 'dgrep-ai:analyze-root-cause': {
       // params: [sessionId, targetRow, targetIndex, contextRows, columns, metadata]
       const rcaMetadata = params[5] || {};
-      const dgrepSettings2 = loadStoreData().consoleReview?.dgrepAnalysis;
+      const rcaStoreData = loadStoreData();
+      const dgrepSettings2 = rcaStoreData.consoleReview?.dgrepAnalysis;
       if (dgrepSettings2) {
         dgrepAIService.setProvider(dgrepSettings2.provider);
       }
+      const rcaScrubPatterns = rcaStoreData.scrubPatterns;
+      if (rcaScrubPatterns) dgrepAIService.setScrubPatterns(rcaScrubPatterns);
       const rcaSourceRepo = rcaMetadata.sourceRepoPath || dgrepSettings2?.sourceRepository || null;
       dgrepAIService.setSourceRepo(rcaSourceRepo);
       // Use full rows from session cache for context
@@ -1258,10 +1276,13 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
     case 'dgrep-ai:improve-display': {
       // params: [sessionId, columns, rows, metadata]
       const idMetadata = params[3] || {};
-      const idSettings = loadStoreData().consoleReview?.dgrepAnalysis;
+      const idStoreData = loadStoreData();
+      const idSettings = idStoreData.consoleReview?.dgrepAnalysis;
       if (idSettings) {
         dgrepAIService.setProvider(idSettings.provider);
       }
+      const idScrubPatterns = idStoreData.scrubPatterns;
+      if (idScrubPatterns) dgrepAIService.setScrubPatterns(idScrubPatterns);
       const idSourceRepo = idMetadata.sourceRepoPath || idSettings?.sourceRepository || null;
       dgrepAIService.setSourceRepo(idSourceRepo);
       // Use full rows from session cache
@@ -1281,11 +1302,14 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       const chatServiceName = params[4] || null;
       const chatQueryContext = params[5] || null;
       // Configure provider
-      const chatDgrepSettings = loadStoreData().consoleReview?.dgrepAnalysis;
+      const chatStoreData = loadStoreData();
+      const chatDgrepSettings = chatStoreData.consoleReview?.dgrepAnalysis;
       if (chatDgrepSettings) {
         dgrepAIService.setProvider(chatDgrepSettings.provider);
         dgrepAIService.setSourceRepo(chatSourceRepo || chatDgrepSettings.sourceRepository || null);
       }
+      const chatScrubPatterns = chatStoreData.scrubPatterns;
+      if (chatScrubPatterns) dgrepAIService.setScrubPatterns(chatScrubPatterns);
       return dgrepAIService.createChatSession(params[0], chatColumns, chatRows, chatSourceRepo, chatServiceName, chatQueryContext);
     }
     case 'dgrep-ai:chat-send':
@@ -1305,11 +1329,14 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       const learnSourceRepo = params[4] || null;
       const learnServiceName = params[5] || null;
       const learnQueryContext = params[6] || null;
-      const learnDgrepSettings = loadStoreData().consoleReview?.dgrepAnalysis;
+      const learnStoreData = loadStoreData();
+      const learnDgrepSettings = learnStoreData.consoleReview?.dgrepAnalysis;
       if (learnDgrepSettings) {
         dgrepAIService.setProvider(learnDgrepSettings.provider);
         dgrepAIService.setSourceRepo(learnSourceRepo || learnDgrepSettings.sourceRepository || null);
       }
+      const learnScrubPatterns = learnStoreData.scrubPatterns;
+      if (learnScrubPatterns) dgrepAIService.setScrubPatterns(learnScrubPatterns);
       return dgrepAIService.createLearningSession(params[0], learnColumns, learnRows, params[3], learnSourceRepo, learnServiceName, learnQueryContext);
     }
     default:

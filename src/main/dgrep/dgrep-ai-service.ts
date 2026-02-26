@@ -191,6 +191,12 @@ export class DGrepAIService extends EventEmitter {
     this.sourceRepoPath = repoPath || null;
   }
 
+  private scrubPatternSettings: Array<{ name: string; letter: string; regex: string; enabled: boolean }> | null = null;
+
+  setScrubPatterns(patterns: Array<{ name: string; letter: string; regex: string; enabled: boolean }>): void {
+    this.scrubPatternSettings = patterns;
+  }
+
   private async getClient(): Promise<CopilotClient> {
     if (!this.client) {
       this.client = new CopilotClient();
@@ -215,7 +221,7 @@ export class DGrepAIService extends EventEmitter {
 
     try {
       // 1. Create workspace, write CSV + patterns + metadata
-      const workspace = createAnalysisWorkspace(sessionId, columns, rows, patterns, metadata);
+      const workspace = createAnalysisWorkspace(sessionId, columns, rows, patterns, metadata, this.scrubPatternSettings ?? undefined);
       this.scrubLayers.set(sessionId, workspace.scrubLayer);
 
       // 2. Build prompt
@@ -258,7 +264,7 @@ export class DGrepAIService extends EventEmitter {
 
     try {
       // 1. Create workspace (reuse same session workspace if exists)
-      const workspace = createAnalysisWorkspace(sessionId + '-rca', columns, contextRows, [], metadata);
+      const workspace = createAnalysisWorkspace(sessionId + '-rca', columns, contextRows, [], metadata, this.scrubPatternSettings ?? undefined);
       this.scrubLayers.set(sessionId, workspace.scrubLayer);
 
       // 2. Build prompt (scrub target row so agent sees tokens, not raw GUIDs)
@@ -299,7 +305,7 @@ export class DGrepAIService extends EventEmitter {
     });
 
     try {
-      const workspace = createAnalysisWorkspace(sessionId + '-display', columns, rows, [], metadata);
+      const workspace = createAnalysisWorkspace(sessionId + '-display', columns, rows, [], metadata, this.scrubPatternSettings ?? undefined);
       this.scrubLayers.set(sessionId, workspace.scrubLayer);
       const outputPath = path.join(workspace.basePath, 'improve-display-output.json');
 
@@ -1086,7 +1092,7 @@ Perform root cause analysis. Respond with ONLY a JSON object:
       serverQuery: queryContext?.serverQuery,
       clientQuery: queryContext?.clientQuery,
     };
-    const workspace = createAnalysisWorkspace(workspaceId, columns, rows, [], metadata);
+    const workspace = createAnalysisWorkspace(workspaceId, columns, rows, [], metadata, this.scrubPatternSettings ?? undefined);
     this.scrubLayers.set(chatSessionId, workspace.scrubLayer);
     const ws = workspace.basePath.replace(/\\/g, '/');
 
@@ -1276,7 +1282,7 @@ Perform root cause analysis. Respond with ONLY a JSON object:
   ): Promise<void> {
     const client = await this.getClient();
     const sampleRows = rows.slice(0, 50);
-    const scrubLayer = this.scrubLayers.get(chatSessionId) ?? ScrubLayer.createDefault();
+    const scrubLayer = this.scrubLayers.get(chatSessionId) ?? (this.scrubPatternSettings ? ScrubLayer.fromSettings(this.scrubPatternSettings) : ScrubLayer.createDefault());
     const contextInfo = scrubLayer.scrubText([
       `\n## Current Log Dataset`,
       `Columns: ${columns.join(', ')}`,
@@ -1367,7 +1373,7 @@ Both modes save filtered results to a CSV and return the path + line count.`,
 
   private createChatToolServer(chatSessionId: string): ReturnType<typeof createSdkMcpServer> {
     const self = this;
-    const scrubLayer = this.scrubLayers.get(chatSessionId) ?? ScrubLayer.createDefault();
+    const scrubLayer = this.scrubLayers.get(chatSessionId) ?? (this.scrubPatternSettings ? ScrubLayer.fromSettings(this.scrubPatternSettings) : ScrubLayer.createDefault());
 
     return createSdkMcpServer({
       name: 'dgrep',
@@ -1749,7 +1755,7 @@ ${sourceRepoPath ? `\n## Source Code\n${serviceName ? `**${serviceName}**` : 'Se
 
     const client = await this.getClient();
     const self = this;
-    const scrubLayer = this.scrubLayers.get(chatSessionId) ?? ScrubLayer.createDefault();
+    const scrubLayer = this.scrubLayers.get(chatSessionId) ?? (this.scrubPatternSettings ? ScrubLayer.fromSettings(this.scrubPatternSettings) : ScrubLayer.createDefault());
 
     const session = await client.createSession({
       model: 'gpt-5.3-codex',

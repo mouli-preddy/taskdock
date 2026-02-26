@@ -17,6 +17,7 @@ export class CfvClient {
   private token: string;
   private apiBase: string;
   private outputBase: string;
+  private scrubSettings?: Array<{ name: string; letter: string; regex: string; enabled: boolean }>;
 
   constructor(options: CfvClientOptions) {
     this.token = options.token;
@@ -26,6 +27,10 @@ export class CfvClient {
 
   setToken(token: string): void {
     this.token = token;
+  }
+
+  setScrubSettings(settings: Array<{ name: string; letter: string; regex: string; enabled: boolean }> | undefined): void {
+    this.scrubSettings = settings;
   }
 
   async validateToken(): Promise<boolean> {
@@ -119,18 +124,20 @@ export class CfvClient {
     if (results['callFlow']) {
       stats.callflowMessages = await convertCallFlow(
         results['callFlow'] as Record<string, unknown>,
-        outputDir
+        outputDir,
+        this.scrubSettings
       );
     }
 
     if (results['callDetails']) {
       stats.diagnosticFiles = await convertCallDetails(
         results['callDetails'] as Record<string, unknown>,
-        outputDir
+        outputDir,
+        this.scrubSettings
       );
     }
 
-    await writeMetadata(callId, rawFiles, stats, outputDir);
+    await writeMetadata(callId, rawFiles, stats, outputDir, this.scrubSettings);
 
     return { callId, outputDir, rawFiles, stats };
   }
