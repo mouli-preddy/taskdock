@@ -388,18 +388,98 @@ class PRReviewApp {
     // Initialize Workspace section
     this.workspaceSection = new WorkspaceSection('workspacesPanel');
 
+    // Wire workspace view callbacks so DGrep/ICM subtab views are functional
+    this.workspaceSection.onWireDgrepView = (view: DGrepSearchView) => {
+      view.onCheckTokenStatus(async () => {
+        return window.electronAPI.dgrepCheckTokenStatus();
+      });
+      view.onAcquireTokens(async () => {
+        return window.electronAPI.dgrepAcquireTokens();
+      });
+      view.onSearch(async (params) => {
+        return window.electronAPI.dgrepSearch(params);
+      });
+      view.onSearchByLogId(async (logId, startTime, endTime, options) => {
+        return window.electronAPI.dgrepSearchByLogId(logId, startTime, endTime, options);
+      });
+      view.onCancel((sessionId) => {
+        window.electronAPI.dgrepCancelSearch(sessionId);
+      });
+      view.onOpenInGeneva(async (url) => {
+        window.electronAPI.openExternal(url);
+      });
+      view.onFetchNamespaces(async (endpoint) => {
+        return window.electronAPI.dgrepGetNamespaces(endpoint);
+      });
+      view.onFetchEvents(async (endpoint, namespace) => {
+        return window.electronAPI.dgrepGetEvents(endpoint, namespace);
+      });
+      view.onGetResults(async (sessionId) => {
+        return window.electronAPI.dgrepGetResults(sessionId);
+      });
+      view.onGetResultsPage(async (sessionId, offset, limit) => {
+        return window.electronAPI.dgrepGetResultsPage(sessionId, offset, limit);
+      });
+      view.onRunClientQuery(async (sessionId, clientQuery) => {
+        return window.electronAPI.dgrepRunClientQuery(sessionId, clientQuery);
+      });
+      view.onNLToKQL(async (prompt, columns) => {
+        return window.electronAPI.dgrepAINLToKQL(prompt, columns, []);
+      });
+      view.onSaveQuery(async (name, formState) => {
+        return window.electronAPI.dgrepSaveQuery({ name, formState, timestamp: new Date().toISOString() } as any);
+      });
+      view.onLoadQueries(async () => {
+        return window.electronAPI.dgrepLoadQueries() as any;
+      });
+      view.onDeleteQuery(async (name) => {
+        return window.electronAPI.dgrepDeleteQuery(name);
+      });
+    };
+
+    this.workspaceSection.onWireIcmView = (view: IcmIncidentDetailView) => {
+      view.onOpenInBrowser((url) => window.electronAPI.openExternal(url));
+      view.onRefreshRequest(async () => {
+        // Refresh is handled by re-fetching; the view manages its own incident state
+      });
+      view.onAction(async (action, incidentId) => {
+        try {
+          switch (action) {
+            case 'acknowledge':
+              await window.electronAPI.icmAcknowledge(incidentId);
+              break;
+            case 'mitigate':
+              await window.electronAPI.icmMitigate(incidentId);
+              break;
+            case 'resolve':
+              await window.electronAPI.icmResolve(incidentId);
+              break;
+          }
+          const refreshed = await window.electronAPI.icmGetIncident(incidentId);
+          view.setIncident(refreshed);
+          Toast.success(`Incident ${incidentId} ${action}d`);
+        } catch (error) {
+          console.error(`[workspace] ICM action ${action} failed:`, error);
+          Toast.error(`Failed to ${action} incident: ${(error as Error).message}`);
+        }
+      });
+      view.onAddDiscussion(async (incidentId, text) => {
+        await window.electronAPI.icmAddDiscussion(incidentId, text);
+      });
+    };
+
     // Wire workspace cross-reference navigation
     this.workspaceSection.onNavigateCfv = (callId: string) => {
-      const workspaces = this.workspaceSection.getWorkspaceList();
-      if (workspaces.length > 0) {
+      const activeWsId = this.workspaceSection.getActiveWorkspaceId();
+      if (activeWsId) {
         const shortId = callId.length > 12 ? callId.slice(0, 8) + '...' : callId;
-        this.workspaceSection.addSubtabToWorkspace(workspaces[0].id, 'cfv', shortId, { callId });
+        this.workspaceSection.addSubtabToWorkspace(activeWsId, 'cfv', shortId, { callId });
       }
     };
     this.workspaceSection.onNavigateIcm = (incidentId: number) => {
-      const workspaces = this.workspaceSection.getWorkspaceList();
-      if (workspaces.length > 0) {
-        this.workspaceSection.addSubtabToWorkspace(workspaces[0].id, 'icm', `#${incidentId}`, { incidentId });
+      const activeWsId = this.workspaceSection.getActiveWorkspaceId();
+      if (activeWsId) {
+        this.workspaceSection.addSubtabToWorkspace(activeWsId, 'icm', `#${incidentId}`, { incidentId });
       }
     };
 

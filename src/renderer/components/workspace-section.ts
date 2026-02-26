@@ -26,13 +26,14 @@ export class WorkspaceSection {
   public onNavigateDgrep: ((query: string, timeRange: { start: string; end: string }) => void) | null = null;
   public onNavigateIcm: ((incidentId: number) => void) | null = null;
 
+  // View wiring callbacks - set by app.ts to wire up callbacks on newly created views
+  public onWireDgrepView: ((view: DGrepSearchView) => void) | null = null;
+  public onWireIcmView: ((view: IcmIncidentDetailView) => void) | null = null;
+
   constructor(containerId: string) {
     this.container = document.getElementById(containerId)!;
     this.render();
     this.loadWorkspaces();
-
-    // Close context menus on click outside
-    document.addEventListener('click', () => this.closeContextMenu());
   }
 
   private render(): void {
@@ -129,6 +130,10 @@ export class WorkspaceSection {
     ws.name = name;
     this.renderWorkspaceTabs();
     this.saveWorkspaces();
+  }
+
+  public getActiveWorkspaceId(): string | null {
+    return this.activeWorkspaceId;
   }
 
   private getActiveWorkspace(): Workspace | undefined {
@@ -355,17 +360,24 @@ export class WorkspaceSection {
       }
       case 'dgrep': {
         const view = new DGrepSearchView(panel.id);
+        if (this.onWireDgrepView) {
+          this.onWireDgrepView(view);
+        }
         this.viewInstances.set(subtab.id, view);
         break;
       }
       case 'icm': {
         const state = subtab.state as IcmSubtabState;
         const view = new IcmIncidentDetailView(panel);
+        if (this.onWireIcmView) {
+          this.onWireIcmView(view);
+        }
         view.setLoading(true);
         window.electronAPI.icmGetIncident(state.incidentId).then(incident => {
           view.setIncident(incident);
         }).catch(err => {
           console.error('[workspace] Failed to load incident:', err);
+          view.setLoading(false);
         });
         this.viewInstances.set(subtab.id, view);
         break;
@@ -425,6 +437,13 @@ export class WorkspaceSection {
     document.body.appendChild(menu);
     this.contextMenuEl = menu;
 
+    // Close on click outside
+    const closeHandler = () => {
+      this.closeContextMenu();
+      document.removeEventListener('click', closeHandler);
+    };
+    setTimeout(() => document.addEventListener('click', closeHandler), 0);
+
     // Adjust if off-screen
     const rect = menu.getBoundingClientRect();
     if (rect.right > window.innerWidth) menu.style.left = `${e.clientX - rect.width}px`;
@@ -452,7 +471,10 @@ export class WorkspaceSection {
     input.focus();
     input.select();
 
+    let finished = false;
     const finish = () => {
+      if (finished) return;
+      finished = true;
       const newName = input.value.trim() || ws.name;
       this.renameWorkspace(workspaceId, newName);
     };
