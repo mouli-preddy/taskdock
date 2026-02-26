@@ -167,6 +167,8 @@ pub fn run() {
             commands::storage::set_notification_settings,
             commands::storage::get_services,
             commands::storage::set_services,
+            commands::storage::get_scrub_patterns,
+            commands::storage::set_scrub_patterns,
             commands::file_io::read_review_output,
             commands::deep_link::get_initial_deep_link,
         ])
