@@ -1,5 +1,5 @@
 import { getIcon, FolderOpen, Activity, Search, AlertTriangle, Plus, Edit, Trash2 } from '../utils/icons.js';
-import type { Workspace, WorkspaceSubtab, WorkspacesData, WorkspaceSubtabType, WorkspaceSubtabState, CfvSubtabState, DgrepSubtabState, IcmSubtabState } from '../../shared/workspace-types.js';
+import type { Workspace, WorkspaceSubtab, WorkspacesData, WorkspaceSubtabType, WorkspaceSubtabState, CfvSubtabState, IcmSubtabState } from '../../shared/workspace-types.js';
 import { CfvCallView } from './cfv/cfv-call-view.js';
 import { DGrepSearchView } from './dgrep-search-view.js';
 import { IcmIncidentDetailView } from './icm-incident-detail-view.js';
@@ -23,7 +23,6 @@ export class WorkspaceSection {
 
   // Navigation interceptor - set by app.ts to redirect cross-references
   public onNavigateCfv: ((callId: string) => void) | null = null;
-  public onNavigateDgrep: ((query: string, timeRange: { start: string; end: string }) => void) | null = null;
   public onNavigateIcm: ((incidentId: number) => void) | null = null;
 
   // View wiring callbacks - set by app.ts to wire up callbacks on newly created views
@@ -196,10 +195,6 @@ export class WorkspaceSection {
     return this.workspaces.map(w => ({ id: w.id, name: w.name }));
   }
 
-  public addSubtabToWorkspace(workspaceId: string, type: WorkspaceSubtabType, label: string, state: WorkspaceSubtabState): void {
-    this.addSubtab(workspaceId, type, label, state);
-  }
-
   public createWorkspaceWithSubtab(name: string, type: WorkspaceSubtabType, label: string, state: WorkspaceSubtabState): void {
     const ws = this.createWorkspace(name);
     this.addSubtab(ws.id, type, label, state);
@@ -261,11 +256,9 @@ export class WorkspaceSection {
     this.renderSubtabBar();
     this.hideAllPanels();
 
-    if (ws.activeSubtabId) {
-      this.activateSubtab(ws.activeSubtabId);
-    } else if (ws.subtabs.length > 0) {
-      ws.activeSubtabId = ws.subtabs[0].id;
-      this.activateSubtab(ws.activeSubtabId);
+    const subtabToActivate = ws.activeSubtabId || ws.subtabs[0]?.id;
+    if (subtabToActivate) {
+      this.activateSubtab(subtabToActivate);
     } else {
       this.showEmpty();
     }
@@ -360,18 +353,14 @@ export class WorkspaceSection {
       }
       case 'dgrep': {
         const view = new DGrepSearchView(panel.id);
-        if (this.onWireDgrepView) {
-          this.onWireDgrepView(view);
-        }
+        this.onWireDgrepView?.(view);
         this.viewInstances.set(subtab.id, view);
         break;
       }
       case 'icm': {
         const state = subtab.state as IcmSubtabState;
         const view = new IcmIncidentDetailView(panel);
-        if (this.onWireIcmView) {
-          this.onWireIcmView(view);
-        }
+        this.onWireIcmView?.(view);
         view.setLoading(true);
         window.electronAPI.icmGetIncident(state.incidentId).then(incident => {
           view.setIncident(incident);

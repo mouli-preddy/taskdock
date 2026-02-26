@@ -439,9 +439,6 @@ class PRReviewApp {
 
     this.workspaceSection.onWireIcmView = (view: IcmIncidentDetailView) => {
       view.onOpenInBrowser((url) => window.electronAPI.openExternal(url));
-      view.onRefreshRequest(async () => {
-        // Refresh is handled by re-fetching; the view manages its own incident state
-      });
       view.onAction(async (action, incidentId) => {
         try {
           switch (action) {
@@ -473,13 +470,13 @@ class PRReviewApp {
       const activeWsId = this.workspaceSection.getActiveWorkspaceId();
       if (activeWsId) {
         const shortId = callId.length > 12 ? callId.slice(0, 8) + '...' : callId;
-        this.workspaceSection.addSubtabToWorkspace(activeWsId, 'cfv', shortId, { callId });
+        this.workspaceSection.addSubtab(activeWsId, 'cfv', shortId, { callId });
       }
     };
     this.workspaceSection.onNavigateIcm = (incidentId: number) => {
       const activeWsId = this.workspaceSection.getActiveWorkspaceId();
       if (activeWsId) {
-        this.workspaceSection.addSubtabToWorkspace(activeWsId, 'icm', `#${incidentId}`, { incidentId });
+        this.workspaceSection.addSubtab(activeWsId, 'icm', `#${incidentId}`, { incidentId });
       }
     };
 
@@ -6032,7 +6029,7 @@ After this, respond with a simple text response to greet the user and ask them w
       <div class="workspace-context-menu-item" data-action="new">New Workspace...</div>
       ${workspaces.length > 0 ? '<div class="workspace-context-menu-separator"></div>' : ''}
       ${workspaces.map(ws =>
-        `<div class="workspace-context-menu-item" data-action="existing" data-ws-id="${ws.id}">${this.escapeHtmlForMenu(ws.name)}</div>`
+        `<div class="workspace-context-menu-item" data-action="existing" data-ws-id="${ws.id}">${this.escapeHtml(ws.name)}</div>`
       ).join('')}
     `;
 
@@ -6041,7 +6038,7 @@ After this, respond with a simple text response to greet the user and ask them w
         ev.stopPropagation();
         const action = (item as HTMLElement).dataset.action;
         if (action === 'new') {
-          this.moveTabToNewWorkspace(sectionType, tabId);
+          this.moveTabToWorkspace(sectionType, tabId);
         } else if (action === 'existing') {
           const wsId = (item as HTMLElement).dataset.wsId!;
           this.moveTabToWorkspace(sectionType, tabId, wsId);
@@ -6073,21 +6070,13 @@ After this, respond with a simple text response to greet the user and ask them w
     }
   }
 
-  private escapeHtmlForMenu(text: string): string {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
-
-  private moveTabToNewWorkspace(sectionType: 'cfv' | 'dgrep' | 'icm', tabId: string): void {
+  private moveTabToWorkspace(sectionType: 'cfv' | 'dgrep' | 'icm', tabId: string, workspaceId?: string): void {
     const { label, state } = this.extractTabState(sectionType, tabId);
-    this.workspaceSection.createWorkspaceWithSubtab(label, sectionType, label, state);
-    this.closeTabInOriginalSection(sectionType, tabId);
-  }
-
-  private moveTabToWorkspace(sectionType: 'cfv' | 'dgrep' | 'icm', tabId: string, workspaceId: string): void {
-    const { label, state } = this.extractTabState(sectionType, tabId);
-    this.workspaceSection.addSubtabToWorkspace(workspaceId, sectionType, label, state);
+    if (workspaceId) {
+      this.workspaceSection.addSubtab(workspaceId, sectionType, label, state);
+    } else {
+      this.workspaceSection.createWorkspaceWithSubtab(label, sectionType, label, state);
+    }
     this.closeTabInOriginalSection(sectionType, tabId);
   }
 
