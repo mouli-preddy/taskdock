@@ -108,3 +108,21 @@ export const DEFAULT_CONSOLE_REVIEW_SETTINGS: ConsoleReviewSettings = {
     sourceRepository: '',
   },
 };
+
+// ==================== Scrub Pattern Settings ====================
+
+export interface ScrubPatternSetting {
+  name: string;
+  letter: string;
+  regex: string;
+  enabled: boolean;
+  isDefault: boolean;
+}
+
+export const DEFAULT_SCRUB_PATTERNS: ScrubPatternSetting[] = [
+  { name: 'GUID', letter: 'g', regex: '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}', enabled: true, isDefault: true },
+  { name: 'Email', letter: 'e', regex: '[\\w.+-]+@[\\w-]+\\.[\\w.]+', enabled: true, isDefault: true },
+  { name: 'IPv4', letter: 'i', regex: '\\b\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\b', enabled: false, isDefault: true },
+  { name: 'Tenant ID', letter: 't', regex: '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}', enabled: true, isDefault: true },
+  { name: 'SIP URI', letter: 's', regex: 'sip:[\\w.+-]+@[\\w.-]+', enabled: true, isDefault: true },
+];
