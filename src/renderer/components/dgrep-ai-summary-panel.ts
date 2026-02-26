@@ -227,6 +227,7 @@ export class DGrepAISummaryPanel {
 
   getAnalysisLevel(): { level: 'quick' | 'standard' | 'detailed' | 'custom'; customPrompt?: string } {
     const select = this.el.querySelector('.dgrep-ai-analysis-level') as HTMLSelectElement;
+    console.log('[getAnalysisLevel] select element:', select, 'value:', select?.value, 'selectedIndex:', select?.selectedIndex, 'options:', select?.options?.length);
     const level = (select?.value || 'standard') as 'quick' | 'standard' | 'detailed' | 'custom';
     if (level === 'custom') {
       const input = this.el.querySelector('.dgrep-ai-custom-prompt-input') as HTMLInputElement;
