@@ -1317,6 +1317,8 @@ Perform root cause analysis. Respond with ONLY a JSON object:
     ].join('\n'));
 
     const self = this;
+    const chatWs = this.chatSessions.get(chatSessionId)?.workspacePath?.replace(/\\/g, '/') || '';
+    const kqlGuidelinesRef = `${chatWs}/kql-guidelines.md`;
 
     const session = await client.createSession({
       model: 'gpt-5.3-codex',
@@ -1331,7 +1333,8 @@ Perform root cause analysis. Respond with ONLY a JSON object:
           description: `Execute a KQL client query against the full DGrep server results. Two modes:
 - Silent (silent=true, default): runs in background without changing the user's UI. Use for your own exploration.
 - Show (silent=false): updates the user's UI with the query results. Only use when the user asks to show/display results.
-Both modes save filtered results to a CSV and return the path + line count.`,
+Both modes save filtered results to a CSV and return the path + line count.
+IMPORTANT: Read ${kqlGuidelinesRef} before writing queries. Only use documented operators.`,
           parameters: {
             type: 'object',
             properties: {
@@ -1346,7 +1349,7 @@ Both modes save filtered results to a CSV and return the path + line count.`,
               const mode = args.silent ? ' (silent — UI not updated)' : '';
               return `Client query completed. ${result.lineCount} lines filtered.${mode}\nCSV path: ${result.csvPath}`;
             } catch (err: any) {
-              return `ERROR: Client query failed.\nQuery: ${args.kql}\nError: ${err?.message || String(err)}\n\nFix the query based on kql-guidelines.md and retry. Only use operators/functions documented there.`;
+              return `ERROR: Client query failed.\nQuery: ${args.kql}\nError: ${err?.message || String(err)}\n\nRead ${kqlGuidelinesRef} for supported syntax. Fix the query and retry.`;
             }
           }),
         },
@@ -1399,6 +1402,8 @@ Both modes save filtered results to a CSV and return the path + line count.`,
   private createChatToolServer(chatSessionId: string): ReturnType<typeof createSdkMcpServer> {
     const self = this;
     const scrubLayer = this.scrubLayers.get(chatSessionId) ?? (this.scrubPatternSettings ? ScrubLayer.fromSettings(this.scrubPatternSettings) : ScrubLayer.createDefault());
+    const sdkWs = this.chatSessions.get(chatSessionId)?.workspacePath?.replace(/\\/g, '/') || '';
+    const sdkKqlRef = `${sdkWs}/kql-guidelines.md`;
 
     return createSdkMcpServer({
       name: 'dgrep',
@@ -1411,7 +1416,7 @@ Both modes save filtered results to a CSV and return the path + line count.`,
 - Show (silent=false): updates the user's UI with the query results. Only use when the user asks to show/display results.
 
 Both modes save filtered results to a CSV and return the path + line count.
-Read kql-guidelines.md in the workspace before writing KQL queries.`,
+CRITICAL: Read ${sdkKqlRef} before writing queries. Only use documented operators.`,
           {
             kql: z.string().describe('The KQL query to execute, e.g. "source | where Message contains \'error\'"'),
             silent: z.boolean().optional().default(true).describe('If true (default), run in background without updating the UI. Set to false to update the user\'s UI with the query results.'),
@@ -1430,7 +1435,7 @@ Read kql-guidelines.md in the workspace before writing KQL queries.`,
               return {
                 content: [{
                   type: 'text' as const,
-                  text: `ERROR: Client query failed.\nQuery: ${args.kql}\nError: ${err?.message || String(err)}\n\nFix the query based on kql-guidelines.md and retry. Only use operators/functions documented there.`,
+                  text: `ERROR: Client query failed.\nQuery: ${args.kql}\nError: ${err?.message || String(err)}\n\nRead ${sdkKqlRef} for supported syntax. Fix the query and retry.`,
                 }],
                 isError: true,
               };
