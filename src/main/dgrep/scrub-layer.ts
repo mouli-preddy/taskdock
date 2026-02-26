@@ -52,15 +52,16 @@ export class ScrubLayer {
     this.scrubRegex = new RegExp(parts.join('|'), 'gi');
   }
 
-  /** Get or create a token for a matched value. */
+  /** Get or create a token for a matched value. Normalizes to lowercase for case-insensitive dedup. */
   private getOrCreateToken(value: string, letter: string): string {
-    const existing = this.valueToToken.get(value);
+    const normalized = value.toLowerCase();
+    const existing = this.valueToToken.get(normalized);
     if (existing) return existing;
     const count = (this.counters.get(letter) ?? 0) + 1;
     this.counters.set(letter, count);
     const token = `scrub_${letter}${count}`;
-    this.valueToToken.set(value, token);
-    this.tokenToValue.set(token, value);
+    this.valueToToken.set(normalized, token);
+    this.tokenToValue.set(token, normalized);
     return token;
   }
 
@@ -122,7 +123,7 @@ export class ScrubLayer {
     };
   }
 
-  /** Save token map to a workspace directory. */
+  /** Save token map to a workspace directory. Silently ignores write failures. */
   save(workspacePath: string): void {
     const data: TokenMapFile = {
       version: 1,
@@ -135,11 +136,15 @@ export class ScrubLayer {
     for (const [value, token] of this.valueToToken) {
       data.mappings.push({ value, token });
     }
-    fs.writeFileSync(
-      path.join(workspacePath, TOKEN_MAP_FILENAME),
-      JSON.stringify(data, null, 2),
-      'utf-8'
-    );
+    try {
+      fs.writeFileSync(
+        path.join(workspacePath, TOKEN_MAP_FILENAME),
+        JSON.stringify(data, null, 2),
+        'utf-8'
+      );
+    } catch {
+      // Best-effort persistence — don't crash on write failure
+    }
   }
 
   /** Load token map from a workspace directory. Returns new ScrubLayer with defaults if file missing. */
@@ -150,7 +155,14 @@ export class ScrubLayer {
       layer.addPattern('GUID', 'g', /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
       return layer;
     }
-    const data: TokenMapFile = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    let data: TokenMapFile;
+    try {
+      data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    } catch {
+      // Corrupted file — fall back to defaults
+      layer.addPattern('GUID', 'g', /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
+      return layer;
+    }
     for (const [name, { letter, regex }] of Object.entries(data.patterns)) {
       layer.addPattern(name, letter, new RegExp(regex));
     }
