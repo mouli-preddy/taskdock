@@ -231,15 +231,11 @@ export class DGrepAIService extends EventEmitter {
       // 3. Determine cwd (source repo or workspace)
       const cwd = this.sourceRepoPath || workspace.basePath;
 
-      // 4. Execute with chosen provider
+      // 4. Execute with chosen provider — both use the full workspace prompt
       if (this.provider === 'claude-sdk') {
         await this.executeWithClaude(sessionId, prompt, cwd, workspace.summaryOutputPath, 'summary');
       } else {
-        // Copilot can't read files — build inline prompt with truncated data
-        const inlinePrompt = this.buildCopilotInlinePrompt(columns, rows, patterns, metadata, 'summary');
-        const scrubLayer = this.scrubLayers.get(sessionId);
-        const scrubbedPrompt = scrubLayer ? scrubLayer.scrubText(inlinePrompt) : inlinePrompt;
-        await this.executeWithCopilot(sessionId, scrubbedPrompt, cwd, workspace.summaryOutputPath, 'summary');
+        await this.executeWithCopilot(sessionId, prompt, cwd, workspace.summaryOutputPath, 'summary');
       }
     } catch (err: any) {
       logger.error(LOG_CATEGORY, 'Summarization failed', { sessionId, error: err?.message });
@@ -275,15 +271,11 @@ export class DGrepAIService extends EventEmitter {
       // 3. Determine cwd
       const cwd = this.sourceRepoPath || workspace.basePath;
 
-      // 4. Execute with chosen provider
+      // 4. Execute with chosen provider — both use the full workspace prompt
       if (this.provider === 'claude-sdk') {
         await this.executeWithClaude(sessionId, prompt, cwd, workspace.rcaOutputPath, 'rca');
       } else {
-        // Copilot can't read files — build inline prompt with truncated data
-        const inlinePrompt = this.buildCopilotRCAInlinePrompt(columns, contextRows, targetRow, targetIndex, metadata);
-        const scrubLayer = this.scrubLayers.get(sessionId);
-        const scrubbedPrompt = scrubLayer ? scrubLayer.scrubText(inlinePrompt) : inlinePrompt;
-        await this.executeWithCopilot(sessionId, scrubbedPrompt, cwd, workspace.rcaOutputPath, 'rca');
+        await this.executeWithCopilot(sessionId, prompt, cwd, workspace.rcaOutputPath, 'rca');
       }
     } catch (err: any) {
       logger.error(LOG_CATEGORY, 'RCA failed', { sessionId, error: err?.message });
@@ -783,22 +775,25 @@ Perform root cause analysis. Respond with ONLY a JSON object:
   private async executeWithCopilot(
     sessionId: string,
     prompt: string,
-    _cwd: string,
+    cwd: string,
     outputPath: string,
     taskType: 'summary' | 'rca'
   ): Promise<void> {
     const logger = getLogger();
-    logger.info(LOG_CATEGORY, 'Executing with Copilot SDK', { sessionId, taskType });
+    logger.info(LOG_CATEGORY, 'Executing with Copilot SDK', { sessionId, taskType, cwd });
 
     const client = await this.getClient();
 
+    // Copilot SDK has built-in Read/Write/Bash tools when workingDirectory is set
     const session = await client.createSession({
       model: 'gpt-5.3-codex',
       streaming: true,
+      workingDirectory: cwd,
       systemMessage: {
         mode: 'append',
-        content: `You are a log analysis agent. Follow the instructions exactly and respond with ONLY a valid JSON object as specified.`,
+        content: `You are a log analysis agent. Follow the instructions in the prompt. Use the built-in Read, Write, and Bash tools to read and analyze the data files.`,
       },
+      onPermissionRequest: async () => ({ kind: 'approved' as const }),
     });
 
     let fullContent = '';
