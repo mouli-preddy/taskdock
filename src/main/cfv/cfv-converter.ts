@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { encode } from '@toon-format/toon';
+import { ScrubLayer } from '../dgrep/scrub-layer.js';
 
 // ============================================================================
 // Call Flow Conversion
@@ -10,6 +11,8 @@ export async function convertCallFlow(data: Record<string, unknown>, outputDir: 
   const callflowDir = join(outputDir, 'callflow');
   const messagesDir = join(callflowDir, 'messages');
   await mkdir(messagesDir, { recursive: true });
+
+  const scrubLayer = ScrubLayer.createDefault();
 
   const nrt = (data.nrtStreamingIndexAugmentedCall ?? {}) as Record<string, unknown>;
   const fullFlow = (nrt.fullCallFlow ?? {}) as Record<string, unknown>;
@@ -84,14 +87,15 @@ export async function convertCallFlow(data: Record<string, unknown>, outputDir: 
     };
 
     const msgFilename = `${String(seq).padStart(4, '0')}.toon`;
+    const scrubbedDetail = JSON.parse(scrubLayer.scrubText(JSON.stringify(messageDetail)));
     writePromises.push(
-      writeFile(join(messagesDir, msgFilename), encode(messageDetail), 'utf-8')
+      writeFile(join(messagesDir, msgFilename), encode(scrubbedDetail), 'utf-8')
     );
   }
 
   // Write CSV index
   writePromises.push(
-    writeFile(join(callflowDir, 'index.csv'), csvLines.join('\n'), 'utf-8')
+    writeFile(join(callflowDir, 'index.csv'), scrubLayer.scrubText(csvLines.join('\n')), 'utf-8')
   );
 
   // Write README
@@ -126,10 +130,11 @@ Column Descriptions:
 `;
 
   writePromises.push(
-    writeFile(join(callflowDir, 'README.txt'), readme, 'utf-8')
+    writeFile(join(callflowDir, 'README.txt'), scrubLayer.scrubText(readme), 'utf-8')
   );
 
   await Promise.all(writePromises);
+  scrubLayer.save(callflowDir);
   return messages.length;
 }
 
@@ -140,6 +145,8 @@ Column Descriptions:
 export async function convertCallDetails(data: Record<string, unknown>, outputDir: string): Promise<number> {
   const diagDir = join(outputDir, 'diagnostics');
   await mkdir(diagDir, { recursive: true });
+
+  const scrubLayer = ScrubLayer.createDefault();
 
   const details = (data.callDetails ?? {}) as Record<string, unknown>;
   if (!details || Object.keys(details).length === 0) return 0;
@@ -170,7 +177,8 @@ export async function convertCallDetails(data: Record<string, unknown>, outputDi
       },
     },
   };
-  writePromises.push(writeFile(join(diagDir, 'summary.toon'), encode(summary), 'utf-8'));
+  const scrubbedSummary = JSON.parse(scrubLayer.scrubText(JSON.stringify(summary)));
+  writePromises.push(writeFile(join(diagDir, 'summary.toon'), encode(scrubbedSummary), 'utf-8'));
 
   // 2. Legs
   const legs = (details.legs ?? []) as Array<Record<string, unknown>>;
@@ -205,7 +213,8 @@ export async function convertCallDetails(data: Record<string, unknown>, outputDi
       };
     }),
   };
-  writePromises.push(writeFile(join(diagDir, 'legs.toon'), encode(legsData), 'utf-8'));
+  const scrubbedLegs = JSON.parse(scrubLayer.scrubText(JSON.stringify(legsData)));
+  writePromises.push(writeFile(join(diagDir, 'legs.toon'), encode(scrubbedLegs), 'utf-8'));
 
   // 3. QoE
   const qoeRaw = (details.qoe ?? []) as Array<Record<string, unknown>>;
@@ -260,7 +269,8 @@ export async function convertCallDetails(data: Record<string, unknown>, outputDi
       return extracted;
     }),
   };
-  writePromises.push(writeFile(join(diagDir, 'qoe.toon'), encode(qoeData), 'utf-8'));
+  const scrubbedQoe = JSON.parse(scrubLayer.scrubText(JSON.stringify(qoeData)));
+  writePromises.push(writeFile(join(diagDir, 'qoe.toon'), encode(scrubbedQoe), 'utf-8'));
 
   // 4. Network (mdiag)
   const mdiagRaw = (details.mdiag ?? []) as Array<Record<string, unknown>>;
@@ -287,7 +297,8 @@ export async function convertCallDetails(data: Record<string, unknown>, outputDi
       })
       .filter((entry) => Object.keys(entry).length > 0),
   };
-  writePromises.push(writeFile(join(diagDir, 'network.toon'), encode(networkData), 'utf-8'));
+  const scrubbedNetwork = JSON.parse(scrubLayer.scrubText(JSON.stringify(networkData)));
+  writePromises.push(writeFile(join(diagDir, 'network.toon'), encode(scrubbedNetwork), 'utf-8'));
 
   // 5. Timeline (csamod)
   const csamodRaw = (details.csamod ?? []) as Array<Record<string, unknown>>;
@@ -316,7 +327,8 @@ export async function convertCallDetails(data: Record<string, unknown>, outputDi
       return entry;
     }),
   };
-  writePromises.push(writeFile(join(diagDir, 'timeline.toon'), encode(timelineData), 'utf-8'));
+  const scrubbedTimeline = JSON.parse(scrubLayer.scrubText(JSON.stringify(timelineData)));
+  writePromises.push(writeFile(join(diagDir, 'timeline.toon'), encode(scrubbedTimeline), 'utf-8'));
 
   // 6. Participants (modelCall.clientEndpoints)
   const modelCall = (details.modelCall ?? {}) as Record<string, unknown>;
@@ -344,9 +356,11 @@ export async function convertCallDetails(data: Record<string, unknown>, outputDi
       };
     }),
   };
-  writePromises.push(writeFile(join(diagDir, 'participants.toon'), encode(participantsData), 'utf-8'));
+  const scrubbedParticipants = JSON.parse(scrubLayer.scrubText(JSON.stringify(participantsData)));
+  writePromises.push(writeFile(join(diagDir, 'participants.toon'), encode(scrubbedParticipants), 'utf-8'));
 
   await Promise.all(writePromises);
+  scrubLayer.save(diagDir);
   return 6; // Always creates 6 diagnostic files
 }
 
@@ -386,5 +400,7 @@ export async function writeMetadata(
     },
   };
 
-  await writeFile(join(outputDir, 'metadata.toon'), encode(metadata), 'utf-8');
+  const scrubLayer = ScrubLayer.createDefault();
+  const scrubbedMetadata = JSON.parse(scrubLayer.scrubText(JSON.stringify(metadata)));
+  await writeFile(join(outputDir, 'metadata.toon'), encode(scrubbedMetadata), 'utf-8');
 }
