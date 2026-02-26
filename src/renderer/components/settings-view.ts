@@ -33,6 +33,7 @@ export class SettingsView {
   private pollingSettingsSavedCallback: ((settings: PollingSettings) => void) | null = null;
   private notificationSettingsSavedCallback: ((settings: NotificationSettings) => void) | null = null;
   private services: ServiceEntry[] = [];
+  private scrubPatterns: Array<{ name: string; letter: string; regex: string; enabled: boolean; isDefault: boolean }> = [];
   private activeSettingsTab: string = 'connection';
 
   constructor(containerId: string) {
@@ -43,6 +44,7 @@ export class SettingsView {
     this.loadNotificationSettings();
     this.loadPlugins();
     this.loadServices();
+    this.loadScrubPatterns();
     this.attachReloadAllHandler();
   }
 
@@ -241,6 +243,7 @@ export class SettingsView {
           <button class="settings-tab-btn" data-settings-tab="review">Review</button>
           <button class="settings-tab-btn" data-settings-tab="ai">AI</button>
           <button class="settings-tab-btn" data-settings-tab="services">Services</button>
+          <button class="settings-tab-btn" data-settings-tab="privacy">Privacy</button>
         </div>
         <div class="settings-content">
 
@@ -609,12 +612,69 @@ export class SettingsView {
             </div>
           </div>
 
+          <!-- Privacy Tab -->
+          <div class="settings-tab-content" data-tab-content="privacy">
+            <div class="settings-section full-width">
+              <h2 class="settings-section-title">Scrub Patterns</h2>
+              <p class="settings-section-description">Configure regex patterns for scrubbing sensitive data before it reaches AI agents. Matched values are replaced with tokens like scrub_g1, scrub_e1.</p>
+
+              <table class="settings-table" id="scrubPatternsTable">
+                <thead>
+                  <tr>
+                    <th style="width: 60px;">Enabled</th>
+                    <th>Name</th>
+                    <th style="width: 60px;">Letter</th>
+                    <th>Regex</th>
+                    <th style="width: 80px;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="scrubPatternsBody"></tbody>
+              </table>
+
+              <div style="margin-top: var(--space-4);">
+                <h3 class="settings-subsection-title" style="margin: 0; padding: 0; border: none;">Add Pattern</h3>
+                <div style="display: flex; gap: var(--space-2); align-items: end; flex-wrap: wrap;">
+                  <div class="form-group" style="flex: 1; min-width: 120px;">
+                    <label for="scrubPatternName">Name</label>
+                    <input type="text" id="scrubPatternName" placeholder="e.g., Phone Number">
+                  </div>
+                  <div class="form-group" style="width: 80px;">
+                    <label for="scrubPatternLetter">Letter</label>
+                    <input type="text" id="scrubPatternLetter" maxlength="1" placeholder="p" style="text-align: center;">
+                  </div>
+                  <div class="form-group" style="flex: 2; min-width: 200px;">
+                    <label for="scrubPatternRegex">Regex</label>
+                    <input type="text" id="scrubPatternRegex" placeholder="\\d{3}-\\d{3}-\\d{4}">
+                  </div>
+                  <button type="button" class="btn btn-primary btn-sm" id="addScrubPatternBtn">Add</button>
+                </div>
+                <div id="scrubPatternError" class="error-text" style="display: none; color: var(--danger); margin-top: var(--space-1); font-size: 0.85em;"></div>
+              </div>
+
+              <div style="margin-top: var(--space-6);">
+                <h3 class="settings-subsection-title" style="margin: 0; padding: 0; border: none;">Regex Tester</h3>
+                <p class="settings-section-description">Paste sample text to see which values would be scrubbed by enabled patterns.</p>
+                <div class="form-group">
+                  <label for="scrubTesterInput">Sample Text</label>
+                  <textarea id="scrubTesterInput" rows="4" placeholder="Paste log text with GUIDs, emails, IPs, etc." style="width: 100%; font-family: var(--font-mono); font-size: 0.85em;"></textarea>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" id="testScrubBtn">Test Scrub</button>
+                <div id="scrubTesterOutput" style="margin-top: var(--space-2); display: none;">
+                  <label>Scrubbed Output</label>
+                  <pre id="scrubTesterResult" style="background: var(--bg-secondary); padding: var(--space-3); border-radius: var(--radius); font-family: var(--font-mono); font-size: 0.85em; white-space: pre-wrap; max-height: 200px; overflow: auto; border: 1px solid var(--border);"></pre>
+                  <div id="scrubTesterMatches" style="margin-top: var(--space-2); font-size: 0.85em;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
     `;
 
     this.attachEventListeners();
     this.attachSettingsTabListeners();
+    this.attachScrubPatternListeners();
   }
 
   private attachSettingsTabListeners(): void {
@@ -1339,5 +1399,149 @@ export class SettingsView {
         </label>
       </div>
     `).join('');
+  }
+
+  // Scrub Patterns (Privacy Tab) Methods
+
+  private async loadScrubPatterns(): Promise<void> {
+    try {
+      this.scrubPatterns = await window.electronAPI.getScrubPatterns();
+    } catch {
+      this.scrubPatterns = [];
+    }
+    this.renderScrubPatterns();
+  }
+
+  private renderScrubPatterns(): void {
+    const tbody = this.container.querySelector('#scrubPatternsBody') as HTMLElement;
+    if (!tbody) return;
+    tbody.innerHTML = this.scrubPatterns.map((p, i) => `
+      <tr>
+        <td style="text-align: center;"><input type="checkbox" class="scrub-pattern-toggle" data-index="${i}" ${p.enabled ? 'checked' : ''}></td>
+        <td>${escapeHtml(p.name)}</td>
+        <td style="text-align: center;"><code>${escapeHtml(p.letter)}</code></td>
+        <td><code style="font-size: 0.85em; word-break: break-all;">${escapeHtml(p.regex)}</code></td>
+        <td style="text-align: center;">${p.isDefault
+          ? '<span style="color: var(--text-muted); font-size: 0.8em;">Default</span>'
+          : `<button class="btn btn-danger btn-xs scrub-pattern-delete" data-index="${i}" style="font-size: 0.75em; padding: 2px 6px;">Delete</button>`
+        }</td>
+      </tr>
+    `).join('');
+  }
+
+  private attachScrubPatternListeners(): void {
+    // Toggle enable/disable
+    this.container.addEventListener('change', async (e) => {
+      const target = e.target as HTMLInputElement;
+      if (target.classList.contains('scrub-pattern-toggle')) {
+        const index = parseInt(target.dataset.index || '0', 10);
+        if (this.scrubPatterns[index]) {
+          this.scrubPatterns[index].enabled = target.checked;
+          await window.electronAPI.setScrubPatterns(this.scrubPatterns);
+        }
+      }
+    });
+
+    // Delete pattern
+    this.container.addEventListener('click', async (e) => {
+      const target = e.target as HTMLElement;
+      if (target.classList.contains('scrub-pattern-delete')) {
+        const index = parseInt(target.dataset.index || '0', 10);
+        if (this.scrubPatterns[index] && !this.scrubPatterns[index].isDefault) {
+          this.scrubPatterns.splice(index, 1);
+          await window.electronAPI.setScrubPatterns(this.scrubPatterns);
+          this.renderScrubPatterns();
+        }
+      }
+    });
+
+    // Add pattern
+    const addBtn = this.container.querySelector('#addScrubPatternBtn');
+    addBtn?.addEventListener('click', async () => {
+      const nameInput = this.container.querySelector('#scrubPatternName') as HTMLInputElement;
+      const letterInput = this.container.querySelector('#scrubPatternLetter') as HTMLInputElement;
+      const regexInput = this.container.querySelector('#scrubPatternRegex') as HTMLInputElement;
+      const errorDiv = this.container.querySelector('#scrubPatternError') as HTMLElement;
+
+      const name = nameInput?.value.trim() || '';
+      const letter = letterInput?.value.trim().toLowerCase() || '';
+      const regex = regexInput?.value.trim() || '';
+
+      // Validation
+      if (!name || !letter || !regex) {
+        if (errorDiv) { errorDiv.textContent = 'All fields are required.'; errorDiv.style.display = 'block'; }
+        return;
+      }
+      if (!/^[a-z]$/.test(letter)) {
+        if (errorDiv) { errorDiv.textContent = 'Letter must be a single lowercase a-z character.'; errorDiv.style.display = 'block'; }
+        return;
+      }
+      if (this.scrubPatterns.some(p => p.letter === letter)) {
+        if (errorDiv) { errorDiv.textContent = `Letter "${letter}" is already used by "${this.scrubPatterns.find(p => p.letter === letter)?.name}".`; errorDiv.style.display = 'block'; }
+        return;
+      }
+      try {
+        new RegExp(regex);
+      } catch {
+        if (errorDiv) { errorDiv.textContent = 'Invalid regex pattern.'; errorDiv.style.display = 'block'; }
+        return;
+      }
+
+      if (errorDiv) errorDiv.style.display = 'none';
+
+      this.scrubPatterns.push({ name, letter, regex, enabled: true, isDefault: false });
+      await window.electronAPI.setScrubPatterns(this.scrubPatterns);
+      this.renderScrubPatterns();
+
+      // Clear inputs
+      if (nameInput) nameInput.value = '';
+      if (letterInput) letterInput.value = '';
+      if (regexInput) regexInput.value = '';
+    });
+
+    // Test scrub
+    const testBtn = this.container.querySelector('#testScrubBtn');
+    testBtn?.addEventListener('click', () => {
+      const input = (this.container.querySelector('#scrubTesterInput') as HTMLTextAreaElement)?.value || '';
+      const outputDiv = this.container.querySelector('#scrubTesterOutput') as HTMLElement;
+      const resultPre = this.container.querySelector('#scrubTesterResult') as HTMLElement;
+      const matchesDiv = this.container.querySelector('#scrubTesterMatches') as HTMLElement;
+
+      if (!input.trim()) return;
+
+      // Build combined regex from enabled patterns and apply scrubbing
+      const enabledPatterns = this.scrubPatterns.filter(p => p.enabled);
+      let scrubbed = input;
+      const matches: Array<{ pattern: string; value: string; token: string }> = [];
+      const counters = new Map<string, number>();
+      const seen = new Map<string, string>();
+
+      for (const p of enabledPatterns) {
+        try {
+          const regex = new RegExp(p.regex, 'gi');
+          scrubbed = scrubbed.replace(regex, (match) => {
+            const normalized = match.toLowerCase();
+            if (seen.has(normalized)) return seen.get(normalized)!;
+            const count = (counters.get(p.letter) ?? 0) + 1;
+            counters.set(p.letter, count);
+            const token = `scrub_${p.letter}${count}`;
+            seen.set(normalized, token);
+            matches.push({ pattern: p.name, value: match, token });
+            return token;
+          });
+        } catch { /* skip bad regex */ }
+      }
+
+      if (outputDiv) outputDiv.style.display = 'block';
+      if (resultPre) resultPre.textContent = scrubbed;
+      if (matchesDiv) {
+        if (matches.length === 0) {
+          matchesDiv.innerHTML = '<span style="color: var(--text-muted);">No matches found.</span>';
+        } else {
+          matchesDiv.innerHTML = `<strong>${matches.length} value(s) scrubbed:</strong><br>` +
+            matches.map(m => `<code>${escapeHtml(m.token)}</code> \u2190 <code>${escapeHtml(m.value)}</code> (${escapeHtml(m.pattern)})`).join('<br>');
+        }
+      }
+    });
   }
 }
