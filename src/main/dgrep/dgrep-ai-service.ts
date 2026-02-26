@@ -231,7 +231,9 @@ export class DGrepAIService extends EventEmitter {
       } else {
         // Copilot can't read files — build inline prompt with truncated data
         const inlinePrompt = this.buildCopilotInlinePrompt(columns, rows, patterns, metadata, 'summary');
-        await this.executeWithCopilot(sessionId, inlinePrompt, cwd, workspace.summaryOutputPath, 'summary');
+        const scrubLayer = this.scrubLayers.get(sessionId);
+        const scrubbedPrompt = scrubLayer ? scrubLayer.scrubText(inlinePrompt) : inlinePrompt;
+        await this.executeWithCopilot(sessionId, scrubbedPrompt, cwd, workspace.summaryOutputPath, 'summary');
       }
     } catch (err: any) {
       logger.error(LOG_CATEGORY, 'Summarization failed', { sessionId, error: err?.message });
@@ -259,8 +261,9 @@ export class DGrepAIService extends EventEmitter {
       const workspace = createAnalysisWorkspace(sessionId + '-rca', columns, contextRows, [], metadata);
       this.scrubLayers.set(sessionId, workspace.scrubLayer);
 
-      // 2. Build prompt
-      const prompt = buildRCAPrompt(workspace, targetRow, targetIndex, this.sourceRepoPath ?? undefined);
+      // 2. Build prompt (scrub target row so agent sees tokens, not raw GUIDs)
+      const scrubbedTargetRow = JSON.parse(workspace.scrubLayer.scrubText(JSON.stringify(targetRow)));
+      const prompt = buildRCAPrompt(workspace, scrubbedTargetRow, targetIndex, this.sourceRepoPath ?? undefined);
       fs.writeFileSync(workspace.promptPath, prompt, 'utf-8');
 
       // 3. Determine cwd
@@ -272,7 +275,9 @@ export class DGrepAIService extends EventEmitter {
       } else {
         // Copilot can't read files — build inline prompt with truncated data
         const inlinePrompt = this.buildCopilotRCAInlinePrompt(columns, contextRows, targetRow, targetIndex, metadata);
-        await this.executeWithCopilot(sessionId, inlinePrompt, cwd, workspace.rcaOutputPath, 'rca');
+        const scrubLayer = this.scrubLayers.get(sessionId);
+        const scrubbedPrompt = scrubLayer ? scrubLayer.scrubText(inlinePrompt) : inlinePrompt;
+        await this.executeWithCopilot(sessionId, scrubbedPrompt, cwd, workspace.rcaOutputPath, 'rca');
       }
     } catch (err: any) {
       logger.error(LOG_CATEGORY, 'RCA failed', { sessionId, error: err?.message });
@@ -1271,17 +1276,16 @@ Perform root cause analysis. Respond with ONLY a JSON object:
   ): Promise<void> {
     const client = await this.getClient();
     const sampleRows = rows.slice(0, 50);
-    const contextInfo = [
+    const scrubLayer = this.scrubLayers.get(chatSessionId) ?? ScrubLayer.createDefault();
+    const contextInfo = scrubLayer.scrubText([
       `\n## Current Log Dataset`,
       `Columns: ${columns.join(', ')}`,
       `Total rows: ${rows.length}`,
       `\n## Sample Rows (first 50)`,
       JSON.stringify(sampleRows, null, 0),
-    ].join('\n');
+    ].join('\n'));
 
     const self = this;
-    const copilotChatSession = this.chatSessions.get(chatSessionId);
-    const scrubLayer = copilotChatSession ? ScrubLayer.load(copilotChatSession.workspacePath) : ScrubLayer.createDefault();
 
     const session = await client.createSession({
       model: 'gpt-5.3-codex',
@@ -1363,8 +1367,7 @@ Both modes save filtered results to a CSV and return the path + line count.`,
 
   private createChatToolServer(chatSessionId: string): ReturnType<typeof createSdkMcpServer> {
     const self = this;
-    const chatSession = this.chatSessions.get(chatSessionId);
-    const scrubLayer = chatSession ? ScrubLayer.load(chatSession.workspacePath) : ScrubLayer.createDefault();
+    const scrubLayer = this.scrubLayers.get(chatSessionId) ?? ScrubLayer.createDefault();
 
     return createSdkMcpServer({
       name: 'dgrep',
@@ -1612,7 +1615,9 @@ You have \`read_memory\` and \`add_memory\` tools to persist learnings across se
     const csvRows = rows.map(row =>
       columns.map(c => csvEscapeField(String(row[c] ?? ''))).join(',')
     );
-    fs.writeFileSync(csvPath, [header, ...csvRows].join('\n'), 'utf-8');
+    const csvContent = [header, ...csvRows].join('\n');
+    const scrubLayer = this.scrubLayers.get(chatSessionId);
+    fs.writeFileSync(csvPath, scrubLayer ? scrubLayer.scrubText(csvContent) : csvContent, 'utf-8');
 
     logger.info(LOG_CATEGORY, 'Client query CSV saved', { chatSessionId, csvPath, lineCount: rows.length });
 
@@ -1744,8 +1749,7 @@ ${sourceRepoPath ? `\n## Source Code\n${serviceName ? `**${serviceName}**` : 'Se
 
     const client = await this.getClient();
     const self = this;
-    const chatSession = this.chatSessions.get(chatSessionId);
-    const scrubLayer = chatSession ? ScrubLayer.load(chatSession.workspacePath) : ScrubLayer.createDefault();
+    const scrubLayer = this.scrubLayers.get(chatSessionId) ?? ScrubLayer.createDefault();
 
     const session = await client.createSession({
       model: 'gpt-5.3-codex',
