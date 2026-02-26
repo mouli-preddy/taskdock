@@ -1,6 +1,6 @@
-import { getIcon, GitPullRequest, LayoutGrid, Search, Terminal, Settings, Info, Activity, AlertTriangle } from '../utils/icons.js';
+import { getIcon, GitPullRequest, LayoutGrid, Search, Terminal, Settings, Info, Activity, AlertTriangle, FolderOpen } from '../utils/icons.js';
 
-export type SectionId = 'review' | 'workItems' | 'icm' | 'terminals' | 'settings' | 'about' | string;
+export type SectionId = 'review' | 'workItems' | 'icm' | 'terminals' | 'settings' | 'about' | 'workspaces' | string;
 
 export interface SectionDef {
   id: SectionId;
@@ -33,6 +33,11 @@ const SECTIONS: SectionDef[] = [
     id: 'icm',
     icon: getIcon(AlertTriangle, 20),
     label: 'ICM',
+  },
+  {
+    id: 'workspaces',
+    icon: getIcon(FolderOpen, 20),
+    label: 'Workspaces',
   },
   {
     id: 'terminals',

@@ -65,6 +65,7 @@ import type { LoadedPlugin, PluginToastEvent, PluginUIUpdateEvent } from '../sha
 import { initDeepLinkHandler } from './deep-link-handler.js';
 import { notificationService } from './services/notification-service.js';
 import { DGrepSearchView } from './components/dgrep-search-view.js';
+import { WorkspaceSection } from './components/workspace-section.js';
 import type { DGrepProgressEvent, DGrepCompleteEvent, DGrepErrorEvent } from '../shared/dgrep-types.js';
 
 // Tab type definitions
@@ -168,6 +169,7 @@ class PRReviewApp {
   private workItemQueryBuilder!: WorkItemQueryBuilder;
   private workItemDetailViews: Map<string, WorkItemDetailView> = new Map();
   private dgrepSearchView!: DGrepSearchView;
+  private workspaceSection!: WorkspaceSection;
 
   private activeSection: SectionId = 'review';
   private reviewTabs: ReviewTab[] = [];
@@ -382,6 +384,9 @@ class PRReviewApp {
     this.dgrepSearchView.onDeleteQuery(async (name) => {
       return window.electronAPI.dgrepDeleteQuery(name);
     });
+
+    // Initialize Workspace section
+    this.workspaceSection = new WorkspaceSection('workspacesPanel');
 
     // Initialize CFV home view
     this.cfvHomeView = new CfvHomeView('cfvHomePanel');
@@ -1354,6 +1359,7 @@ class PRReviewApp {
     document.getElementById('dgrepSectionContent')?.classList.toggle('hidden', section !== 'dgrep');
     document.getElementById('aboutSectionContent')?.classList.toggle('hidden', section !== 'about');
     document.getElementById('cfvSectionContent')?.classList.toggle('hidden', section !== 'cfv');
+    document.getElementById('workspacesSectionContent')?.classList.toggle('hidden', section !== 'workspaces');
 
     // Hide/show plugin sections
     const pluginContents = document.getElementById('pluginSectionContents');
