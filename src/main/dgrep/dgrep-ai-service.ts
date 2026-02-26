@@ -29,6 +29,7 @@ import {
 import { getDGrepService } from './dgrep-service.js';
 import { resolveMemoryKey, readMemories, addMemory } from './dgrep-memory-service.js';
 import { getLogger } from '../services/logger-service.js';
+import { ScrubLayer } from './scrub-layer.js';
 import type {
   DGrepAISummary,
   DGrepRootCauseAnalysis,
@@ -360,14 +361,14 @@ export class DGrepAIService extends EventEmitter {
             offset: z.number().optional().default(0).describe('Line number to start reading from (0-based)'),
             limit: z.number().optional().default(200).describe('Max number of lines to read'),
           },
-          async (args: { offset?: number; limit?: number }) => {
+          workspace.scrubLayer.wrapSdkToolHandler(async (args: { offset?: number; limit?: number }) => {
             try {
               const text = this.readFileLines(workspace.dataPath, args.offset, args.limit);
               return { content: [{ type: 'text' as const, text }] };
             } catch (err: any) {
               return { content: [{ type: 'text' as const, text: `Error: ${err?.message}` }], isError: true };
             }
-          }
+          })
         ),
         tool(
           'search_file',
@@ -376,14 +377,14 @@ export class DGrepAIService extends EventEmitter {
             pattern: z.string().describe('Regex pattern to search for'),
             max_results: z.number().optional().default(50).describe('Max matching lines to return'),
           },
-          async (args: { pattern: string; max_results?: number }) => {
+          workspace.scrubLayer.wrapSdkToolHandler(async (args: { pattern: string; max_results?: number }) => {
             try {
               const text = this.searchFileLines(workspace.dataPath, args.pattern, args.max_results);
               return { content: [{ type: 'text' as const, text }] };
             } catch (err: any) {
               return { content: [{ type: 'text' as const, text: `Error: ${err?.message}` }], isError: true };
             }
-          }
+          })
         ),
       ],
     });
@@ -448,13 +449,13 @@ export class DGrepAIService extends EventEmitter {
               limit: { type: 'number', description: 'Max lines to read', default: 200 },
             },
           },
-          handler: async (args: any) => {
+          handler: workspace.scrubLayer.wrapCopilotToolHandler(async (args: any) => {
             try {
               return this.readFileLines(workspace.dataPath, args.offset ?? 0, args.limit ?? 200);
             } catch (err: any) {
               return `Error: ${err?.message}`;
             }
-          },
+          }),
         },
         {
           name: 'search_file',
@@ -467,13 +468,13 @@ export class DGrepAIService extends EventEmitter {
             },
             required: ['pattern'],
           },
-          handler: async (args: any) => {
+          handler: workspace.scrubLayer.wrapCopilotToolHandler(async (args: any) => {
             try {
               return this.searchFileLines(workspace.dataPath, args.pattern, args.max_results ?? 50);
             } catch (err: any) {
               return `Error: ${err?.message}`;
             }
-          },
+          }),
         },
       ],
     });
@@ -1253,6 +1254,9 @@ Perform root cause analysis. Respond with ONLY a JSON object:
     ].join('\n');
 
     const self = this;
+    const copilotChatSession = this.chatSessions.get(chatSessionId);
+    const scrubLayer = copilotChatSession ? ScrubLayer.load(copilotChatSession.workspacePath) : ScrubLayer.createDefault();
+
     const session = await client.createSession({
       model: 'gpt-5.3-codex',
       streaming: true,
@@ -1275,7 +1279,7 @@ Both modes save filtered results to a CSV and return the path + line count.`,
             },
             required: ['kql'],
           },
-          handler: async (args: any) => {
+          handler: scrubLayer.wrapCopilotToolHandler(async (args: any) => {
             try {
               const result = await self.runChatClientQuery(chatSessionId, args.kql, args.silent ?? true);
               const mode = args.silent ? ' (silent — UI not updated)' : '';
@@ -1283,7 +1287,7 @@ Both modes save filtered results to a CSV and return the path + line count.`,
             } catch (err: any) {
               return `Client query failed: ${err?.message || String(err)}`;
             }
-          },
+          }),
         },
         {
           name: 'read_memory',
@@ -1294,13 +1298,13 @@ Both modes save filtered results to a CSV and return the path + line count.`,
               query: { type: 'string', description: 'Optional: a topic or question to help the subagent filter relevant memories' },
             },
           },
-          handler: async (_args: any) => {
+          handler: scrubLayer.wrapCopilotToolHandler(async (_args: any) => {
             const session = self.chatSessions.get(chatSessionId);
             if (!session) return 'No session found.';
             const memories = readMemories(session.memoryKey);
             if (memories.length === 0) return 'No memories saved yet for this service.';
             return `${memories.length} memories for "${session.memoryKey}":\n\n${memories.map((m: string, i: number) => `${i + 1}. ${m}`).join('\n')}`;
-          },
+          }),
         },
         {
           name: 'add_memory',
@@ -1312,13 +1316,13 @@ Both modes save filtered results to a CSV and return the path + line count.`,
             },
             required: ['memory'],
           },
-          handler: async (args: any) => {
+          handler: scrubLayer.wrapCopilotToolHandler(async (args: any) => {
             const session = self.chatSessions.get(chatSessionId);
             if (!session) return 'No session found.';
             const result = addMemory(session.memoryKey, args.memory);
             if (!result.added) return 'Memory already exists (duplicate). Total: ' + result.total;
             return `Memory saved. Total memories for "${session.memoryKey}": ${result.total}`;
-          },
+          }),
         },
       ],
     });
@@ -1333,6 +1337,9 @@ Both modes save filtered results to a CSV and return the path + line count.`,
 
   private createChatToolServer(chatSessionId: string): ReturnType<typeof createSdkMcpServer> {
     const self = this;
+    const chatSession = this.chatSessions.get(chatSessionId);
+    const scrubLayer = chatSession ? ScrubLayer.load(chatSession.workspacePath) : ScrubLayer.createDefault();
+
     return createSdkMcpServer({
       name: 'dgrep',
       version: '1.0.0',
@@ -1349,7 +1356,7 @@ Read kql-guidelines.md in the workspace before writing KQL queries.`,
             kql: z.string().describe('The KQL query to execute, e.g. "source | where Message contains \'error\'"'),
             silent: z.boolean().optional().default(true).describe('If true (default), run in background without updating the UI. Set to false to update the user\'s UI with the query results.'),
           },
-          async (args: { kql: string; silent?: boolean }) => {
+          scrubLayer.wrapSdkToolHandler(async (args: { kql: string; silent?: boolean }) => {
             try {
               const result = await self.runChatClientQuery(chatSessionId, args.kql, args.silent ?? true);
               const mode = args.silent ? ' (silent — UI not updated)' : '';
@@ -1368,7 +1375,7 @@ Read kql-guidelines.md in the workspace before writing KQL queries.`,
                 isError: true,
               };
             }
-          }
+          })
         ),
         tool(
           'read_memory',
@@ -1378,7 +1385,7 @@ IMPORTANT: Always call this via a subagent (Task tool) to filter the returned me
           {
             query: z.string().optional().describe('Optional: a topic or question to help the subagent filter relevant memories'),
           },
-          async (_args: { query?: string }) => {
+          scrubLayer.wrapSdkToolHandler(async (_args: { query?: string }) => {
             const session = self.chatSessions.get(chatSessionId);
             if (!session) return { content: [{ type: 'text' as const, text: 'No session found.' }], isError: true };
             const memories = readMemories(session.memoryKey);
@@ -1391,7 +1398,7 @@ IMPORTANT: Always call this via a subagent (Task tool) to filter the returned me
                 text: `${memories.length} memories for "${session.memoryKey}":\n\n${memories.map((m, i) => `${i + 1}. ${m}`).join('\n')}`,
               }],
             };
-          }
+          })
         ),
         tool(
           'add_memory',
@@ -1404,7 +1411,7 @@ IMPORTANT: Always call this via a subagent (Task tool) to filter the returned me
           {
             memory: z.string().describe('The learning/insight to save. Be specific and actionable.'),
           },
-          async (args: { memory: string }) => {
+          scrubLayer.wrapSdkToolHandler(async (args: { memory: string }) => {
             const session = self.chatSessions.get(chatSessionId);
             if (!session) return { content: [{ type: 'text' as const, text: 'No session found.' }], isError: true };
             const result = addMemory(session.memoryKey, args.memory);
@@ -1417,7 +1424,7 @@ IMPORTANT: Always call this via a subagent (Task tool) to filter the returned me
                 text: `Memory saved. Total memories for "${session.memoryKey}": ${result.total}`,
               }],
             };
-          }
+          })
         ),
       ],
     });
@@ -1704,6 +1711,8 @@ ${sourceRepoPath ? `\n## Source Code\n${serviceName ? `**${serviceName}**` : 'Se
 
     const client = await this.getClient();
     const self = this;
+    const chatSession = this.chatSessions.get(chatSessionId);
+    const scrubLayer = chatSession ? ScrubLayer.load(chatSession.workspacePath) : ScrubLayer.createDefault();
 
     const session = await client.createSession({
       model: 'gpt-5.3-codex',
@@ -1717,25 +1726,25 @@ ${sourceRepoPath ? `\n## Source Code\n${serviceName ? `**${serviceName}**` : 'Se
           name: 'read_memory',
           description: 'Read saved memories for this service.',
           parameters: { type: 'object', properties: {} },
-          handler: async () => {
+          handler: scrubLayer.wrapCopilotToolHandler(async () => {
             const cs = self.chatSessions.get(chatSessionId);
             if (!cs) return 'No session.';
             const memories = readMemories(cs.memoryKey);
             if (memories.length === 0) return 'No memories saved yet.';
             return memories.map((m: string, i: number) => `${i + 1}. ${m}`).join('\n');
-          },
+          }),
         },
         {
           name: 'add_memory',
           description: 'Save a learning about this service for future sessions.',
           parameters: { type: 'object', properties: { memory: { type: 'string' } }, required: ['memory'] },
-          handler: async (args: any) => {
+          handler: scrubLayer.wrapCopilotToolHandler(async (args: any) => {
             const cs = self.chatSessions.get(chatSessionId);
             if (!cs) return 'No session.';
             const result = addMemory(cs.memoryKey, args.memory);
             if (!result.added) return 'Duplicate. Total: ' + result.total;
             return `Saved. Total: ${result.total}`;
-          },
+          }),
         },
       ],
     });
