@@ -796,8 +796,12 @@ Perform root cause analysis. Respond with ONLY a JSON object:
       onPermissionRequest: async () => ({ kind: 'approved' as const }),
       hooks: {
         onPreToolUse: async (input: any) => {
-          console.log(`[onPreToolUse] tool=${input.toolName} argKeys=${Object.keys(input.toolArgs || {}).join(',')}`);
-          const summary = this.summarizeToolUse({ name: input.toolName, input: input.toolArgs });
+          // toolArgs may be a JSON string — parse if needed
+          let args = input.toolArgs;
+          if (typeof args === 'string') {
+            try { args = JSON.parse(args); } catch { args = {}; }
+          }
+          const summary = this.summarizeToolUse({ name: input.toolName, input: args });
           this.emit(`ai:${taskType}-progress`, { sessionId, text: summary });
           return { permissionDecision: 'allow' as const };
         },
