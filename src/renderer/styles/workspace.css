@@ -1,0 +1,232 @@
+/* Workspace Section */
+.workspace-section {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Workspace tab bar (top row - workspace names) */
+.workspace-tab-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  min-height: 36px;
+  overflow-x: auto;
+}
+
+.workspace-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 4px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+}
+
+.workspace-tab-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.workspace-tab-btn.active {
+  background: var(--bg-active);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+.workspace-tab-close {
+  display: none;
+  margin-left: 4px;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+.workspace-tab-btn:hover .workspace-tab-close {
+  display: inline;
+}
+
+.workspace-tab-close:hover {
+  opacity: 1;
+}
+
+.workspace-tab-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.workspace-tab-add:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Subtab bar (second row - mixed-type subtabs) */
+.workspace-subtab-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  min-height: 32px;
+  overflow-x: auto;
+}
+
+.workspace-subtab-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+}
+
+.workspace-subtab-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.workspace-subtab-btn.active {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
+.workspace-subtab-icon {
+  display: flex;
+  align-items: center;
+}
+
+.workspace-subtab-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.workspace-subtab-close {
+  display: none;
+  margin-left: 4px;
+  font-size: 13px;
+  line-height: 1;
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+.workspace-subtab-btn:hover .workspace-subtab-close {
+  display: inline;
+}
+
+.workspace-subtab-close:hover {
+  opacity: 1;
+}
+
+/* Content panels container */
+.workspace-panels-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.workspace-panel {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  display: none;
+}
+
+.workspace-panel.active {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Empty state */
+.workspace-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-tertiary);
+  gap: var(--space-2);
+}
+
+.workspace-empty svg {
+  width: 48px;
+  height: 48px;
+  opacity: 0.3;
+}
+
+/* Context menu */
+.workspace-context-menu {
+  position: fixed;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 4px 0;
+  min-width: 200px;
+  z-index: 10000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.workspace-context-menu-item {
+  padding: 6px 12px;
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.workspace-context-menu-item:hover {
+  background: var(--bg-hover);
+}
+
+.workspace-context-menu-separator {
+  height: 1px;
+  background: var(--border-color);
+  margin: 4px 0;
+}
+
+.workspace-context-menu-header {
+  padding: 4px 12px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+/* Rename input */
+.workspace-rename-input {
+  background: var(--bg-primary);
+  border: 1px solid var(--accent-blue);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 12px;
+  padding: 3px 8px;
+  outline: none;
+  width: 120px;
+}
