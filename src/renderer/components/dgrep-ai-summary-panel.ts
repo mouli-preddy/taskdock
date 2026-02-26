@@ -149,7 +149,7 @@ export class DGrepAISummaryPanel {
         <div class="dgrep-ai-summary-header-right">
           <select class="dgrep-ai-analysis-level">
             <option value="quick">Quick (3-5)</option>
-            <option value="standard" selected>Standard (5-10)</option>
+            <option value="standard">Standard (5-10)</option>
             <option value="detailed">Detailed (all)</option>
             <option value="custom">Custom...</option>
           </select>
@@ -191,6 +191,7 @@ export class DGrepAISummaryPanel {
 
     // Analysis level dropdown — store value immediately on change
     const levelSelect = this.el.querySelector('.dgrep-ai-analysis-level') as HTMLSelectElement;
+    if (levelSelect) levelSelect.value = this.selectedLevel; // set DOM property, no HTML attribute
     const customPromptEl = this.el.querySelector('.dgrep-ai-custom-prompt') as HTMLElement;
     levelSelect?.addEventListener('change', () => {
       this.selectedLevel = (levelSelect.value || 'standard') as 'quick' | 'standard' | 'detailed' | 'custom';

@@ -899,12 +899,14 @@ export class DGrepSearchView {
       this.aiSummaryPanel.summarize(cols, rows, patterns as any);
     };
     this.container.querySelector('#dgrepAISummarizeBtn')?.addEventListener('click', () => {
-      this.aiSummaryPanel.toggle();
-      if ((this.aiSummaryPanel as any).visible) {
-        triggerSummarize();
+      // Just show the panel — user clicks internal Summarize button after choosing level
+      if (!(this.aiSummaryPanel as any).visible) {
+        this.aiSummaryPanel.show();
+      } else {
+        this.aiSummaryPanel.toggle();
       }
     });
-    // Listen for re-summarize from the panel's internal Summarize button
+    // Listen for summarize from the panel's internal Summarize button
     this.container.addEventListener('request-summarize', () => {
       triggerSummarize();
     });
