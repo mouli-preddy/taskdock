@@ -276,13 +276,21 @@ export class DGrepResultsTable {
     this.renderToolbar();
   }
 
-  /** Called to show streaming progress text */
+  /** Called to show streaming progress text — accumulates deltas */
   showImproveDisplayProgress(text: string): void {
     if (!this.improveDisplayProgressEl) return;
     const existing = this.improveDisplayProgressEl.querySelector('.dgrep-improve-display-text');
     if (existing) {
-      const clean = text.replace(/\n/g, ' ').trim();
-      if (clean) existing.textContent = clean;
+      const isToolUse = text.startsWith('[');
+      if (isToolUse) {
+        // Tool use markers replace the current text
+        existing.textContent = text.replace(/\n/g, ' ').trim();
+      } else {
+        // Streaming deltas accumulate
+        const current = existing.textContent || '';
+        const clean = text.replace(/\n/g, ' ');
+        existing.textContent = (current + clean).slice(-200); // keep last 200 chars
+      }
     }
   }
 
