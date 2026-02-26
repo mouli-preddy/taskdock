@@ -181,6 +181,7 @@ export class DGrepAIService extends EventEmitter {
   private chatSessions = new Map<string, ChatSession>();
   private provider: 'claude-sdk' | 'copilot-sdk' = 'copilot-sdk';
   private sourceRepoPath: string | null = null;
+  private scrubLayers = new Map<string, ScrubLayer>();
 
   setProvider(provider: 'claude-sdk' | 'copilot-sdk'): void {
     this.provider = provider;
@@ -215,6 +216,7 @@ export class DGrepAIService extends EventEmitter {
     try {
       // 1. Create workspace, write CSV + patterns + metadata
       const workspace = createAnalysisWorkspace(sessionId, columns, rows, patterns, metadata);
+      this.scrubLayers.set(sessionId, workspace.scrubLayer);
 
       // 2. Build prompt
       const prompt = buildSummaryPrompt(workspace, this.sourceRepoPath ?? undefined);
@@ -255,6 +257,7 @@ export class DGrepAIService extends EventEmitter {
     try {
       // 1. Create workspace (reuse same session workspace if exists)
       const workspace = createAnalysisWorkspace(sessionId + '-rca', columns, contextRows, [], metadata);
+      this.scrubLayers.set(sessionId, workspace.scrubLayer);
 
       // 2. Build prompt
       const prompt = buildRCAPrompt(workspace, targetRow, targetIndex, this.sourceRepoPath ?? undefined);
@@ -292,6 +295,7 @@ export class DGrepAIService extends EventEmitter {
 
     try {
       const workspace = createAnalysisWorkspace(sessionId + '-display', columns, rows, [], metadata);
+      this.scrubLayers.set(sessionId, workspace.scrubLayer);
       const outputPath = path.join(workspace.basePath, 'improve-display-output.json');
 
       if (this.provider === 'claude-sdk') {
@@ -405,7 +409,8 @@ export class DGrepAIService extends EventEmitter {
       if (message.type === 'assistant') {
         const text = this.extractTextContent(message);
         if (text) {
-          this.emit('ai:improve-display-progress', { sessionId, text });
+          const scrubLayer = this.scrubLayers.get(sessionId);
+          this.emit('ai:improve-display-progress', { sessionId, text: scrubLayer ? scrubLayer.unscrubText(text) : text });
         }
         const toolUses = this.extractToolUses(message);
         for (const t of toolUses) {
@@ -487,7 +492,10 @@ export class DGrepAIService extends EventEmitter {
           case 'assistant.message_delta': {
             const delta = event.data?.deltaContent || '';
             fullContent += delta;
-            if (delta) this.emit('ai:improve-display-progress', { sessionId, text: delta });
+            if (delta) {
+              const scrubLayer = this.scrubLayers.get(sessionId);
+              this.emit('ai:improve-display-progress', { sessionId, text: scrubLayer ? scrubLayer.unscrubText(delta) : delta });
+            }
             break;
           }
           case 'assistant.message': {
@@ -587,7 +595,13 @@ export class DGrepAIService extends EventEmitter {
       }
 
       result.formattedLookup = formattedLookup;
-      this.emit('ai:improve-display-complete', { sessionId, result });
+      const scrubLayer = this.scrubLayers.get(sessionId);
+      const finalResult = scrubLayer ? JSON.parse(scrubLayer.unscrubText(JSON.stringify(result))) : result;
+      this.emit('ai:improve-display-complete', { sessionId, result: finalResult });
+
+      // Clean up scrub layer for one-shot tasks
+      this.scrubLayers.delete(sessionId);
+
       logger.info(LOG_CATEGORY, 'Improve display complete', {
         sessionId,
         formattedColumns: Object.keys(formattedLookup).length,
@@ -728,12 +742,13 @@ Perform root cause analysis. Respond with ONLY a JSON object:
 
     for await (const message of response) {
       if (message.type === 'assistant') {
-        // Stream assistant text as progress
+        // Stream assistant text as progress (unscrub tokens back to original values)
         const text = this.extractTextContent(message);
         if (text) {
-          this.emit(`ai:${taskType}-progress`, { sessionId, text });
+          const scrubLayer = this.scrubLayers.get(sessionId);
+          this.emit(`ai:${taskType}-progress`, { sessionId, text: scrubLayer ? scrubLayer.unscrubText(text) : text });
         }
-        // Stream tool use with a short summary of what it's doing
+        // Tool uses don't need unscrubbing (they're metadata summaries)
         const toolUses = this.extractToolUses(message);
         for (const tool of toolUses) {
           const summary = this.summarizeToolUse(tool);
@@ -783,7 +798,10 @@ Perform root cause analysis. Respond with ONLY a JSON object:
           case 'assistant.message_delta': {
             const delta = event.data?.deltaContent || '';
             fullContent += delta;
-            if (delta) this.emit(`ai:${taskType}-progress`, { sessionId, text: delta });
+            if (delta) {
+              const scrubLayer = this.scrubLayers.get(sessionId);
+              this.emit(`ai:${taskType}-progress`, { sessionId, text: scrubLayer ? scrubLayer.unscrubText(delta) : delta });
+            }
             break;
           }
           case 'assistant.message': {
@@ -846,12 +864,17 @@ Perform root cause analysis. Respond with ONLY a JSON object:
 
       const raw = fs.readFileSync(outputPath, 'utf-8');
       const output = JSON.parse(raw);
+      const scrubLayer = this.scrubLayers.get(sessionId);
+      const unscrubbed = scrubLayer ? JSON.parse(scrubLayer.unscrubText(JSON.stringify(output))) : output;
 
       if (taskType === 'summary') {
-        this.emit('ai:summary-complete', { sessionId, summary: output, raw });
+        this.emit('ai:summary-complete', { sessionId, summary: unscrubbed, raw });
       } else {
-        this.emit('ai:rca-complete', { sessionId, analysis: output, raw });
+        this.emit('ai:rca-complete', { sessionId, analysis: unscrubbed, raw });
       }
+
+      // Clean up scrub layer for one-shot tasks
+      this.scrubLayers.delete(sessionId);
 
       logger.info(LOG_CATEGORY, `${taskType} complete`, { sessionId });
     } catch (err: any) {
@@ -1059,6 +1082,7 @@ Perform root cause analysis. Respond with ONLY a JSON object:
       clientQuery: queryContext?.clientQuery,
     };
     const workspace = createAnalysisWorkspace(workspaceId, columns, rows, [], metadata);
+    this.scrubLayers.set(chatSessionId, workspace.scrubLayer);
     const ws = workspace.basePath.replace(/\\/g, '/');
 
     // Write chatSessionId into metadata so tools can read it
@@ -1208,8 +1232,10 @@ Perform root cause analysis. Respond with ONLY a JSON object:
           if (!session || session.closed) break;
 
           if (message.type === 'assistant') {
-            const text = this.extractTextContent(message);
-            if (text) {
+            const rawText = this.extractTextContent(message);
+            if (rawText) {
+              const scrubLayer = this.scrubLayers.get(chatSessionId);
+              const text = scrubLayer ? scrubLayer.unscrubText(rawText) : rawText;
               const msgId = session.currentMessageId;
               const currentMsg = session.messages.find(m => m.id === msgId);
               if (currentMsg) currentMsg.content += text;
@@ -1533,6 +1559,13 @@ You have \`read_memory\` and \`add_memory\` tools to persist learnings across se
     const chatSession = this.chatSessions.get(chatSessionId);
     if (!chatSession) return;
 
+    // Save scrub layer before cleanup
+    const scrubLayer = this.scrubLayers.get(chatSessionId);
+    if (scrubLayer) {
+      scrubLayer.save(chatSession.workspacePath);
+      this.scrubLayers.delete(chatSessionId);
+    }
+
     chatSession.closed = true;
     chatSession.messageReady?.(); // unblock generator if waiting
 
@@ -1785,7 +1818,9 @@ ${sourceRepoPath ? `\n## Source Code\n${serviceName ? `**${serviceName}**` : 'Se
 
     switch (event.type) {
       case 'assistant.message_delta': {
-        const delta = event.data?.deltaContent || '';
+        const rawDelta = event.data?.deltaContent || '';
+        const scrubLayer = this.scrubLayers.get(chatSessionId);
+        const delta = scrubLayer ? scrubLayer.unscrubText(rawDelta) : rawDelta;
         if (currentMsg) {
           currentMsg.content += delta;
         }
@@ -1799,7 +1834,9 @@ ${sourceRepoPath ? `\n## Source Code\n${serviceName ? `**${serviceName}**` : 'Se
       }
 
       case 'assistant.message': {
-        const fullContent = event.data?.content || '';
+        const rawContent = event.data?.content || '';
+        const scrubLayer = this.scrubLayers.get(chatSessionId);
+        const fullContent = scrubLayer ? scrubLayer.unscrubText(rawContent) : rawContent;
         if (currentMsg) {
           currentMsg.content = fullContent;
         }
