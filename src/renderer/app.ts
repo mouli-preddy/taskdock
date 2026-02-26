@@ -5248,6 +5248,16 @@ After this, respond with a simple text response to greet the user and ask them w
         }
       });
     });
+
+    // Context menu for Move to Workspace
+    tabBar.querySelectorAll('.cfv-tab-btn').forEach(btn => {
+      const tabId = (btn as HTMLElement).dataset.tabId!;
+      if (tabId === 'home') return;
+      btn.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        this.showMoveToWorkspaceMenu(e as MouseEvent, 'cfv', tabId);
+      });
+    });
   }
 
   private hideCfvTabs() {
@@ -5895,6 +5905,126 @@ After this, respond with a simple text response to greet the user and ask them w
 
     const tabBar = container.querySelector('.icm-tab-bar');
     tabBar?.remove();
+  }
+
+  // =========================================================================
+  // Workspace Move-to Methods
+  // =========================================================================
+
+  private moveToWorkspaceMenuEl: HTMLElement | null = null;
+
+  private showMoveToWorkspaceMenu(e: MouseEvent, sectionType: 'cfv' | 'dgrep' | 'icm', tabId: string): void {
+    this.closeMoveToWorkspaceMenu();
+
+    const workspaces = this.workspaceSection.getWorkspaceList();
+    const menu = document.createElement('div');
+    menu.className = 'workspace-context-menu';
+    menu.style.left = `${e.clientX}px`;
+    menu.style.top = `${e.clientY}px`;
+
+    menu.innerHTML = `
+      <div class="workspace-context-menu-header">Move to Workspace</div>
+      <div class="workspace-context-menu-item" data-action="new">New Workspace...</div>
+      ${workspaces.length > 0 ? '<div class="workspace-context-menu-separator"></div>' : ''}
+      ${workspaces.map(ws =>
+        `<div class="workspace-context-menu-item" data-action="existing" data-ws-id="${ws.id}">${this.escapeHtmlForMenu(ws.name)}</div>`
+      ).join('')}
+    `;
+
+    menu.querySelectorAll('.workspace-context-menu-item').forEach(item => {
+      item.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const action = (item as HTMLElement).dataset.action;
+        if (action === 'new') {
+          this.moveTabToNewWorkspace(sectionType, tabId);
+        } else if (action === 'existing') {
+          const wsId = (item as HTMLElement).dataset.wsId!;
+          this.moveTabToWorkspace(sectionType, tabId, wsId);
+        }
+        this.closeMoveToWorkspaceMenu();
+      });
+    });
+
+    document.body.appendChild(menu);
+    this.moveToWorkspaceMenuEl = menu;
+
+    // Adjust if off-screen
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) menu.style.left = `${e.clientX - rect.width}px`;
+    if (rect.bottom > window.innerHeight) menu.style.top = `${e.clientY - rect.height}px`;
+
+    // Close on click outside
+    const closeHandler = () => {
+      this.closeMoveToWorkspaceMenu();
+      document.removeEventListener('click', closeHandler);
+    };
+    setTimeout(() => document.addEventListener('click', closeHandler), 0);
+  }
+
+  private closeMoveToWorkspaceMenu(): void {
+    if (this.moveToWorkspaceMenuEl) {
+      this.moveToWorkspaceMenuEl.remove();
+      this.moveToWorkspaceMenuEl = null;
+    }
+  }
+
+  private escapeHtmlForMenu(text: string): string {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  private moveTabToNewWorkspace(sectionType: 'cfv' | 'dgrep' | 'icm', tabId: string): void {
+    const { label, state } = this.extractTabState(sectionType, tabId);
+    this.workspaceSection.createWorkspaceWithSubtab(label, sectionType, label, state);
+    this.closeTabInOriginalSection(sectionType, tabId);
+  }
+
+  private moveTabToWorkspace(sectionType: 'cfv' | 'dgrep' | 'icm', tabId: string, workspaceId: string): void {
+    const { label, state } = this.extractTabState(sectionType, tabId);
+    this.workspaceSection.addSubtabToWorkspace(workspaceId, sectionType, label, state);
+    this.closeTabInOriginalSection(sectionType, tabId);
+  }
+
+  private extractTabState(sectionType: 'cfv' | 'dgrep' | 'icm', tabId: string): { label: string; state: any } {
+    switch (sectionType) {
+      case 'cfv': {
+        const tab = this.cfvTabs.find(t => t.id === tabId);
+        return {
+          label: tab?.label || tabId,
+          state: { callId: tab?.callId || tabId.replace('cfv-', '') },
+        };
+      }
+      case 'icm': {
+        const tab = this.icmTabs.find(t => t.id === tabId);
+        return {
+          label: tab?.label || tabId,
+          state: { incidentId: tab?.incidentId || parseInt(tabId.replace('icm-', ''), 10) },
+        };
+      }
+      case 'dgrep': {
+        return {
+          label: 'Log Search',
+          state: { searchQuery: '', timeRange: { start: '', end: '' } },
+        };
+      }
+      default:
+        return { label: tabId, state: {} };
+    }
+  }
+
+  private closeTabInOriginalSection(sectionType: 'cfv' | 'dgrep' | 'icm', tabId: string): void {
+    switch (sectionType) {
+      case 'cfv':
+        this.closeCfvTab(tabId);
+        break;
+      case 'icm':
+        this.closeIcmTab(tabId);
+        break;
+      case 'dgrep':
+        // DGrep is a singleton view - don't close
+        break;
+    }
   }
 }
 
