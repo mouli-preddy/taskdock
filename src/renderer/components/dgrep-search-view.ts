@@ -892,14 +892,21 @@ export class DGrepSearchView {
     };
 
     // Wire AI buttons in actions bar
+    const triggerSummarize = () => {
+      const rows = this.resultsTable.getFilteredRows();
+      const cols = this.resultsTable.getColumns();
+      const patterns = this.resultsTable.getPatterns();
+      this.aiSummaryPanel.summarize(cols, rows, patterns as any);
+    };
     this.container.querySelector('#dgrepAISummarizeBtn')?.addEventListener('click', () => {
       this.aiSummaryPanel.toggle();
       if ((this.aiSummaryPanel as any).visible) {
-        const rows = this.resultsTable.getFilteredRows();
-        const cols = this.resultsTable.getColumns();
-        const patterns = this.resultsTable.getPatterns();
-        this.aiSummaryPanel.summarize(cols, rows, patterns as any);
+        triggerSummarize();
       }
+    });
+    // Listen for re-summarize from the panel's internal Summarize button
+    this.container.addEventListener('request-summarize', () => {
+      triggerSummarize();
     });
     this.container.querySelector('#dgrepAIChatBtn')?.addEventListener('click', () => {
       this.chatPanel.toggle();
