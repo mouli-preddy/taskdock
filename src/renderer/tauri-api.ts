@@ -510,6 +510,16 @@ export const tauriAPI = {
     return invoke('set_services', { services });
   },
 
+  // Scrub Patterns
+  getScrubPatterns: async () => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke('get_scrub_patterns');
+  },
+  setScrubPatterns: async (patterns: any) => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke('set_scrub_patterns', { patterns });
+  },
+
   // Apply Changes API
   applyChangesInitialize: (prId: number, contextDir: string, worktreePath: string, prTitle: string, prMetadata: any, hasLinkedRepo: boolean) =>
     invoke('apply-changes:initialize', prId, contextDir, worktreePath, prTitle, prMetadata, hasLinkedRepo),

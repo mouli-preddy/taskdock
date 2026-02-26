@@ -379,6 +379,22 @@ export interface ElectronAPI {
     linkedServiceIds: string[];
   }[]) => Promise<void>;
 
+  // Scrub Patterns
+  getScrubPatterns: () => Promise<{
+    name: string;
+    letter: string;
+    regex: string;
+    enabled: boolean;
+    isDefault: boolean;
+  }[]>;
+  setScrubPatterns: (patterns: {
+    name: string;
+    letter: string;
+    regex: string;
+    enabled: boolean;
+    isDefault: boolean;
+  }[]) => Promise<void>;
+
   // PR file cache API
   ensurePRContext: (
     prContext: any,
