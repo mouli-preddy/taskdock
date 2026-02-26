@@ -147,11 +147,12 @@ export class ScrubLayer {
     }
   }
 
-  /** Load token map from a workspace directory. Returns new ScrubLayer with defaults if file missing. */
-  static load(workspacePath: string): ScrubLayer {
+  /** Load token map from a workspace directory. Uses settings for initialization if provided, otherwise GUID default. */
+  static load(workspacePath: string, settings?: Array<{ name: string; letter: string; regex: string; enabled: boolean }>): ScrubLayer {
     const layer = new ScrubLayer();
     const filePath = path.join(workspacePath, TOKEN_MAP_FILENAME);
     if (!fs.existsSync(filePath)) {
+      if (settings) return ScrubLayer.fromSettings(settings);
       layer.addPattern('GUID', 'g', /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
       return layer;
     }
@@ -184,6 +185,25 @@ export class ScrubLayer {
   static createDefault(): ScrubLayer {
     const layer = new ScrubLayer();
     layer.addPattern('GUID', 'g', /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
+    return layer;
+  }
+
+  /** Create a ScrubLayer from user-configured pattern settings. Only adds enabled patterns. */
+  static fromSettings(patterns: Array<{ name: string; letter: string; regex: string; enabled: boolean }>): ScrubLayer {
+    const layer = new ScrubLayer();
+    for (const p of patterns) {
+      if (p.enabled) {
+        try {
+          layer.addPattern(p.name, p.letter, new RegExp(p.regex));
+        } catch {
+          // Skip invalid patterns (bad regex or duplicate letter)
+        }
+      }
+    }
+    // Fallback: if no patterns were added (all disabled or all invalid), add GUID default
+    if (layer.patterns.length === 0) {
+      layer.addPattern('GUID', 'g', /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
+    }
     return layer;
   }
 }
