@@ -208,6 +208,15 @@ export class WorkspaceSection {
     this.addSubtab(ws.id, type, label, state);
   }
 
+  /** Returns all workspace-hosted DGrep views (for event routing). */
+  public getDgrepViews(): DGrepSearchView[] {
+    const views: DGrepSearchView[] = [];
+    for (const view of this.viewInstances.values()) {
+      if (view instanceof DGrepSearchView) views.push(view);
+    }
+    return views;
+  }
+
   // ── Workspace Tab Bar Rendering ──
 
   private renderWorkspaceTabs(): void {

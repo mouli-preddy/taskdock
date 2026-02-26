@@ -1192,46 +1192,55 @@ class PRReviewApp {
   }
 
   private initDgrepListeners(): void {
+    // Helper: broadcast an event to the main DGrep view AND any workspace-hosted DGrep views.
+    // Each view filters by sessionId internally, so only the correct view processes the event.
+    const forAllDgrep = (fn: (view: DGrepSearchView) => void) => {
+      fn(this.dgrepSearchView);
+      if (this.workspaceSection) {
+        for (const view of this.workspaceSection.getDgrepViews()) fn(view);
+      }
+    };
+
     window.electronAPI.onDgrepProgress((event: DGrepProgressEvent) => {
-      this.dgrepSearchView.setSearchProgress(event);
+      forAllDgrep(v => v.setSearchProgress(event));
     });
 
     window.electronAPI.onDgrepComplete((event: DGrepCompleteEvent) => {
-      this.dgrepSearchView.setSearchComplete(event);
+      forAllDgrep(v => v.setSearchComplete(event));
     });
 
     window.electronAPI.onDgrepError((event: DGrepErrorEvent) => {
-      this.dgrepSearchView.setSearchError(event);
+      forAllDgrep(v => v.setSearchError(event));
     });
 
     window.electronAPI.onDgrepIntermediateResults((event: { sessionId: string; columns: string[]; rows: Record<string, any>[]; totalCount: number }) => {
-      this.dgrepSearchView.setIntermediateResults(event);
+      forAllDgrep(v => v.setIntermediateResults(event));
     });
 
     // DGrep AI event listeners
     window.electronAPI.onDgrepAISummaryProgress((event: any) => {
-      this.dgrepSearchView.handleAISummaryProgress(event);
+      forAllDgrep(v => v.handleAISummaryProgress(event));
     });
     window.electronAPI.onDgrepAISummaryComplete((event: any) => {
-      this.dgrepSearchView.handleAISummaryComplete(event);
+      forAllDgrep(v => v.handleAISummaryComplete(event));
     });
     window.electronAPI.onDgrepAIRCAProgress((event: any) => {
-      this.dgrepSearchView.handleAIRCAProgress(event);
+      forAllDgrep(v => v.handleAIRCAProgress(event));
     });
     window.electronAPI.onDgrepAIRCAComplete((event: any) => {
-      this.dgrepSearchView.handleAIRCAComplete(event);
+      forAllDgrep(v => v.handleAIRCAComplete(event));
     });
     window.electronAPI.onDgrepAIChatEvent((event: any) => {
-      this.dgrepSearchView.handleAIChatEvent(event);
+      forAllDgrep(v => v.handleAIChatEvent(event));
     });
     window.electronAPI.onDgrepAIClientQueryUpdate((event: any) => {
-      this.dgrepSearchView.handleAIClientQueryUpdate(event);
+      forAllDgrep(v => v.handleAIClientQueryUpdate(event));
     });
     window.electronAPI.onDgrepAIImproveDisplayProgress((event: any) => {
-      this.dgrepSearchView.handleAIImproveDisplayProgress(event);
+      forAllDgrep(v => v.handleAIImproveDisplayProgress(event));
     });
     window.electronAPI.onDgrepAIImproveDisplayComplete((event: any) => {
-      this.dgrepSearchView.handleAIImproveDisplayComplete(event);
+      forAllDgrep(v => v.handleAIImproveDisplayComplete(event));
     });
   }
 
