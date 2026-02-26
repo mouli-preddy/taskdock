@@ -8,6 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { getQueryToolSource } from './dgrep-query-tool.js';
+import { ScrubLayer } from './scrub-layer.js';
 import { encode as toonEncode, decode as toonDecode } from '@toon-format/toon';
 
 const TASKDOCK_DIR = path.join(os.homedir(), '.taskdock');
@@ -22,6 +23,7 @@ export interface AnalysisWorkspace {
   summaryOutputPath: string;
   rcaOutputPath: string;
   promptPath: string;
+  scrubLayer: ScrubLayer;
 }
 
 export interface AnalysisMetadata {
@@ -57,7 +59,11 @@ export function createAnalysisWorkspace(
   const csvRows = rows.map((row, i) =>
     [String(i), ...columns.map(c => csvEscape(String(row[c] ?? '')))].join(',')
   );
-  fs.writeFileSync(dataPath, [header, ...csvRows].join('\n'), 'utf-8');
+  const csvContent = [header, ...csvRows].join('\n');
+
+  // Scrub sensitive values before writing to disk
+  const scrubLayer = ScrubLayer.createDefault();
+  fs.writeFileSync(dataPath, scrubLayer.scrubText(csvContent), 'utf-8');
 
   // Write query tool
   const queryToolPath = path.join(basePath, 'query-logs.mjs');
@@ -80,6 +86,7 @@ export function createAnalysisWorkspace(
     summaryOutputPath: path.join(basePath, 'summary-output.json'),
     rcaOutputPath: path.join(basePath, 'rca-output.json'),
     promptPath: path.join(basePath, 'prompt.md'),
+    scrubLayer,
   };
 }
 
@@ -366,6 +373,11 @@ source | where Duration > threshold
 - \`dcount\` is always 100% accurate (no Accuracy argument)
 - \`any()\` supports only one argument
 `;
+}
+
+/** Load a ScrubLayer for an existing workspace. */
+export function loadScrubLayer(basePath: string): ScrubLayer {
+  return ScrubLayer.load(basePath);
 }
 
 function csvEscape(value: string): string {
