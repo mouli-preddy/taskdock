@@ -22,6 +22,11 @@ const HIDDEN_EXACT = new Set([
   'TIMESTAMP',
 ]);
 
+function isHttpUrlOrResponseColumn(col: string): boolean {
+  const normalized = col.toLowerCase();
+  return normalized.includes('http') && (normalized.includes('url') || normalized.includes('response'));
+}
+
 function shouldHideByDefault(col: string): boolean {
   if (HIDDEN_EXACT.has(col)) return true;
   for (const prefix of HIDDEN_PREFIXES) {
@@ -438,7 +443,9 @@ export class DGrepResultsTable {
   /** Set visible columns from a saved list of names */
   setVisibleColumnNames(names: string[]): void {
     const nameSet = new Set(names);
-    this.visibleColumns = new Set(this.columns.filter(c => nameSet.has(c)));
+    this.visibleColumns = new Set(
+      this.columns.filter(c => nameSet.has(c) || isHttpUrlOrResponseColumn(c))
+    );
     this.updateScroller();
     this.renderToolbar();
   }
@@ -1390,6 +1397,11 @@ export class DGrepResultsTable {
               c.toLowerCase() === e.toLowerCase()
             ))
           );
+          for (const col of this.columns) {
+            if (isHttpUrlOrResponseColumn(col)) {
+              this.visibleColumns.add(col);
+            }
+          }
           for (const col of this.columns) {
             if (col === 'PreciseTimeStamp' || col === 'Message') {
               this.visibleColumns.add(col);
