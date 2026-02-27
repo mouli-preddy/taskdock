@@ -435,6 +435,8 @@ class PRReviewApp {
       view.onDeleteQuery(async (name) => {
         return window.electronAPI.dgrepDeleteQuery(name);
       });
+      // Check token status now that callbacks are wired
+      view.checkTokenStatus();
     };
 
     this.workspaceSection.onWireIcmView = (view: IcmIncidentDetailView) => {

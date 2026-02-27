@@ -1,4 +1,5 @@
 import type { IcmIncident, IcmDiscussionEntry, IcmCustomField } from '../../shared/icm-types.js';
+import type { WorkspaceContext } from '../../shared/workspace-types.js';
 import { ICM_SEVERITY_COLORS, ICM_STATE_COLORS } from '../../shared/icm-types.js';
 import { escapeHtml, formatTimeAgo } from '../utils/html-utils.js';
 import { getIcon, ExternalLink, RefreshCw, Check, AlertTriangle, Clock, MessageSquare, Send } from '../utils/icons.js';
@@ -16,6 +17,8 @@ export class IcmIncidentDetailView {
   private onIncidentUpdatedCallback: ((incident: IcmIncident) => void) | null = null;
   private onActionCallback: ((action: string, incidentId: number) => Promise<void>) | null = null;
   private onAddDiscussionCallback: ((incidentId: number, text: string) => Promise<void>) | null = null;
+
+  workspaceContext: WorkspaceContext | null = null;
 
   constructor(container: HTMLElement) {
     this.container = container;

@@ -2390,3 +2390,45 @@
   border-radius: 50%;
   flex-shrink: 0;
 }
+
+/* --------------------------------------------------------------------------
+   Logs Dropdown
+   -------------------------------------------------------------------------- */
+.cfv-logs-dropdown-container {
+  position: relative;
+}
+
+.cfv-logs-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 100;
+  min-width: 220px;
+  max-height: 400px;
+  overflow-y: auto;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.cfv-logs-dropdown.open {
+  display: flex;
+  flex-direction: column;
+}
+
+.cfv-logs-dropdown-item {
+  padding: 6px 12px;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cfv-logs-dropdown-item:hover {
+  background: var(--bg-hover);
+}

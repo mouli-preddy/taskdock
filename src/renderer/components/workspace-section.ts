@@ -1,5 +1,5 @@
 import { getIcon, FolderOpen, Activity, Search, AlertTriangle, Plus, Edit, Trash2 } from '../utils/icons.js';
-import type { Workspace, WorkspaceSubtab, WorkspacesData, WorkspaceSubtabType, WorkspaceSubtabState, CfvSubtabState, IcmSubtabState } from '../../shared/workspace-types.js';
+import type { Workspace, WorkspaceSubtab, WorkspacesData, WorkspaceSubtabType, WorkspaceSubtabState, CfvSubtabState, IcmSubtabState, WorkspaceContext, DgrepSubtabState } from '../../shared/workspace-types.js';
 import { CfvCallView } from './cfv/cfv-call-view.js';
 import { DGrepSearchView } from './dgrep-search-view.js';
 import { IcmIncidentDetailView } from './icm-incident-detail-view.js';
@@ -369,6 +369,12 @@ export class WorkspaceSection {
   }
 
   private createViewForSubtab(subtab: WorkspaceSubtab, panel: HTMLElement): void {
+    const ws = this.getActiveWorkspace();
+    const ctx: WorkspaceContext | null = ws ? {
+      workspaceId: ws.id,
+      addSubtab: (type, label, state) => this.addSubtab(ws.id, type, label, state),
+    } : null;
+
     switch (subtab.type) {
       case 'cfv': {
         const state = subtab.state as CfvSubtabState;
@@ -376,13 +382,19 @@ export class WorkspaceSection {
           this.renderCfvIdInput(subtab, panel);
         } else {
           const view = new CfvCallView(panel, state.callId);
+          view.workspaceContext = ctx;
           this.viewInstances.set(subtab.id, view);
         }
         break;
       }
       case 'dgrep': {
+        const state = subtab.state as DgrepSubtabState;
         const view = new DGrepSearchView(panel.id);
+        view.workspaceContext = ctx;
         this.onWireDgrepView?.(view);
+        if (state.formState) {
+          view.loadFormState(state.formState);
+        }
         this.viewInstances.set(subtab.id, view);
         break;
       }
@@ -392,6 +404,7 @@ export class WorkspaceSection {
           this.renderIcmIdInput(subtab, panel);
         } else {
           const view = new IcmIncidentDetailView(panel);
+          view.workspaceContext = ctx;
           this.onWireIcmView?.(view);
           view.setLoading(true);
           this.loadIcmIncidentIntoView(state.incidentId, view);

@@ -1,3 +1,5 @@
+import type { DGrepFormState } from './dgrep-ui-types.js';
+
 export type WorkspaceSubtabType = 'cfv' | 'dgrep' | 'icm' | 'new';
 
 export interface CfvSubtabState {
@@ -7,6 +9,7 @@ export interface CfvSubtabState {
 export interface DgrepSubtabState {
   searchQuery: string;
   timeRange: { start: string; end: string };
+  formState?: DGrepFormState;
 }
 
 export interface IcmSubtabState {
@@ -16,6 +19,11 @@ export interface IcmSubtabState {
 export interface NewSubtabState {}
 
 export type WorkspaceSubtabState = CfvSubtabState | DgrepSubtabState | IcmSubtabState | NewSubtabState;
+
+export interface WorkspaceContext {
+  workspaceId: string;
+  addSubtab: (type: WorkspaceSubtabType, label: string, state: WorkspaceSubtabState) => void;
+}
 
 export interface WorkspaceSubtab {
   id: string;

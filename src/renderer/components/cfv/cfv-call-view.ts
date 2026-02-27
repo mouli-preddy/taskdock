@@ -1,7 +1,10 @@
 import type { CallFlowData, CallDetailsData, CallFlowMessage } from '../../../main/cfv/cfv-types.js';
 import type { CfvChatAction } from '../../../shared/cfv-types.js';
+import type { DGrepFormState } from '../../../shared/dgrep-ui-types.js';
+import type { WorkspaceContext } from '../../../shared/workspace-types.js';
+import { extractLogComponents, cfvLogComponentToFormState } from '../../../shared/cfv-log-links.js';
 import { escapeHtml } from '../../utils/html-utils.js';
-import { getIcon, MessageSquare } from '../../utils/icons.js';
+import { getIcon, MessageSquare, FileText } from '../../utils/icons.js';
 import { CfvCallFlowPanel } from './cfv-callflow-panel.js';
 import { CfvDrillDownPanel } from './cfv-drilldown-panel.js';
 import { CfvRawEventsPanel } from './cfv-raw-events-panel.js';
@@ -27,6 +30,9 @@ export class CfvCallView {
   private callDetailsData: CallDetailsData | null = null;
   private rawFilesData: Record<string, unknown> = {};
 
+  workspaceContext: WorkspaceContext | null = null;
+  private logComponents: Array<{ name: string; formState: DGrepFormState }> = [];
+
   constructor(container: HTMLElement, callId: string) {
     this.container = container;
     this.callId = callId;
@@ -47,6 +53,12 @@ export class CfvCallView {
               <button class="cfv-subtab-btn" data-subtab="drilldown">Drill Down</button>
               <button class="cfv-subtab-btn" data-subtab="rawevents">Raw Events</button>
               <button class="cfv-subtab-btn" data-subtab="qoe">QoE</button>
+            </div>
+            <div class="cfv-logs-dropdown-container">
+              <button class="cfv-subtab-btn" id="cfvLogsBtn" title="Open service logs" disabled>
+                ${getIcon(FileText, 14)} Logs
+              </button>
+              <div class="cfv-logs-dropdown" id="cfvLogsDropdown"></div>
             </div>
             <div class="spacer"></div>
             <button class="cfv-subtab-btn" id="cfvChatToggle" title="AI Chat">
@@ -116,6 +128,18 @@ export class CfvCallView {
 
       this.rawFilesData = rawFilesData;
       this.loading = false;
+
+      // Extract log components and convert to DGrepFormState
+      if (this.callFlowData) {
+        const raw = extractLogComponents(this.callFlowData as Record<string, unknown>);
+        this.logComponents = raw
+          .map(lc => {
+            const formState = cfvLogComponentToFormState(lc);
+            return formState ? { name: lc.name, formState } : null;
+          })
+          .filter((x): x is { name: string; formState: DGrepFormState } => x !== null);
+        this.renderLogsDropdown();
+      }
 
       // Hide loading, show active tab
       const loadingPanel = this.container.querySelector('#cfvSubLoading') as HTMLElement;
@@ -289,6 +313,51 @@ export class CfvCallView {
         const messages = (this.callFlowData?.nrtStreamingIndexAugmentedCall?.fullCallFlow?.messages ?? []) as CallFlowMessage[];
         this.callFlowPanel.setData(messages, this.callId);
       }
+    }
+  }
+
+  private renderLogsDropdown(): void {
+    const btn = this.container.querySelector('#cfvLogsBtn') as HTMLButtonElement;
+    const dropdown = this.container.querySelector('#cfvLogsDropdown') as HTMLElement;
+    if (!btn || !dropdown) return;
+
+    if (this.logComponents.length === 0) {
+      btn.disabled = true;
+      return;
+    }
+
+    btn.disabled = false;
+    dropdown.innerHTML = this.logComponents.map((lc, i) =>
+      `<button class="cfv-logs-dropdown-item" data-log-index="${i}">${escapeHtml(lc.name)}</button>`
+    ).join('');
+
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dropdown.classList.toggle('open');
+    });
+
+    document.addEventListener('click', () => {
+      dropdown.classList.remove('open');
+    });
+
+    dropdown.querySelectorAll('.cfv-logs-dropdown-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = parseInt((item as HTMLElement).dataset.logIndex || '0', 10);
+        const lc = this.logComponents[idx];
+        if (lc) this.openLogSearch(lc.name, lc.formState);
+        dropdown.classList.remove('open');
+      });
+    });
+  }
+
+  private openLogSearch(serviceName: string, formState: DGrepFormState): void {
+    if (this.workspaceContext) {
+      this.workspaceContext.addSubtab('dgrep', serviceName, {
+        searchQuery: '',
+        timeRange: { start: formState.referenceTime, end: '' },
+        formState,
+      });
     }
   }
 

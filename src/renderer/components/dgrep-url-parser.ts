@@ -70,10 +70,10 @@ export function parseDGrepUrl(url: string): ParsedDGrepUrl | null {
     // Client query
     const clientQuery = params.get('kqlClientQuery') || null;
 
-    // Scoping conditions
+    // Scoping conditions — use getAll() since CFV URLs can have multiple scopingConditions params
     const scopingConditions: ScopingCondition[] = [];
-    const scopingRaw = params.get('scopingConditions');
-    if (scopingRaw) {
+    for (const scopingRaw of params.getAll('scopingConditions')) {
+      if (!scopingRaw) continue;
       try {
         const parsed = JSON.parse(scopingRaw);
         if (Array.isArray(parsed)) {

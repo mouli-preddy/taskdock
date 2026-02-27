@@ -32,6 +32,7 @@ import { DGrepRCAPanel } from './dgrep-ai-rca-panel.js';
 import { DGrepChatPanel } from './dgrep-chat-panel.js';
 import { DGrepAISuggestionsBar } from './dgrep-ai-suggestions-bar.js';
 import type { DGrepAISummary, DGrepRootCauseAnalysis, DGrepChatEvent, ImproveDisplayResult } from '../../shared/dgrep-ai-types.js';
+import type { WorkspaceContext } from '../../shared/workspace-types.js';
 
 const ENDPOINT_NAMES = Object.keys(DGREP_ENDPOINT_URLS) as DGrepEndpointName[];
 const LOG_IDS = Object.keys(LOG_CONFIGS) as LogId[];
@@ -98,6 +99,8 @@ export class DGrepSearchView {
   // Token state
   private tokenStatus: { hasToken: boolean; valid: boolean } = { hasToken: false, valid: false };
   private acquiringToken = false;
+
+  workspaceContext: WorkspaceContext | null = null;
 
   // Callbacks
   private onCheckTokenStatusCallback: (() => Promise<{ hasToken: boolean; valid: boolean }>) | null = null;
@@ -328,6 +331,13 @@ export class DGrepSearchView {
     this.chatPanel?.handleChatEvent?.(event);
   }
   handleAIClientQueryUpdate(event: { chatSessionId: string; dgrepSessionId: string; kql: string }): void {
+    console.log('[dgrep-view] handleAIClientQueryUpdate', {
+      eventDgrepSessionId: event.dgrepSessionId,
+      activeSessionId: this.activeSessionId,
+      match: event.dgrepSessionId === this.activeSessionId,
+      kqlLength: event.kql?.length,
+      containerId: this.container?.id,
+    });
     if (event.dgrepSessionId === this.activeSessionId) {
       this.clientQueryEditor.setValue(event.kql);
     }
