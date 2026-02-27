@@ -87,8 +87,12 @@ function connect(): Promise<void> {
 }
 
 async function invoke(method: string, ...params: any[]): Promise<any> {
+  return invokeWithTimeout(60000, method, ...params);
+}
+
+async function invokeWithTimeout(timeoutMs: number, method: string, ...params: any[]): Promise<any> {
   await connect();
-  
+
   if (!ws || ws.readyState !== WebSocket.OPEN) {
     throw new Error('Not connected to backend');
   }
@@ -96,7 +100,7 @@ async function invoke(method: string, ...params: any[]): Promise<any> {
   return new Promise((resolve, reject) => {
     const id = ++messageId;
     pendingCalls.set(id, { resolve, reject });
-    
+
     ws!.send(JSON.stringify({
       type: 'rpc',
       id,
@@ -104,13 +108,12 @@ async function invoke(method: string, ...params: any[]): Promise<any> {
       params,
     }));
 
-    // Timeout after 60 seconds
     setTimeout(() => {
       if (pendingCalls.has(id)) {
         pendingCalls.delete(id);
         reject(new Error(`RPC timeout: ${method}`));
       }
-    }, 60000);
+    }, timeoutMs);
   });
 }
 
@@ -497,6 +500,26 @@ export const tauriAPI = {
     return invoke('set_notification_settings', { settings });
   },
 
+  // Services
+  getServices: async () => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke('get_services');
+  },
+  setServices: async (services: any) => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke('set_services', { services });
+  },
+
+  // Scrub Patterns
+  getScrubPatterns: async () => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke('get_scrub_patterns');
+  },
+  setScrubPatterns: async (patterns: any) => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke('set_scrub_patterns', { patterns });
+  },
+
   // Apply Changes API
   applyChangesInitialize: (prId: number, contextDir: string, worktreePath: string, prTitle: string, prMetadata: any, hasLinkedRepo: boolean) =>
     invoke('apply-changes:initialize', prId, contextDir, worktreePath, prTitle, prMetadata, hasLinkedRepo),
@@ -551,6 +574,40 @@ export const tauriAPI = {
   onCommentAnalysisProgress: (callback: (event: { prId: number; status: string }) => void) =>
     subscribe('comment-analysis:progress', callback),
 
+  // CFV API
+  cfvSetToken: (token: string) => invoke('cfv:set-token', token),
+  cfvGetTokenStatus: () => invoke('cfv:get-token-status'),
+  cfvFetchCall: (callId: string) => invoke('cfv:fetch-call', callId),
+  cfvListCachedCalls: () => invoke('cfv:list-cached-calls'),
+  cfvGetCallFlowData: (callId: string) => invoke('cfv:get-callflow-data', callId),
+  cfvGetCallDetails: (callId: string) => invoke('cfv:get-call-details', callId),
+  cfvGetRawFile: (callId: string, filename: string) => invoke('cfv:get-raw-file', callId, filename),
+  cfvDeleteCall: (callId: string) => invoke('cfv:delete-call', callId),
+  cfvAcquireToken: (options?: { forceVisible?: boolean; timeout?: number; edgeProfile?: string }) => invoke('cfv:acquire-token', options),
+  cfvCancelTokenAcquisition: () => invoke('cfv:cancel-token-acquisition'),
+  cfvListEdgeProfiles: () => invoke('cfv:list-edge-profiles'),
+  cfvCheckPlaywright: () => invoke('cfv:check-playwright'),
+  onCfvProgress: (callback: (event: any) => void) => subscribe('cfv:progress', callback),
+  onCfvTokenProgress: (callback: (event: any) => void) => subscribe('cfv:token-progress', callback),
+  onCfvTokenResult: (callback: (event: any) => void) => subscribe('cfv:token-result', callback),
+
+  // CFV Chat API
+  cfvChatCreate: (callId: string, persistentSessionId?: string) => invoke('cfv-chat:create', callId, persistentSessionId),
+  cfvChatSend: (sessionId: string, message: string) => invoke('cfv-chat:send', sessionId, message),
+  cfvChatGetHistory: (sessionId: string) => invoke('cfv-chat:get-history', sessionId),
+  cfvChatDestroy: (sessionId: string) => invoke('cfv-chat:destroy', sessionId),
+  cfvChatListSessions: (callId: string) => invoke('cfv-chat:list-sessions', callId),
+  cfvChatLoadSessionMessages: (callId: string, persistentSessionId: string) => invoke('cfv-chat:load-session-messages', callId, persistentSessionId),
+  cfvChatDeleteSession: (callId: string, persistentSessionId: string) => invoke('cfv-chat:delete-session', callId, persistentSessionId),
+  onCfvChatEvent: (callback: (event: any) => void) => subscribe('cfv:chat-event', callback),
+
+  // CFV Filter API
+  cfvSaveCallFilters: (callId: string, state: any) => invoke('cfv-filter:save', callId, state),
+  cfvLoadCallFilters: (callId: string) => invoke('cfv-filter:load', callId),
+  cfvListFilterPresets: () => invoke('cfv-filter:list-presets'),
+  cfvSaveFilterPreset: (preset: any) => invoke('cfv-filter:save-preset', preset),
+  cfvDeleteFilterPreset: (presetId: string) => invoke('cfv-filter:delete-preset', presetId),
+
   // Plugin API
   pluginGetPlugins: () => invoke('plugin:get-plugins'),
   pluginGetPlugin: (pluginId: string) => invoke('plugin:get-plugin', pluginId),
@@ -562,6 +619,10 @@ export const tauriAPI = {
     invoke('plugin:save-config', pluginId, config),
   pluginGetLogs: (pluginId: string) =>
     invoke('plugin:get-logs', pluginId),
+  pluginReload: (pluginId: string) =>
+    invoke('plugin:reload', pluginId),
+  pluginReloadAll: () =>
+    invoke('plugin:reload-all'),
 
   // Plugin event listeners
   onPluginUIUpdate: (callback: (event: any) => void) => subscribe('plugin:ui-update', callback),
@@ -573,6 +634,133 @@ export const tauriAPI = {
   onPluginsReloaded: (callback: () => void) => subscribe('plugin:plugins-reloaded', callback),
   onPluginStateChanged: (callback: (event: any) => void) => subscribe('plugin:state-changed', callback),
   onPluginNavigate: (callback: (event: any) => void) => subscribe('plugin:ui-navigate', callback),
+  onTriggerPRReview: (callback: (event: { org: string; project: string; prId: number }) => void) => subscribe('app:trigger-pr-review', callback),
+  onAutoReviewStarted: (callback: (event: { org: string; project: string; prId: number; sessionId: string; displayName: string }) => void) => subscribe('app:auto-review-started', callback),
+
+  // ICM Auth methods
+  icmAcquireToken: () => invoke('icm:acquire-token'),
+  icmHasValidToken: () => invoke('icm:has-valid-token'),
+
+  // ICM API methods
+  icmGetToken: () => invoke('icm:get-token'),
+  icmGetCurrentUser: () => invoke('icm:get-current-user'),
+  icmGetPermissions: () => invoke('icm:get-permissions'),
+  icmResolveContacts: (emails: string[]) => invoke('icm:resolve-contacts', emails),
+  icmQueryIncidents: (filter?: string, top?: number, select?: string, expand?: string, orderby?: string) =>
+    invoke('icm:query-incidents', filter, top, select, expand, orderby),
+  icmGetIncidentCount: (filter: string) => invoke('icm:get-incident-count', filter),
+  icmGetIncident: (id: number) => invoke('icm:get-incident', id),
+  icmGetIncidentBridges: (id: number) => invoke('icm:get-incident-bridges', id),
+  icmAcknowledge: (id: number) => invoke('icm:acknowledge', id),
+  icmTransfer: (id: number, teamId: number) => invoke('icm:transfer', id, teamId),
+  icmMitigate: (id: number) => invoke('icm:mitigate', id),
+  icmResolve: (id: number) => invoke('icm:resolve', id),
+  icmGetDiscussion: (incidentId: number) => invoke('icm:get-discussion', incidentId),
+  icmAddDiscussion: (incidentId: number, text: string) => invoke('icm:add-discussion', incidentId, text),
+  icmGetFavoriteQueries: (ownerId: number, ownerType?: string) => invoke('icm:get-favorite-queries', ownerId, ownerType),
+  icmGetSavedQueries: (contactId: number) => invoke('icm:get-saved-queries', contactId),
+  icmGetSharedQueries: (contactId: number) => invoke('icm:get-shared-queries', contactId),
+  icmGetTeams: (ids: number[]) => invoke('icm:get-teams', ids),
+  icmSearchTeams: (id: number) => invoke('icm:search-teams', id),
+  icmSearchServices: (id: number) => invoke('icm:search-services', id),
+  icmGetAlertSources: (alertSourceId: string) => invoke('icm:get-alert-sources', alertSourceId),
+  icmGetUserPreferences: (alias: string) => invoke('icm:get-user-preferences', alias),
+  icmGetFeatureFlags: (scope: string, alias: string) => invoke('icm:get-feature-flags', scope, alias),
+  icmGetTeamsChannel: (incidentId: number) => invoke('icm:get-teams-channel', incidentId),
+  icmGetBreakingNews: () => invoke('icm:get-breaking-news'),
+  icmGetPropertyGroups: () => invoke('icm:get-property-groups'),
+  icmGetCloudInstances: () => invoke('icm:get-cloud-instances'),
+
+  // DGrep API
+  dgrepCheckTokenStatus: () => invoke('dgrep:check-token-status'),
+  dgrepAcquireTokens: () => invoke('dgrep:acquire-tokens'),
+  dgrepSearchByLogId: (logId: string, startTime: string, endTime: string, options?: any) =>
+    invoke('dgrep:search-by-log-id', logId, startTime, endTime, options),
+  dgrepSearch: (params: any) =>
+    invoke('dgrep:search', params),
+  dgrepCancelSearch: (sessionId: string) =>
+    invoke('dgrep:cancel-search', sessionId),
+  dgrepGetSession: (sessionId: string) =>
+    invoke('dgrep:get-session', sessionId),
+  dgrepGetAllSessions: () =>
+    invoke('dgrep:get-all-sessions'),
+  dgrepGetResults: (sessionId: string) =>
+    invokeWithTimeout(300000, 'dgrep:get-results', sessionId),
+  dgrepGetResultsPage: (sessionId: string, offset: number, limit: number) =>
+    invoke('dgrep:get-results-page', sessionId, offset, limit),
+  dgrepRunClientQuery: (sessionId: string, clientQuery: string) =>
+    invoke('dgrep:run-client-query', sessionId, clientQuery),
+  dgrepRemoveSession: (sessionId: string) =>
+    invoke('dgrep:remove-session', sessionId),
+  dgrepGetNamespaces: (endpoint: string) =>
+    invokeWithTimeout(120000, 'dgrep:get-namespaces', endpoint),
+  dgrepGetEvents: (endpoint: string, namespace: string) =>
+    invoke('dgrep:get-events', endpoint, namespace),
+  dgrepGenerateUrl: (logId: string, timeCenter: string, serverQuery: string, options?: any) =>
+    invoke('dgrep:generate-url', logId, timeCenter, serverQuery, options),
+  dgrepGetMonitoringAccounts: () =>
+    invoke('dgrep:get-monitoring-accounts'),
+
+  // DGrep event listeners
+  onDgrepProgress: (callback: (event: any) => void) => subscribe('dgrep:progress', callback),
+  onDgrepComplete: (callback: (event: any) => void) => subscribe('dgrep:complete', callback),
+  onDgrepError: (callback: (event: any) => void) => subscribe('dgrep:error', callback),
+  onDgrepIntermediateResults: (callback: (event: any) => void) => subscribe('dgrep:intermediate-results', callback),
+  onDgrepLiveTailData: (callback: (event: any) => void) => subscribe('dgrep:live-tail-data', callback),
+
+  // DGrep extra methods
+  dgrepGetSurroundingDocs: (sessionId: string, rowIndex: number, count: number) =>
+    invoke('dgrep-ai:get-surrounding-docs', sessionId, rowIndex, count),
+  dgrepStartLiveTail: (sessionId: string, intervalMs?: number) =>
+    invoke('dgrep:live-tail-start', sessionId, intervalMs),
+  dgrepStopLiveTail: (sessionId: string) =>
+    invoke('dgrep:live-tail-stop', sessionId),
+  dgrepSaveQuery: (query: any) =>
+    invoke('dgrep:save-query', query),
+  dgrepLoadQueries: () =>
+    invoke('dgrep:load-queries'),
+  dgrepDeleteQuery: (queryId: string) =>
+    invoke('dgrep:delete-query', queryId),
+
+  // Workspaces API
+  workspacesLoad: () =>
+    invoke('workspaces:load'),
+  workspacesSave: (data: any) =>
+    invoke('workspaces:save', data),
+
+  // DGrep AI API
+  dgrepAISummarizeLogs: (sessionId: string, columns: string[], rows: any[], patterns: any[], metadata: any) =>
+    invoke('dgrep-ai:summarize-logs', sessionId, columns, rows, patterns, metadata),
+  dgrepAINLToKQL: (prompt: string, columns: string[], sampleRows: any[]) =>
+    invoke('dgrep-ai:nl-to-kql', prompt, columns, sampleRows),
+  dgrepAIAnalyzeRootCause: (sessionId: string, targetRow: any, targetIndex: number, contextRows: any[], columns: string[], metadata: any) =>
+    invoke('dgrep-ai:analyze-root-cause', sessionId, targetRow, targetIndex, contextRows, columns, metadata),
+  dgrepAIReadFile: (filePath: string) =>
+    invoke('dgrep-ai:read-file', filePath),
+  dgrepAIDetectAnomalies: (sessionId: string, columns: string[], rows: any[]) =>
+    invoke('dgrep-ai:detect-anomalies', sessionId, columns, rows),
+  dgrepAIImproveDisplay: (sessionId: string, columns: string[], rows: any[], metadata: any) =>
+    invoke('dgrep-ai:improve-display', sessionId, columns, rows, metadata),
+  dgrepAIChatCreate: (sessionId: string, columns: string[], rows: any[], sourceRepoPath?: string, serviceName?: string, queryContext?: any) =>
+    invoke('dgrep-ai:chat-create', sessionId, columns, rows, sourceRepoPath, serviceName, queryContext),
+  dgrepAIChatSend: (chatSessionId: string, message: string) =>
+    invoke('dgrep-ai:chat-send', chatSessionId, message),
+  dgrepAIChatDestroy: (chatSessionId: string) =>
+    invoke('dgrep-ai:chat-destroy', chatSessionId),
+  dgrepAIShadowSaveCsv: (shadowId: string, stepIndex: number, columns: string[], rows: any[]) =>
+    invoke('dgrep-ai:shadow-save-csv', shadowId, stepIndex, columns, rows),
+  dgrepAILearningCreate: (sessionId: string, columns: string[], rows: any[], shadowLog: any[], sourceRepoPath?: string, serviceName?: string, queryContext?: any) =>
+    invoke('dgrep-ai:learning-create', sessionId, columns, rows, shadowLog, sourceRepoPath, serviceName, queryContext),
+
+  // DGrep AI event listeners
+  onDgrepAISummaryProgress: (callback: (event: any) => void) => subscribe('dgrep:ai:summary-progress', callback),
+  onDgrepAISummaryComplete: (callback: (event: any) => void) => subscribe('dgrep:ai:summary-complete', callback),
+  onDgrepAIRCAProgress: (callback: (event: any) => void) => subscribe('dgrep:ai:rca-progress', callback),
+  onDgrepAIRCAComplete: (callback: (event: any) => void) => subscribe('dgrep:ai:rca-complete', callback),
+  onDgrepAIChatEvent: (callback: (event: any) => void) => subscribe('dgrep:ai:chat-event', callback),
+  onDgrepAIClientQueryUpdate: (callback: (event: any) => void) => subscribe('dgrep:ai:client-query-update', callback),
+  onDgrepAIImproveDisplayProgress: (callback: (event: any) => void) => subscribe('dgrep:ai:improve-display-progress', callback),
+  onDgrepAIImproveDisplayComplete: (callback: (event: any) => void) => subscribe('dgrep:ai:improve-display-complete', callback),
 };
 
 // Initialize connection when module loads

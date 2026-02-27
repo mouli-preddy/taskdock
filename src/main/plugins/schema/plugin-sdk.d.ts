@@ -38,7 +38,7 @@ export interface PluginContext {
     /** Send a prompt to Claude SDK and get a text response */
     claude(prompt: string, opts?: { model?: 'sonnet' | 'opus' | 'haiku' }): Promise<string>;
     /** Send a prompt to GitHub Copilot SDK and get a text response */
-    copilot(prompt: string, opts?: { model?: 'gpt-4o' | 'gpt-4' | 'gpt-5' | 'claude-3.5-sonnet' }): Promise<string>;
+    copilot(prompt: string, opts?: { model?: 'gpt-5.3-codex' | 'gpt-4o' | 'gpt-4' | 'gpt-5' | 'claude-3.5-sonnet' }): Promise<string>;
     /** Launch an interactive AI terminal session. Returns the session ID. */
     launchTerminal(opts: {
       ai: 'copilot' | 'claude';

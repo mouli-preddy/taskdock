@@ -282,6 +282,10 @@ export interface ElectronAPI {
       showTerminal: boolean;
       timeoutMinutes: number;
     };
+    dgrepAnalysis: {
+      provider: 'claude-sdk' | 'copilot-sdk';
+      sourceRepository: string;
+    };
   }>;
   setConsoleReviewSettings: (settings: {
     linkedRepositories: { path: string; originUrl: string }[];
@@ -303,6 +307,10 @@ export interface ElectronAPI {
       provider: 'claude-sdk' | 'claude-terminal' | 'copilot-sdk' | 'copilot-terminal';
       showTerminal: boolean;
       timeoutMinutes: number;
+    };
+    dgrepAnalysis: {
+      provider: 'claude-sdk' | 'copilot-sdk';
+      sourceRepository: string;
     };
   }) => Promise<void>;
   browseFolder: () => Promise<string | null>;
@@ -355,6 +363,38 @@ export interface ElectronAPI {
     newIterations: boolean;
   }) => Promise<void>;
 
+  // Services
+  getServices: () => Promise<{
+    id: string;
+    name: string;
+    description: string;
+    repoPath: string;
+    linkedServiceIds: string[];
+  }[]>;
+  setServices: (services: {
+    id: string;
+    name: string;
+    description: string;
+    repoPath: string;
+    linkedServiceIds: string[];
+  }[]) => Promise<void>;
+
+  // Scrub Patterns
+  getScrubPatterns: () => Promise<{
+    name: string;
+    letter: string;
+    regex: string;
+    enabled: boolean;
+    isDefault: boolean;
+  }[]>;
+  setScrubPatterns: (patterns: {
+    name: string;
+    letter: string;
+    regex: string;
+    enabled: boolean;
+    isDefault: boolean;
+  }[]) => Promise<void>;
+
   // PR file cache API
   ensurePRContext: (
     prContext: any,
@@ -395,6 +435,40 @@ export interface ElectronAPI {
   ) => Promise<any>;
   onCommentAnalysisProgress: (callback: (event: { prId: number; status: string }) => void) => () => void;
 
+  // CFV API
+  cfvSetToken: (token: string) => Promise<void>;
+  cfvGetTokenStatus: () => Promise<{ valid: boolean; hasToken: boolean }>;
+  cfvFetchCall: (callId: string) => Promise<{ callId: string; outputDir: string; rawFiles: string[]; stats: { callflowMessages: number; diagnosticFiles: number } }>;
+  cfvListCachedCalls: () => Promise<Array<{ callId: string; fetchedAt: string; outputDir: string; messageCount: number; diagnosticFiles: number }>>;
+  cfvGetCallFlowData: (callId: string) => Promise<any>;
+  cfvGetCallDetails: (callId: string) => Promise<any>;
+  cfvGetRawFile: (callId: string, filename: string) => Promise<string | null>;
+  cfvDeleteCall: (callId: string) => Promise<void>;
+  cfvAcquireToken: (options?: { forceVisible?: boolean; timeout?: number; edgeProfile?: string }) => Promise<void>;
+  cfvCancelTokenAcquisition: () => Promise<void>;
+  cfvListEdgeProfiles: () => Promise<Array<{ dirName: string; displayName: string; email: string }>>;
+  cfvCheckPlaywright: () => Promise<{ available: boolean; reason?: string }>;
+  onCfvProgress: (callback: (event: any) => void) => () => void;
+  onCfvTokenProgress: (callback: (event: { status: string; message: string; headless?: boolean; tokenLength?: number; error?: string }) => void) => () => void;
+  onCfvTokenResult: (callback: (event: { success: boolean; tokenLength?: number; error?: string }) => void) => () => void;
+
+  // CFV Chat API
+  cfvChatCreate: (callId: string, persistentSessionId?: string) => Promise<{ sdkSessionId: string; persistentSessionId: string }>;
+  cfvChatSend: (sessionId: string, message: string) => Promise<void>;
+  cfvChatGetHistory: (sessionId: string) => Promise<import('../shared/cfv-types.js').CfvChatMessage[]>;
+  cfvChatDestroy: (sessionId: string) => Promise<void>;
+  cfvChatListSessions: (callId: string) => Promise<{ sessions: import('../shared/cfv-types.js').CfvChatSessionInfo[]; lastActiveSessionId: string | null }>;
+  cfvChatLoadSessionMessages: (callId: string, persistentSessionId: string) => Promise<import('../shared/cfv-types.js').CfvChatMessage[]>;
+  cfvChatDeleteSession: (callId: string, persistentSessionId: string) => Promise<void>;
+  onCfvChatEvent: (callback: (event: import('../shared/cfv-types.js').CfvChatEvent) => void) => () => void;
+
+  // CFV Filter API
+  cfvSaveCallFilters: (callId: string, state: import('../shared/cfv-filter-types.js').CallFilterState) => Promise<void>;
+  cfvLoadCallFilters: (callId: string) => Promise<import('../shared/cfv-filter-types.js').CallFilterState | null>;
+  cfvListFilterPresets: () => Promise<import('../shared/cfv-filter-types.js').FilterPreset[]>;
+  cfvSaveFilterPreset: (preset: import('../shared/cfv-filter-types.js').FilterPreset) => Promise<void>;
+  cfvDeleteFilterPreset: (presetId: string) => Promise<void>;
+
   // Plugin API
   pluginGetPlugins: () => Promise<any[]>;
   pluginGetPlugin: (pluginId: string) => Promise<any>;
@@ -402,6 +476,8 @@ export interface ElectronAPI {
   pluginSetEnabled: (pluginId: string, enabled: boolean) => Promise<void>;
   pluginSaveConfig: (pluginId: string, config: Record<string, any>) => Promise<void>;
   pluginGetLogs: (pluginId: string) => Promise<any[]>;
+  pluginReload: (pluginId: string) => Promise<any>;
+  pluginReloadAll: () => Promise<any[]>;
 
   // Plugin Event listeners
   onPluginUIUpdate: (callback: (event: any) => void) => () => void;
@@ -410,9 +486,101 @@ export interface ElectronAPI {
   onPluginLog: (callback: (event: any) => void) => () => void;
   onPluginExecutionComplete: (callback: (event: any) => void) => () => void;
   onPluginReloaded: (callback: (event: any) => void) => () => void;
-  onPluginsReloaded: (callback: (event: any) => void) => () => void;
+  onPluginsReloaded: (callback: () => void) => () => void;
   onPluginStateChanged: (callback: (event: any) => void) => () => void;
   onPluginNavigate: (callback: (event: { pluginId: string; section: string }) => void) => () => void;
+
+  // ICM Auth methods
+  icmAcquireToken: () => Promise<string>;
+  icmHasValidToken: () => Promise<boolean>;
+
+  // ICM API methods
+  icmGetToken: () => Promise<string>;
+  icmGetCurrentUser: () => Promise<any>;
+  icmGetPermissions: () => Promise<any>;
+  icmResolveContacts: (emails: string[]) => Promise<any[]>;
+  icmQueryIncidents: (filter?: string, top?: number, select?: string, expand?: string, orderby?: string) => Promise<any>;
+  icmGetIncidentCount: (filter: string) => Promise<number>;
+  icmGetIncident: (id: number) => Promise<any>;
+  icmGetIncidentBridges: (id: number) => Promise<any[]>;
+  icmAcknowledge: (id: number) => Promise<void>;
+  icmTransfer: (id: number, teamId: number) => Promise<void>;
+  icmMitigate: (id: number) => Promise<void>;
+  icmResolve: (id: number) => Promise<void>;
+  icmGetDiscussion: (incidentId: number) => Promise<any[]>;
+  icmAddDiscussion: (incidentId: number, text: string) => Promise<void>;
+  icmGetFavoriteQueries: (ownerId: number, ownerType?: string) => Promise<any[]>;
+  icmGetSavedQueries: (contactId: number) => Promise<any[]>;
+  icmGetSharedQueries: (contactId: number) => Promise<any[]>;
+  icmGetTeams: (ids: number[]) => Promise<any[]>;
+  icmSearchTeams: (id: number) => Promise<any[]>;
+  icmSearchServices: (id: number) => Promise<any[]>;
+  icmGetAlertSources: (alertSourceId: string) => Promise<any>;
+  icmGetUserPreferences: (alias: string) => Promise<any>;
+  icmGetFeatureFlags: (scope: string, alias: string) => Promise<any>;
+  icmGetTeamsChannel: (incidentId: number) => Promise<any>;
+  icmGetBreakingNews: () => Promise<any[]>;
+  icmGetPropertyGroups: () => Promise<any[]>;
+  icmGetCloudInstances: () => Promise<any[]>;
+
+  // DGrep API
+  dgrepCheckTokenStatus: () => Promise<{ hasToken: boolean; valid: boolean }>;
+  dgrepAcquireTokens: () => Promise<{ success: boolean; error?: string }>;
+  dgrepSearchByLogId: (logId: string, startTime: string, endTime: string, options?: any) => Promise<string>;
+  dgrepSearch: (params: any) => Promise<string>;
+  dgrepCancelSearch: (sessionId: string) => Promise<void>;
+  dgrepGetSession: (sessionId: string) => Promise<any>;
+  dgrepGetAllSessions: () => Promise<any[]>;
+  dgrepGetResults: (sessionId: string) => Promise<{ columns: string[]; rows: Record<string, any>[] } | undefined>;
+  dgrepGetResultsPage: (sessionId: string, offset: number, limit: number) => Promise<{ columns: string[]; rows: Record<string, any>[]; totalCount: number } | undefined>;
+  dgrepRunClientQuery: (sessionId: string, clientQuery: string) => Promise<void>;
+  dgrepRemoveSession: (sessionId: string) => Promise<void>;
+  dgrepGetNamespaces: (endpoint: string) => Promise<string[]>;
+  dgrepGetEvents: (endpoint: string, namespace: string) => Promise<string[]>;
+  dgrepGenerateUrl: (logId: string, timeCenter: string, serverQuery: string, options?: any) => Promise<string>;
+  dgrepGetMonitoringAccounts: () => Promise<any>;
+
+  // DGrep event listeners
+  onDgrepProgress: (callback: (event: any) => void) => () => void;
+  onDgrepComplete: (callback: (event: any) => void) => () => void;
+  onDgrepError: (callback: (event: any) => void) => () => void;
+  onDgrepIntermediateResults: (callback: (event: any) => void) => () => void;
+  onDgrepLiveTailData: (callback: (event: any) => void) => () => void;
+
+  // DGrep extra methods
+  dgrepGetSurroundingDocs: (sessionId: string, rowIndex: number, count: number) => Promise<{ columns: string[]; rows: Record<string, any>[]; startIndex: number; endIndex: number } | undefined>;
+  dgrepStartLiveTail: (sessionId: string, intervalMs?: number) => Promise<void>;
+  dgrepStopLiveTail: (sessionId: string) => Promise<void>;
+  dgrepSaveQuery: (query: import('../shared/dgrep-ai-types.js').DGrepSavedQuery) => Promise<void>;
+  dgrepLoadQueries: () => Promise<import('../shared/dgrep-ai-types.js').DGrepSavedQuery[]>;
+  dgrepDeleteQuery: (queryId: string) => Promise<void>;
+
+  // Workspaces API
+  workspacesLoad(): Promise<import('../shared/workspace-types.js').WorkspacesData>;
+  workspacesSave(data: import('../shared/workspace-types.js').WorkspacesData): Promise<void>;
+
+  // DGrep AI API
+  dgrepAISummarizeLogs: (sessionId: string, columns: string[], rows: any[], patterns: any[], metadata: { endpoint: string; namespace: string; events: string[]; startTime: string; endTime: string; totalRows: number }) => Promise<void>;
+  dgrepAINLToKQL: (prompt: string, columns: string[], sampleRows: any[]) => Promise<import('../shared/dgrep-ai-types.js').DGrepNLToKQLResult>;
+  dgrepAIAnalyzeRootCause: (sessionId: string, targetRow: any, targetIndex: number, contextRows: any[], columns: string[], metadata: { endpoint: string; namespace: string; events: string[]; startTime: string; endTime: string; totalRows: number }) => Promise<void>;
+  dgrepAIReadFile: (filePath: string) => Promise<string>;
+  dgrepAIDetectAnomalies: (sessionId: string, columns: string[], rows: any[]) => Promise<import('../shared/dgrep-ai-types.js').DGrepAnomalyResult | null>;
+  dgrepAIImproveDisplay: (sessionId: string, columns: string[], rows: any[], metadata: any) => Promise<void>;
+  dgrepAIChatCreate: (sessionId: string, columns: string[], rows: any[], sourceRepoPath?: string, serviceName?: string, queryContext?: { endpoint: string; namespace: string; events: string[]; startTime: string; endTime: string; serverQuery: string; clientQuery: string }) => Promise<string>;
+  dgrepAIChatSend: (chatSessionId: string, message: string) => Promise<void>;
+  dgrepAIChatDestroy: (chatSessionId: string) => Promise<void>;
+  dgrepAIShadowSaveCsv: (shadowId: string, stepIndex: number, columns: string[], rows: any[]) => Promise<string>;
+  dgrepAILearningCreate: (sessionId: string, columns: string[], rows: any[], shadowLog: any[], sourceRepoPath?: string, serviceName?: string, queryContext?: any) => Promise<string>;
+
+  // DGrep AI event listeners
+  onDgrepAISummaryProgress: (callback: (event: { sessionId: string; text: string }) => void) => () => void;
+  onDgrepAISummaryComplete: (callback: (event: { sessionId: string; summary?: import('../shared/dgrep-ai-types.js').DGrepAISummary; raw?: string; error?: string }) => void) => () => void;
+  onDgrepAIRCAProgress: (callback: (event: { sessionId: string; text: string }) => void) => () => void;
+  onDgrepAIRCAComplete: (callback: (event: { sessionId: string; analysis?: import('../shared/dgrep-ai-types.js').DGrepRootCauseAnalysis; raw?: string; error?: string }) => void) => () => void;
+  onDgrepAIChatEvent: (callback: (event: import('../shared/dgrep-ai-types.js').DGrepChatEvent) => void) => () => void;
+  onDgrepAIClientQueryUpdate: (callback: (event: { chatSessionId: string; dgrepSessionId: string; kql: string }) => void) => () => void;
+  onDgrepAIImproveDisplayProgress: (callback: (event: { sessionId: string; text: string }) => void) => () => void;
+  onDgrepAIImproveDisplayComplete: (callback: (event: { sessionId: string; result?: import('../shared/dgrep-ai-types.js').ImproveDisplayResult; error?: string }) => void) => () => void;
 }
 
 declare global {

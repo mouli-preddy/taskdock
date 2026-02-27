@@ -5,12 +5,20 @@ import type { PollingSettings, NotificationSettings } from '../../shared/types.j
 import { DEFAULT_POLLING_SETTINGS, DEFAULT_NOTIFICATION_SETTINGS } from '../../shared/types.js';
 import { escapeHtml } from '../utils/html-utils.js';
 import { notificationService } from '../services/notification-service.js';
-import { getIcon, Eye, Plus, X, Globe, MessageSquare, Wand2 } from '../utils/icons.js';
+import { getIcon, Eye, Plus, X, Globe, MessageSquare, Wand2, Search, Server } from '../utils/icons.js';
 
 export interface ReviewSettings {
   organization: string;
   project: string;
   pat: string;
+}
+
+export interface ServiceEntry {
+  id: string;
+  name: string;
+  description: string;
+  repoPath: string;
+  linkedServiceIds: string[];
 }
 
 export class SettingsView {
@@ -24,6 +32,9 @@ export class SettingsView {
   private consoleSettingsSavedCallback: ((settings: ConsoleReviewSettings) => void) | null = null;
   private pollingSettingsSavedCallback: ((settings: PollingSettings) => void) | null = null;
   private notificationSettingsSavedCallback: ((settings: NotificationSettings) => void) | null = null;
+  private services: ServiceEntry[] = [];
+  private scrubPatterns: Array<{ name: string; letter: string; regex: string; enabled: boolean; isDefault: boolean }> = [];
+  private activeSettingsTab: string = 'connection';
 
   constructor(containerId: string) {
     this.container = document.getElementById(containerId)!;
@@ -32,6 +43,9 @@ export class SettingsView {
     this.loadPollingSettings();
     this.loadNotificationSettings();
     this.loadPlugins();
+    this.loadServices();
+    this.loadScrubPatterns();
+    this.attachReloadAllHandler();
   }
 
   async loadPlugins(): Promise<void> {
@@ -52,10 +66,13 @@ export class SettingsView {
               <span class="plugin-settings-name">${escapeHtml(plugin.name)}</span>
               <span class="plugin-settings-version">v${escapeHtml(plugin.version)}</span>
             </div>
-            <label class="toggle-switch">
-              <input type="checkbox" class="plugin-toggle" data-plugin-id="${plugin.id}" ${plugin.enabled ? 'checked' : ''}>
-              <span class="toggle-slider"></span>
-            </label>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <button class="btn btn-secondary btn-sm plugin-reload-btn" data-plugin-id="${plugin.id}" title="Reload plugin">Reload</button>
+              <label class="toggle-switch">
+                <input type="checkbox" class="plugin-toggle" data-plugin-id="${plugin.id}" ${plugin.enabled ? 'checked' : ''}>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
           </div>
           ${plugin.description ? `<p class="plugin-settings-desc">${escapeHtml(plugin.description)}</p>` : ''}
           ${plugin.manifest?.config ? this.renderPluginConfigFields(plugin) : ''}
@@ -101,8 +118,48 @@ export class SettingsView {
           }
         });
       });
+      // Attach per-plugin reload handlers
+      container.querySelectorAll('.plugin-reload-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const el = e.currentTarget as HTMLButtonElement;
+          const pluginId = el.dataset.pluginId!;
+          el.disabled = true;
+          el.textContent = 'Reloading...';
+          try {
+            await window.electronAPI.pluginReload(pluginId);
+            // Toast is shown by onPluginReloaded event handler in app.ts
+            await this.loadPlugins(); // Refresh the settings list
+          } catch (err: any) {
+            Toast.error(err.message || `Failed to reload plugin "${pluginId}"`);
+          } finally {
+            el.disabled = false;
+            el.textContent = 'Reload';
+          }
+        });
+      });
     } catch (err) {
       console.error('Failed to load plugins:', err);
+    }
+  }
+
+  /** One-time handler for the static "Reload All" button (not inside the dynamic plugin list) */
+  private attachReloadAllHandler(): void {
+    const reloadAllBtn = this.container.querySelector('#reloadAllPluginsBtn') as HTMLButtonElement | null;
+    if (reloadAllBtn) {
+      reloadAllBtn.addEventListener('click', async () => {
+        reloadAllBtn.disabled = true;
+        reloadAllBtn.textContent = 'Reloading...';
+        try {
+          await window.electronAPI.pluginReloadAll();
+          // Toast is shown by onPluginsReloaded event handler in app.ts
+          await this.loadPlugins(); // Refresh the settings list
+        } catch (err: any) {
+          Toast.error(err.message || 'Failed to reload plugins');
+        } finally {
+          reloadAllBtn.disabled = false;
+          reloadAllBtn.textContent = 'Reload All';
+        }
+      });
     }
   }
 
@@ -181,303 +238,466 @@ export class SettingsView {
             </span>
           </button>
         </div>
+        <div class="settings-tabs">
+          <button class="settings-tab-btn active" data-settings-tab="connection">Connection</button>
+          <button class="settings-tab-btn" data-settings-tab="review">Review</button>
+          <button class="settings-tab-btn" data-settings-tab="ai">AI</button>
+          <button class="settings-tab-btn" data-settings-tab="services">Services</button>
+          <button class="settings-tab-btn" data-settings-tab="privacy">Privacy</button>
+        </div>
         <div class="settings-content">
-          <div class="settings-section">
-            <h2 class="settings-section-title">Azure DevOps Connection</h2>
-            <p class="settings-section-description">Configure your Azure DevOps connection to browse and review pull requests.</p>
 
-            <form class="settings-form" id="settingsForm">
-              <div class="form-group">
-                <label for="settingsOrganization">Organization</label>
-                <input type="text" id="settingsOrganization" placeholder="e.g., mycompany" required>
-                <span class="form-hint">Your Azure DevOps organization name</span>
-              </div>
+          <!-- Connection Tab -->
+          <div class="settings-tab-content active" data-tab-content="connection">
+            <div class="settings-section">
+              <h2 class="settings-section-title">Azure DevOps Connection</h2>
+              <p class="settings-section-description">Configure your Azure DevOps connection to browse and review pull requests.</p>
 
-              <div class="form-group">
-                <label for="settingsProject">Project</label>
-                <input type="text" id="settingsProject" placeholder="e.g., myproject" required>
-                <span class="form-hint">The project containing your repositories</span>
-              </div>
+              <form class="settings-form" id="settingsForm">
+                <div class="form-group">
+                  <label for="settingsOrganization">Organization</label>
+                  <input type="text" id="settingsOrganization" placeholder="e.g., mycompany" required>
+                  <span class="form-hint">Your Azure DevOps organization name</span>
+                </div>
 
-              <div class="form-group">
-                <label for="settingsPat">Personal Access Token (Optional)</label>
-                <div class="input-with-toggle">
-                  <input type="password" id="settingsPat" placeholder="Leave empty to use Azure CLI auth">
-                  <button type="button" class="btn btn-icon toggle-visibility" id="togglePatVisibility" title="Show/hide">
-                    ${getIcon(Eye, 16)}
+                <div class="form-group">
+                  <label for="settingsProject">Project</label>
+                  <input type="text" id="settingsProject" placeholder="e.g., myproject" required>
+                  <span class="form-hint">The project containing your repositories</span>
+                </div>
+
+                <div class="form-group">
+                  <label for="settingsPat">Personal Access Token (Optional)</label>
+                  <div class="input-with-toggle">
+                    <input type="password" id="settingsPat" placeholder="Leave empty to use Azure CLI auth">
+                    <button type="button" class="btn btn-icon toggle-visibility" id="togglePatVisibility" title="Show/hide">
+                      ${getIcon(Eye, 16)}
+                    </button>
+                  </div>
+                  <span class="form-hint">Optional: Provide a PAT if not using <code>az login</code></span>
+                </div>
+
+                <div class="form-actions">
+                  <button type="button" class="btn btn-secondary" id="testConnectionBtn">
+                    <span class="btn-text">Test Connection</span>
+                    <span class="btn-loading">
+                      <span class="spinner"></span>
+                      Testing...
+                    </span>
                   </button>
                 </div>
-                <span class="form-hint">Optional: Provide a PAT if not using <code>az login</code></span>
+              </form>
+
+              <div class="connection-status" id="connectionStatus"></div>
+            </div>
+
+            <div class="settings-section">
+              <h3 class="settings-section-title">Authentication Help</h3>
+              <div class="settings-help">
+                <p>You can authenticate using either:</p>
+                <ol>
+                  <li><strong>Azure CLI (Recommended):</strong> Run <code>az login</code> in your terminal</li>
+                  <li><strong>Personal Access Token:</strong> Create a PAT with "Code (Read)" scope</li>
+                </ol>
               </div>
+            </div>
 
-              <div class="form-actions">
-                <button type="button" class="btn btn-secondary" id="testConnectionBtn">
-                  <span class="btn-text">Test Connection</span>
-                  <span class="btn-loading">
-                    <span class="spinner"></span>
-                    Testing...
-                  </span>
-                </button>
+            <div class="settings-section full-width">
+              <h2 class="settings-section-title">Monitored Repositories</h2>
+              <p class="settings-section-description">Add Azure DevOps repositories to monitor. Pull requests from these repositories will appear in a separate tab on the home page.</p>
+
+              <div class="form-group">
+                <label>Repository URLs</label>
+                <div class="repo-list" id="monitoredReposList"></div>
+                <div class="monitored-repo-add-form">
+                  <input type="text" id="monitoredRepoUrl" placeholder="https://dev.azure.com/org/project/_git/repo" class="monitored-repo-input">
+                  <button type="button" class="btn btn-secondary btn-sm" id="addMonitoredRepoBtn">
+                    ${getIcon(Plus, 14)}
+                    Add
+                  </button>
+                </div>
+                <span class="form-hint">Enter Azure DevOps repository URLs (dev.azure.com or visualstudio.com). PRs from these repos will show in the "Monitored" tab.</span>
               </div>
-            </form>
-
-            <div class="connection-status" id="connectionStatus"></div>
-          </div>
-
-          <div class="settings-section">
-            <h3 class="settings-section-title">Authentication Help</h3>
-            <div class="settings-help">
-              <p>You can authenticate using either:</p>
-              <ol>
-                <li><strong>Azure CLI (Recommended):</strong> Run <code>az login</code> in your terminal</li>
-                <li><strong>Personal Access Token:</strong> Create a PAT with "Code (Read)" scope</li>
-              </ol>
             </div>
           </div>
 
-          <div class="settings-section full-width">
-            <h2 class="settings-section-title">Monitored Repositories</h2>
-            <p class="settings-section-description">Add Azure DevOps repositories to monitor. Pull requests from these repositories will appear in a separate tab on the home page.</p>
+          <!-- Review Tab -->
+          <div class="settings-tab-content" data-tab-content="review">
+            <div class="settings-section full-width">
+              <h2 class="settings-section-title">Console Review (Deep Review)</h2>
+              <p class="settings-section-description">Configure how console-based AI reviews work with your local repositories.</p>
 
-            <div class="form-group">
-              <label>Repository URLs</label>
-              <div class="repo-list" id="monitoredReposList"></div>
-              <div class="monitored-repo-add-form">
-                <input type="text" id="monitoredRepoUrl" placeholder="https://dev.azure.com/org/project/_git/repo" class="monitored-repo-input">
-                <button type="button" class="btn btn-secondary btn-sm" id="addMonitoredRepoBtn">
+              <div class="form-group">
+                <label>Linked Repositories</label>
+                <div class="repo-list" id="linkedReposList"></div>
+                <button type="button" class="btn btn-secondary btn-sm" id="addRepoBtn">
                   ${getIcon(Plus, 14)}
-                  Add
+                  Add Repository
                 </button>
+                <span class="form-hint">Git repositories to link with ADO PRs (matched by remote origin URL)</span>
               </div>
-              <span class="form-hint">Enter Azure DevOps repository URLs (dev.azure.com or visualstudio.com). PRs from these repos will show in the "Monitored" tab.</span>
+
+              <div class="form-group">
+                <label for="whenRepoFound">When Local Repository Found</label>
+                <select id="whenRepoFound">
+                  <option value="worktree">Use git worktree (Recommended)</option>
+                  <option value="ask">Ask me each time</option>
+                  <option value="tempOnly">Always use temp folder only</option>
+                </select>
+                <span class="form-hint">What to do when a matching local repository is found</span>
+              </div>
+
+              <div class="form-group">
+                <label for="whenRepoNotFound">When No Local Repository</label>
+                <select id="whenRepoNotFound">
+                  <option value="immediate">Proceed without repo context</option>
+                  <option value="ask">Ask me each time</option>
+                  <option value="clone">Clone repository first</option>
+                </select>
+                <span class="form-hint">What to do when no matching local repository is found</span>
+              </div>
+
+              <div class="form-group">
+                <label for="worktreeCleanup">Worktree Cleanup</label>
+                <select id="worktreeCleanup">
+                  <option value="auto">Auto-cleanup after review</option>
+                  <option value="ask">Ask me each time</option>
+                  <option value="never">Keep worktrees</option>
+                </select>
+                <span class="form-hint">How to handle git worktrees after review completes</span>
+              </div>
+
+              <div class="form-group checkbox-group">
+                <label>
+                  <input type="checkbox" id="autoCloseTerminal">
+                  <span>Auto-close terminal when review completes</span>
+                </label>
+              </div>
+
+              <div class="form-group checkbox-group">
+                <label>
+                  <input type="checkbox" id="showNotification">
+                  <span>Show notification when review completes</span>
+                </label>
+              </div>
+
+              <div class="form-group">
+                <label for="generatedFilePatterns">Generated File Patterns</label>
+                <textarea id="generatedFilePatterns" rows="3" placeholder="*.g.cs&#10;*.generated.ts&#10;*.json"></textarea>
+                <span class="form-hint">Glob patterns for generated files (one per line). These files will be hidden by default in PRs and marked as generated for AI review.</span>
+              </div>
+
+              <div class="form-group checkbox-group">
+                <label>
+                  <input type="checkbox" id="enableWorkIQ">
+                  <span>Enable WorkIQ context gathering</span>
+                </label>
+                <span class="form-hint">When enabled, AI will use WorkIQ to gather context from your recent meetings related to this PR.</span>
+              </div>
+            </div>
+
+            <div class="settings-section">
+              <h2 class="settings-section-title">PR Polling</h2>
+              <p class="settings-section-description">Configure automatic polling for PR updates (new commits, comments).</p>
+
+              <div class="form-group checkbox-group">
+                <label>
+                  <input type="checkbox" id="pollingEnabled">
+                  <span>Enable automatic polling for open PR tabs</span>
+                </label>
+              </div>
+
+              <div class="form-group">
+                <label for="pollingInterval">Polling Interval (seconds)</label>
+                <input type="number" id="pollingInterval" min="10" max="300" step="5" value="30">
+                <span class="form-hint">How often to check for updates (10-300 seconds)</span>
+              </div>
             </div>
           </div>
 
-          <div class="settings-section full-width">
-            <h2 class="settings-section-title">Console Review (Deep Review)</h2>
-            <p class="settings-section-description">Configure how console-based AI reviews work with your local repositories.</p>
+          <!-- AI Tab -->
+          <div class="settings-tab-content" data-tab-content="ai">
+            <div class="settings-section">
+              <h2 class="settings-section-title">AI Providers</h2>
+              <p class="settings-section-description">Configure AI providers for comment analysis and applying fixes.</p>
 
-            <div class="form-group">
-              <label>Linked Repositories</label>
-              <div class="repo-list" id="linkedReposList"></div>
-              <button type="button" class="btn btn-secondary btn-sm" id="addRepoBtn">
-                ${getIcon(Plus, 14)}
-                Add Repository
-              </button>
-              <span class="form-hint">Git repositories to link with ADO PRs (matched by remote origin URL)</span>
-            </div>
-
-            <div class="form-group">
-              <label for="whenRepoFound">When Local Repository Found</label>
-              <select id="whenRepoFound">
-                <option value="worktree">Use git worktree (Recommended)</option>
-                <option value="ask">Ask me each time</option>
-                <option value="tempOnly">Always use temp folder only</option>
-              </select>
-              <span class="form-hint">What to do when a matching local repository is found</span>
-            </div>
-
-            <div class="form-group">
-              <label for="whenRepoNotFound">When No Local Repository</label>
-              <select id="whenRepoNotFound">
-                <option value="immediate">Proceed without repo context</option>
-                <option value="ask">Ask me each time</option>
-                <option value="clone">Clone repository first</option>
-              </select>
-              <span class="form-hint">What to do when no matching local repository is found</span>
-            </div>
-
-            <div class="form-group">
-              <label for="worktreeCleanup">Worktree Cleanup</label>
-              <select id="worktreeCleanup">
-                <option value="auto">Auto-cleanup after review</option>
-                <option value="ask">Ask me each time</option>
-                <option value="never">Keep worktrees</option>
-              </select>
-              <span class="form-hint">How to handle git worktrees after review completes</span>
-            </div>
-
-            <div class="form-group checkbox-group">
-              <label>
-                <input type="checkbox" id="autoCloseTerminal">
-                <span>Auto-close terminal when review completes</span>
-              </label>
-            </div>
-
-            <div class="form-group checkbox-group">
-              <label>
-                <input type="checkbox" id="showNotification">
-                <span>Show notification when review completes</span>
-              </label>
-            </div>
-
-            <div class="form-group">
-              <label for="generatedFilePatterns">Generated File Patterns</label>
-              <textarea id="generatedFilePatterns" rows="3" placeholder="*.g.cs&#10;*.generated.ts&#10;*.json"></textarea>
-              <span class="form-hint">Glob patterns for generated files (one per line). These files will be hidden by default in PRs and marked as generated for AI review.</span>
-            </div>
-
-            <div class="form-group checkbox-group">
-              <label>
-                <input type="checkbox" id="enableWorkIQ">
-                <span>Enable WorkIQ context gathering</span>
-              </label>
-              <span class="form-hint">When enabled, AI will use WorkIQ to gather context from your recent meetings related to this PR.</span>
-            </div>
-          </div>
-
-          <div class="settings-section">
-            <h2 class="settings-section-title">AI Providers</h2>
-            <p class="settings-section-description">Configure AI providers for comment analysis and applying fixes.</p>
-
-            <div class="ai-provider-cards">
-              <div class="ai-provider-card">
-                <div class="ai-provider-header">
-                  <div class="ai-provider-title-group">
-                    <span class="ai-provider-icon">${getIcon(MessageSquare, 16)}</span>
-                    <span class="ai-provider-title">Analyze Comments</span>
+              <div class="ai-provider-cards">
+                <div class="ai-provider-card">
+                  <div class="ai-provider-header">
+                    <div class="ai-provider-title-group">
+                      <span class="ai-provider-icon">${getIcon(MessageSquare, 16)}</span>
+                      <span class="ai-provider-title">Analyze Comments</span>
+                    </div>
+                  </div>
+                  <div class="ai-provider-settings">
+                    <div class="ai-provider-row">
+                      <select id="analyzeCommentsProvider" class="ai-provider-select">
+                        <option value="claude-sdk">Claude SDK</option>
+                        <option value="claude-terminal">Claude Terminal</option>
+                        <option value="copilot-sdk">Copilot SDK</option>
+                        <option value="copilot-terminal">Copilot Terminal</option>
+                      </select>
+                      <label class="ai-provider-checkbox">
+                        <input type="checkbox" id="analyzeCommentsShowTerminal">
+                        <span>Show terminal</span>
+                      </label>
+                      <div class="ai-provider-timeout">
+                        <input type="number" id="analyzeCommentsTimeout" min="1" max="30" value="5">
+                        <span>min</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div class="ai-provider-settings">
-                  <div class="ai-provider-row">
-                    <select id="analyzeCommentsProvider" class="ai-provider-select">
-                      <option value="claude-sdk">Claude SDK</option>
-                      <option value="claude-terminal">Claude Terminal</option>
-                      <option value="copilot-sdk">Copilot SDK</option>
-                      <option value="copilot-terminal">Copilot Terminal</option>
-                    </select>
-                    <label class="ai-provider-checkbox">
-                      <input type="checkbox" id="analyzeCommentsShowTerminal">
-                      <span>Show terminal</span>
-                    </label>
-                    <div class="ai-provider-timeout">
-                      <input type="number" id="analyzeCommentsTimeout" min="1" max="30" value="5">
-                      <span>min</span>
+
+                <div class="ai-provider-card">
+                  <div class="ai-provider-header">
+                    <div class="ai-provider-title-group">
+                      <span class="ai-provider-icon">${getIcon(Wand2, 16)}</span>
+                      <span class="ai-provider-title">Apply Changes</span>
+                    </div>
+                  </div>
+                  <div class="ai-provider-settings">
+                    <div class="ai-provider-row">
+                      <select id="applyChangesProvider" class="ai-provider-select">
+                        <option value="claude-sdk">Claude SDK</option>
+                        <option value="claude-terminal">Claude Terminal</option>
+                        <option value="copilot-sdk">Copilot SDK</option>
+                        <option value="copilot-terminal">Copilot Terminal</option>
+                      </select>
+                      <label class="ai-provider-checkbox">
+                        <input type="checkbox" id="applyChangesShowTerminal">
+                        <span>Show terminal</span>
+                      </label>
+                      <div class="ai-provider-timeout">
+                        <input type="number" id="applyChangesTimeout" min="1" max="30" value="5">
+                        <span>min</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="ai-provider-card">
+                  <div class="ai-provider-header">
+                    <div class="ai-provider-title-group">
+                      <span class="ai-provider-icon">${getIcon(MessageSquare, 16)}</span>
+                      <span class="ai-provider-title">Chat Panel Default</span>
+                    </div>
+                  </div>
+                  <div class="ai-provider-settings">
+                    <div class="ai-provider-row">
+                      <select id="defaultChatAI" class="ai-provider-select">
+                        <option value="copilot">Copilot</option>
+                        <option value="claude">Claude</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="ai-provider-card">
+                  <div class="ai-provider-header">
+                    <div class="ai-provider-title-group">
+                      <span class="ai-provider-icon">${getIcon(Search, 16)}</span>
+                      <span class="ai-provider-title">DGrep Log Analysis</span>
+                    </div>
+                  </div>
+                  <div class="ai-provider-settings">
+                    <div class="ai-provider-row">
+                      <select id="dgrepAnalysisProvider" class="ai-provider-select">
+                        <option value="claude-sdk">Claude SDK</option>
+                        <option value="copilot-sdk">Copilot SDK</option>
+                      </select>
+                    </div>
+                    <div class="ai-provider-row" style="margin-top: 6px;">
+                      <label style="font-size: 12px; color: var(--text-secondary); margin-right: 8px;">Source repo</label>
+                      <select id="dgrepAnalysisSourceRepo" class="ai-provider-select" style="flex: 1;">
+                        <option value="">None</option>
+                      </select>
                     </div>
                   </div>
                 </div>
               </div>
+            </div>
 
-              <div class="ai-provider-card">
-                <div class="ai-provider-header">
-                  <div class="ai-provider-title-group">
-                    <span class="ai-provider-icon">${getIcon(Wand2, 16)}</span>
-                    <span class="ai-provider-title">Apply Changes</span>
-                  </div>
+            <div class="settings-section">
+              <h2 class="settings-section-title">Notifications</h2>
+              <p class="settings-section-description">Configure native Windows toast notifications for background events.</p>
+
+              <div class="form-group checkbox-group">
+                <label>
+                  <input type="checkbox" id="notificationsEnabled" checked>
+                  <span>Enable Windows notifications</span>
+                </label>
+              </div>
+
+              <div id="notificationEventToggles" class="form-group" style="margin-left: 24px;">
+                <div class="checkbox-group">
+                  <label>
+                    <input type="checkbox" id="notifyAiReviewComplete" checked>
+                    <span>AI PR Review completed</span>
+                  </label>
                 </div>
-                <div class="ai-provider-settings">
-                  <div class="ai-provider-row">
-                    <select id="applyChangesProvider" class="ai-provider-select">
-                      <option value="claude-sdk">Claude SDK</option>
-                      <option value="claude-terminal">Claude Terminal</option>
-                      <option value="copilot-sdk">Copilot SDK</option>
-                      <option value="copilot-terminal">Copilot Terminal</option>
-                    </select>
-                    <label class="ai-provider-checkbox">
-                      <input type="checkbox" id="applyChangesShowTerminal">
-                      <span>Show terminal</span>
-                    </label>
-                    <div class="ai-provider-timeout">
-                      <input type="number" id="applyChangesTimeout" min="1" max="30" value="5">
-                      <span>min</span>
-                    </div>
-                  </div>
+                <div class="checkbox-group">
+                  <label>
+                    <input type="checkbox" id="notifyAiAnalysisComplete" checked>
+                    <span>AI Comment Analysis completed</span>
+                  </label>
+                </div>
+                <div class="checkbox-group">
+                  <label>
+                    <input type="checkbox" id="notifyNewComments" checked>
+                    <span>New comments detected</span>
+                  </label>
+                </div>
+                <div class="checkbox-group">
+                  <label>
+                    <input type="checkbox" id="notifyNewIterations" checked>
+                    <span>New iterations (commits) detected</span>
+                  </label>
                 </div>
               </div>
 
-              <div class="ai-provider-card">
-                <div class="ai-provider-header">
-                  <div class="ai-provider-title-group">
-                    <span class="ai-provider-icon">${getIcon(MessageSquare, 16)}</span>
-                    <span class="ai-provider-title">Chat Panel Default</span>
+              <div class="form-group" style="margin-top: 12px;">
+                <button type="button" class="btn btn-secondary" id="testNotificationBtn">Test Notification</button>
+              </div>
+            </div>
+
+            <div class="settings-section" id="pluginSettingsSection">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <h2 class="settings-section-title" style="margin: 0;">Plugins</h2>
+                <button type="button" class="btn btn-secondary btn-sm" id="reloadAllPluginsBtn">Reload All</button>
+              </div>
+              <p class="settings-section-description">Manage installed plugins. Plugins are loaded from ~/.taskdock/plugins/</p>
+              <div id="pluginSettingsList" class="plugin-settings-list">
+                <p class="text-muted">Loading plugins...</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Services Tab -->
+          <div class="settings-tab-content" data-tab-content="services">
+            <div class="settings-section full-width">
+              <h2 class="settings-section-title">Services</h2>
+              <p class="settings-section-description">Register your services with their repositories and link related services together.</p>
+
+              <div class="service-list" id="servicesList"></div>
+
+              <div class="service-add-form" id="serviceAddForm" style="margin-top: var(--space-4);">
+                <h3 class="settings-subsection-title" style="margin: 0; padding: 0; border: none;">Add Service</h3>
+                <div class="form-group">
+                  <label for="serviceNameInput">Name</label>
+                  <input type="text" id="serviceNameInput" placeholder="e.g., Backend API">
+                </div>
+                <div class="form-group">
+                  <label for="serviceDescInput">Description</label>
+                  <input type="text" id="serviceDescInput" placeholder="Short description of this service">
+                </div>
+                <div class="form-group">
+                  <label>Repository Path</label>
+                  <div style="display: flex; gap: var(--space-2);">
+                    <input type="text" id="serviceRepoPathInput" placeholder="Browse to select local repo folder" readonly style="flex: 1;">
+                    <button type="button" class="btn btn-secondary btn-sm" id="browseServiceRepoBtn">Browse</button>
                   </div>
                 </div>
-                <div class="ai-provider-settings">
-                  <div class="ai-provider-row">
-                    <select id="defaultChatAI" class="ai-provider-select">
-                      <option value="copilot">Copilot</option>
-                      <option value="claude">Claude</option>
-                    </select>
-                  </div>
+                <div class="form-group" id="serviceLinkedGroup" style="display: none;">
+                  <label>Linked Services</label>
+                  <div id="serviceLinkedCheckboxes"></div>
+                </div>
+                <div class="form-actions" style="margin-top: 0;">
+                  <button type="button" class="btn btn-primary btn-sm" id="addServiceBtn">
+                    ${getIcon(Plus, 14)}
+                    Add Service
+                  </button>
                 </div>
               </div>
             </div>
           </div>
 
-          <div class="settings-section">
-            <h2 class="settings-section-title">PR Polling</h2>
-            <p class="settings-section-description">Configure automatic polling for PR updates (new commits, comments).</p>
+          <!-- Privacy Tab -->
+          <div class="settings-tab-content" data-tab-content="privacy">
+            <div class="settings-section full-width">
+              <h2 class="settings-section-title">Scrub Patterns</h2>
+              <p class="settings-section-description">Configure regex patterns for scrubbing sensitive data before it reaches AI agents. Matched values are replaced with tokens like scrub_g1, scrub_e1.</p>
 
-            <div class="form-group checkbox-group">
-              <label>
-                <input type="checkbox" id="pollingEnabled">
-                <span>Enable automatic polling for open PR tabs</span>
-              </label>
-            </div>
+              <table class="settings-table" id="scrubPatternsTable">
+                <thead>
+                  <tr>
+                    <th style="width: 60px;">Enabled</th>
+                    <th>Name</th>
+                    <th style="width: 60px;">Letter</th>
+                    <th>Regex</th>
+                    <th style="width: 80px;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="scrubPatternsBody"></tbody>
+              </table>
 
-            <div class="form-group">
-              <label for="pollingInterval">Polling Interval (seconds)</label>
-              <input type="number" id="pollingInterval" min="10" max="300" step="5" value="30">
-              <span class="form-hint">How often to check for updates (10-300 seconds)</span>
-            </div>
-
-          </div>
-
-          <div class="settings-section">
-            <h2 class="settings-section-title">Notifications</h2>
-            <p class="settings-section-description">Configure native Windows toast notifications for background events.</p>
-
-            <div class="form-group checkbox-group">
-              <label>
-                <input type="checkbox" id="notificationsEnabled" checked>
-                <span>Enable Windows notifications</span>
-              </label>
-            </div>
-
-            <div id="notificationEventToggles" class="form-group" style="margin-left: 24px;">
-              <div class="checkbox-group">
-                <label>
-                  <input type="checkbox" id="notifyAiReviewComplete" checked>
-                  <span>AI PR Review completed</span>
-                </label>
+              <div style="margin-top: var(--space-4);">
+                <h3 class="settings-subsection-title" style="margin: 0; padding: 0; border: none;">Add Pattern</h3>
+                <div style="display: flex; gap: var(--space-2); align-items: end; flex-wrap: wrap;">
+                  <div class="form-group" style="flex: 1; min-width: 120px;">
+                    <label for="scrubPatternName">Name</label>
+                    <input type="text" id="scrubPatternName" placeholder="e.g., Phone Number">
+                  </div>
+                  <div class="form-group" style="width: 80px;">
+                    <label for="scrubPatternLetter">Letter</label>
+                    <input type="text" id="scrubPatternLetter" maxlength="1" placeholder="p" style="text-align: center;">
+                  </div>
+                  <div class="form-group" style="flex: 2; min-width: 200px;">
+                    <label for="scrubPatternRegex">Regex</label>
+                    <input type="text" id="scrubPatternRegex" placeholder="\\d{3}-\\d{3}-\\d{4}">
+                  </div>
+                  <button type="button" class="btn btn-primary btn-sm" id="addScrubPatternBtn">Add</button>
+                </div>
+                <div id="scrubPatternError" class="error-text" style="display: none; color: var(--danger); margin-top: var(--space-1); font-size: 0.85em;"></div>
               </div>
-              <div class="checkbox-group">
-                <label>
-                  <input type="checkbox" id="notifyAiAnalysisComplete" checked>
-                  <span>AI Comment Analysis completed</span>
-                </label>
-              </div>
-              <div class="checkbox-group">
-                <label>
-                  <input type="checkbox" id="notifyNewComments" checked>
-                  <span>New comments detected</span>
-                </label>
-              </div>
-              <div class="checkbox-group">
-                <label>
-                  <input type="checkbox" id="notifyNewIterations" checked>
-                  <span>New iterations (commits) detected</span>
-                </label>
-              </div>
-            </div>
 
-            <div class="form-group" style="margin-top: 12px;">
-              <button type="button" class="btn btn-secondary" id="testNotificationBtn">Test Notification</button>
+              <div style="margin-top: var(--space-6);">
+                <h3 class="settings-subsection-title" style="margin: 0; padding: 0; border: none;">Regex Tester</h3>
+                <p class="settings-section-description">Paste sample text to see which values would be scrubbed by enabled patterns.</p>
+                <div class="form-group">
+                  <label for="scrubTesterInput">Sample Text</label>
+                  <textarea id="scrubTesterInput" rows="4" placeholder="Paste log text with GUIDs, emails, IPs, etc." style="width: 100%; font-family: var(--font-mono); font-size: 0.85em;"></textarea>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" id="testScrubBtn">Test Scrub</button>
+                <div id="scrubTesterOutput" style="margin-top: var(--space-2); display: none;">
+                  <label>Scrubbed Output</label>
+                  <pre id="scrubTesterResult" style="background: var(--bg-secondary); padding: var(--space-3); border-radius: var(--radius); font-family: var(--font-mono); font-size: 0.85em; white-space: pre-wrap; max-height: 200px; overflow: auto; border: 1px solid var(--border);"></pre>
+                  <div id="scrubTesterMatches" style="margin-top: var(--space-2); font-size: 0.85em;"></div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div class="settings-section" id="pluginSettingsSection">
-            <h2 class="settings-section-title">Plugins</h2>
-            <p class="settings-section-description">Manage installed plugins. Plugins are loaded from ~/.taskdock/plugins/</p>
-            <div id="pluginSettingsList" class="plugin-settings-list">
-              <p class="text-muted">Loading plugins...</p>
-            </div>
-          </div>
         </div>
       </div>
     `;
 
     this.attachEventListeners();
+    this.attachSettingsTabListeners();
+    this.attachScrubPatternListeners();
+  }
+
+  private attachSettingsTabListeners(): void {
+    this.container.querySelectorAll('.settings-tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tab = (btn as HTMLElement).dataset.settingsTab!;
+        this.switchSettingsTab(tab);
+      });
+    });
+  }
+
+  private switchSettingsTab(tabId: string): void {
+    this.activeSettingsTab = tabId;
+
+    // Update tab buttons
+    this.container.querySelectorAll('.settings-tab-btn').forEach(btn => {
+      btn.classList.toggle('active', (btn as HTMLElement).dataset.settingsTab === tabId);
+    });
+
+    // Update tab content
+    this.container.querySelectorAll('.settings-tab-content').forEach(content => {
+      content.classList.toggle('active', (content as HTMLElement).dataset.tabContent === tabId);
+    });
   }
 
   private attachEventListeners() {
@@ -548,6 +768,65 @@ export class SettingsView {
       await notificationService.sendTest();
       Toast.info('Test notification sent');
     });
+
+    // Services
+    const browseServiceRepoBtn = this.container.querySelector('#browseServiceRepoBtn');
+    browseServiceRepoBtn?.addEventListener('click', async () => {
+      const folder = await window.electronAPI.browseFolder();
+      if (folder) {
+        (this.container.querySelector('#serviceRepoPathInput') as HTMLInputElement).value = folder;
+      }
+    });
+
+    const addServiceBtn = this.container.querySelector('#addServiceBtn');
+    addServiceBtn?.addEventListener('click', async () => {
+      const name = (this.container.querySelector('#serviceNameInput') as HTMLInputElement).value.trim();
+      const description = (this.container.querySelector('#serviceDescInput') as HTMLInputElement).value.trim();
+      const repoPath = (this.container.querySelector('#serviceRepoPathInput') as HTMLInputElement).value.trim();
+
+      if (!name) {
+        Toast.error('Service name is required');
+        return;
+      }
+      if (!repoPath) {
+        Toast.error('Repository path is required');
+        return;
+      }
+
+      // Check for duplicate name
+      if (this.services.some(s => s.name.toLowerCase() === name.toLowerCase())) {
+        Toast.error('A service with this name already exists');
+        return;
+      }
+
+      // Gather linked service IDs
+      const linkedServiceIds: string[] = [];
+      this.container.querySelectorAll('.service-linked-cb:checked').forEach(cb => {
+        linkedServiceIds.push((cb as HTMLInputElement).dataset.serviceId!);
+      });
+
+      const newService: ServiceEntry = {
+        id: crypto.randomUUID(),
+        name,
+        description,
+        repoPath,
+        linkedServiceIds,
+      };
+
+      this.services.push(newService);
+      await this.saveServices();
+      this.renderServicesList();
+
+      // Clear form
+      (this.container.querySelector('#serviceNameInput') as HTMLInputElement).value = '';
+      (this.container.querySelector('#serviceDescInput') as HTMLInputElement).value = '';
+      (this.container.querySelector('#serviceRepoPathInput') as HTMLInputElement).value = '';
+      this.container.querySelectorAll('.service-linked-cb').forEach(cb => {
+        (cb as HTMLInputElement).checked = false;
+      });
+
+      Toast.success(`Service "${name}" added`);
+    });
   }
 
   private updateFormValues() {
@@ -590,6 +869,9 @@ export class SettingsView {
 
       const defaultChatAI = (this.container.querySelector('#defaultChatAI') as HTMLSelectElement).value as 'copilot' | 'claude';
 
+      const dgrepAnalysisProvider = (this.container.querySelector('#dgrepAnalysisProvider') as HTMLSelectElement).value as 'claude-sdk' | 'copilot-sdk';
+      const dgrepAnalysisSourceRepo = (this.container.querySelector('#dgrepAnalysisSourceRepo') as HTMLSelectElement).value;
+
       // 4. Gather Polling settings
       const pollingEnabled = (this.container.querySelector('#pollingEnabled') as HTMLInputElement).checked;
       let pollingIntervalSeconds = parseInt((this.container.querySelector('#pollingInterval') as HTMLInputElement).value, 10);
@@ -615,6 +897,10 @@ export class SettingsView {
           provider: applyChangesProvider,
           showTerminal: applyChangesShowTerminal,
           timeoutMinutes: applyChangesTimeoutMinutes,
+        },
+        dgrepAnalysis: {
+          provider: dgrepAnalysisProvider,
+          sourceRepository: dgrepAnalysisSourceRepo,
         },
       };
       await window.electronAPI.setConsoleReviewSettings(this.consoleReviewSettings);
@@ -713,6 +999,9 @@ export class SettingsView {
           <span class="repo-path">${escapeHtml(repo.path)}</span>
           <span class="repo-normalized">${escapeHtml(repo.normalized)}</span>
           <span class="repo-origin">${escapeHtml(repo.originUrl)}</span>
+          <input type="text" class="repo-description-input" data-index="${index}"
+            placeholder="Description (e.g., Backend API service, Frontend SPA...)"
+            value="${escapeHtml(repo.description || '')}">
         </div>
         <button type="button" class="btn btn-icon btn-danger-subtle remove-repo-btn" data-index="${index}" title="Remove">
           ${getIcon(X, 14)}
@@ -726,6 +1015,15 @@ export class SettingsView {
         const index = parseInt((e.currentTarget as HTMLElement).dataset.index || '0');
         this.consoleReviewSettings.linkedRepositories.splice(index, 1);
         this.renderLinkedReposList();
+      });
+    });
+
+    // Attach description change listeners
+    container.querySelectorAll('.repo-description-input').forEach(input => {
+      input.addEventListener('input', (e) => {
+        const el = e.target as HTMLInputElement;
+        const index = parseInt(el.dataset.index || '0');
+        this.consoleReviewSettings.linkedRepositories[index].description = el.value.trim() || undefined;
       });
     });
   }
@@ -789,13 +1087,13 @@ export class SettingsView {
     if (enableWorkIQ) enableWorkIQ.checked = this.consoleReviewSettings.enableWorkIQ ?? true;
 
     // Analyze Comments form values
-    const analyzeComments = this.consoleReviewSettings.analyzeComments || { provider: 'claude-sdk', showTerminal: false, timeoutMinutes: 5 };
+    const analyzeComments = this.consoleReviewSettings.analyzeComments || { provider: 'copilot-sdk', showTerminal: false, timeoutMinutes: 5 };
     if (analyzeCommentsProvider) analyzeCommentsProvider.value = analyzeComments.provider;
     if (analyzeCommentsShowTerminal) analyzeCommentsShowTerminal.checked = analyzeComments.showTerminal;
     if (analyzeCommentsTimeout) analyzeCommentsTimeout.value = String(analyzeComments.timeoutMinutes);
 
     // Apply Changes form values
-    const applyChanges = this.consoleReviewSettings.applyChanges || { provider: 'claude-terminal', showTerminal: false, timeoutMinutes: 5 };
+    const applyChanges = this.consoleReviewSettings.applyChanges || { provider: 'copilot-sdk', showTerminal: false, timeoutMinutes: 5 };
     if (applyChangesProvider) applyChangesProvider.value = applyChanges.provider;
     if (applyChangesShowTerminal) applyChangesShowTerminal.checked = applyChanges.showTerminal;
     if (applyChangesTimeout) applyChangesTimeout.value = String(applyChanges.timeoutMinutes);
@@ -803,6 +1101,25 @@ export class SettingsView {
     // Default Chat AI form value
     const defaultChatAI = this.container.querySelector('#defaultChatAI') as HTMLSelectElement;
     if (defaultChatAI) defaultChatAI.value = this.consoleReviewSettings.defaultChatAI || 'copilot';
+
+    // DGrep Analysis settings
+    const dgrepAnalysis = this.consoleReviewSettings.dgrepAnalysis || { provider: 'copilot-sdk', sourceRepository: '' };
+    const dgrepAnalysisProvider = this.container.querySelector('#dgrepAnalysisProvider') as HTMLSelectElement;
+    if (dgrepAnalysisProvider) dgrepAnalysisProvider.value = dgrepAnalysis.provider;
+
+    const dgrepAnalysisSourceRepo = this.container.querySelector('#dgrepAnalysisSourceRepo') as HTMLSelectElement;
+    if (dgrepAnalysisSourceRepo) {
+      // Populate with linked repos
+      dgrepAnalysisSourceRepo.innerHTML = '<option value="">None</option>';
+      for (const repo of this.consoleReviewSettings.linkedRepositories || []) {
+        const label = repo.description || repo.path.split(/[\\/]/).pop() || repo.path;
+        const opt = document.createElement('option');
+        opt.value = repo.path;
+        opt.textContent = label;
+        dgrepAnalysisSourceRepo.appendChild(opt);
+      }
+      dgrepAnalysisSourceRepo.value = dgrepAnalysis.sourceRepository;
+    }
 
     this.renderLinkedReposList();
     this.renderMonitoredReposList();
@@ -989,5 +1306,242 @@ export class SettingsView {
         (cb as HTMLInputElement).disabled = true;
       });
     }
+  }
+
+  private async loadServices(): Promise<void> {
+    try {
+      this.services = await window.electronAPI.getServices();
+      this.renderServicesList();
+    } catch (error) {
+      console.error('Failed to load services:', error);
+      this.services = [];
+      this.renderServicesList();
+    }
+  }
+
+  private async saveServices(): Promise<void> {
+    try {
+      await window.electronAPI.setServices(this.services);
+    } catch (error: any) {
+      Toast.error(error.message || 'Failed to save services');
+    }
+  }
+
+  private renderServicesList(): void {
+    const container = this.container.querySelector('#servicesList') as HTMLElement;
+    if (!container) return;
+
+    if (this.services.length === 0) {
+      container.innerHTML = '<div class="service-empty">No services registered yet</div>';
+      this.updateLinkedServicesCheckboxes();
+      return;
+    }
+
+    container.innerHTML = this.services.map((service, index) => {
+      const linkedNames = service.linkedServiceIds
+        .map(id => this.services.find(s => s.id === id)?.name)
+        .filter(Boolean);
+
+      return `
+        <div class="service-card" data-index="${index}">
+          <div class="service-card-header">
+            <span class="service-card-name">${escapeHtml(service.name)}</span>
+            <button type="button" class="btn btn-icon btn-danger-subtle remove-service-btn" data-index="${index}" title="Remove">
+              ${getIcon(X, 14)}
+            </button>
+          </div>
+          ${service.description ? `<span class="service-card-description">${escapeHtml(service.description)}</span>` : ''}
+          <span class="service-card-repo">${escapeHtml(service.repoPath)}</span>
+          ${linkedNames.length > 0 ? `
+            <div class="service-card-links">
+              ${linkedNames.map(name => `<span class="service-link-badge">${escapeHtml(name!)}</span>`).join('')}
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }).join('');
+
+    // Attach remove listeners
+    container.querySelectorAll('.remove-service-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const index = parseInt((e.currentTarget as HTMLElement).dataset.index || '0');
+        const removedId = this.services[index].id;
+        this.services.splice(index, 1);
+        // Remove references to deleted service from linked lists
+        for (const s of this.services) {
+          s.linkedServiceIds = s.linkedServiceIds.filter(id => id !== removedId);
+        }
+        await this.saveServices();
+        this.renderServicesList();
+      });
+    });
+
+    this.updateLinkedServicesCheckboxes();
+  }
+
+  private updateLinkedServicesCheckboxes(): void {
+    const group = this.container.querySelector('#serviceLinkedGroup') as HTMLElement;
+    const checkboxes = this.container.querySelector('#serviceLinkedCheckboxes') as HTMLElement;
+    if (!group || !checkboxes) return;
+
+    if (this.services.length === 0) {
+      group.style.display = 'none';
+      checkboxes.innerHTML = '';
+      return;
+    }
+
+    group.style.display = '';
+    checkboxes.innerHTML = this.services.map(s => `
+      <div class="checkbox-group">
+        <label>
+          <input type="checkbox" class="service-linked-cb" data-service-id="${s.id}">
+          <span>${escapeHtml(s.name)}</span>
+        </label>
+      </div>
+    `).join('');
+  }
+
+  // Scrub Patterns (Privacy Tab) Methods
+
+  private async loadScrubPatterns(): Promise<void> {
+    try {
+      this.scrubPatterns = await window.electronAPI.getScrubPatterns();
+    } catch {
+      this.scrubPatterns = [];
+    }
+    this.renderScrubPatterns();
+  }
+
+  private renderScrubPatterns(): void {
+    const tbody = this.container.querySelector('#scrubPatternsBody') as HTMLElement;
+    if (!tbody) return;
+    tbody.innerHTML = this.scrubPatterns.map((p, i) => `
+      <tr>
+        <td style="text-align: center;"><input type="checkbox" class="scrub-pattern-toggle" data-index="${i}" ${p.enabled ? 'checked' : ''}></td>
+        <td>${escapeHtml(p.name)}</td>
+        <td style="text-align: center;"><code>${escapeHtml(p.letter)}</code></td>
+        <td><code style="font-size: 0.85em; word-break: break-all;">${escapeHtml(p.regex)}</code></td>
+        <td style="text-align: center;">${p.isDefault
+          ? '<span style="color: var(--text-muted); font-size: 0.8em;">Default</span>'
+          : `<button class="btn btn-danger btn-xs scrub-pattern-delete" data-index="${i}" style="font-size: 0.75em; padding: 2px 6px;">Delete</button>`
+        }</td>
+      </tr>
+    `).join('');
+  }
+
+  private attachScrubPatternListeners(): void {
+    // Toggle enable/disable
+    this.container.addEventListener('change', async (e) => {
+      const target = e.target as HTMLInputElement;
+      if (target.classList.contains('scrub-pattern-toggle')) {
+        const index = parseInt(target.dataset.index || '0', 10);
+        if (this.scrubPatterns[index]) {
+          this.scrubPatterns[index].enabled = target.checked;
+          await window.electronAPI.setScrubPatterns(this.scrubPatterns);
+        }
+      }
+    });
+
+    // Delete pattern
+    this.container.addEventListener('click', async (e) => {
+      const target = e.target as HTMLElement;
+      if (target.classList.contains('scrub-pattern-delete')) {
+        const index = parseInt(target.dataset.index || '0', 10);
+        if (this.scrubPatterns[index] && !this.scrubPatterns[index].isDefault) {
+          this.scrubPatterns.splice(index, 1);
+          await window.electronAPI.setScrubPatterns(this.scrubPatterns);
+          this.renderScrubPatterns();
+        }
+      }
+    });
+
+    // Add pattern
+    const addBtn = this.container.querySelector('#addScrubPatternBtn');
+    addBtn?.addEventListener('click', async () => {
+      const nameInput = this.container.querySelector('#scrubPatternName') as HTMLInputElement;
+      const letterInput = this.container.querySelector('#scrubPatternLetter') as HTMLInputElement;
+      const regexInput = this.container.querySelector('#scrubPatternRegex') as HTMLInputElement;
+      const errorDiv = this.container.querySelector('#scrubPatternError') as HTMLElement;
+
+      const name = nameInput?.value.trim() || '';
+      const letter = letterInput?.value.trim().toLowerCase() || '';
+      const regex = regexInput?.value.trim() || '';
+
+      // Validation
+      if (!name || !letter || !regex) {
+        if (errorDiv) { errorDiv.textContent = 'All fields are required.'; errorDiv.style.display = 'block'; }
+        return;
+      }
+      if (!/^[a-z]$/.test(letter)) {
+        if (errorDiv) { errorDiv.textContent = 'Letter must be a single lowercase a-z character.'; errorDiv.style.display = 'block'; }
+        return;
+      }
+      if (this.scrubPatterns.some(p => p.letter === letter)) {
+        if (errorDiv) { errorDiv.textContent = `Letter "${letter}" is already used by "${this.scrubPatterns.find(p => p.letter === letter)?.name}".`; errorDiv.style.display = 'block'; }
+        return;
+      }
+      try {
+        new RegExp(regex);
+      } catch {
+        if (errorDiv) { errorDiv.textContent = 'Invalid regex pattern.'; errorDiv.style.display = 'block'; }
+        return;
+      }
+
+      if (errorDiv) errorDiv.style.display = 'none';
+
+      this.scrubPatterns.push({ name, letter, regex, enabled: true, isDefault: false });
+      await window.electronAPI.setScrubPatterns(this.scrubPatterns);
+      this.renderScrubPatterns();
+
+      // Clear inputs
+      if (nameInput) nameInput.value = '';
+      if (letterInput) letterInput.value = '';
+      if (regexInput) regexInput.value = '';
+    });
+
+    // Test scrub
+    const testBtn = this.container.querySelector('#testScrubBtn');
+    testBtn?.addEventListener('click', () => {
+      const input = (this.container.querySelector('#scrubTesterInput') as HTMLTextAreaElement)?.value || '';
+      const outputDiv = this.container.querySelector('#scrubTesterOutput') as HTMLElement;
+      const resultPre = this.container.querySelector('#scrubTesterResult') as HTMLElement;
+      const matchesDiv = this.container.querySelector('#scrubTesterMatches') as HTMLElement;
+
+      if (!input.trim()) return;
+
+      // Build combined regex from enabled patterns and apply scrubbing
+      const enabledPatterns = this.scrubPatterns.filter(p => p.enabled);
+      let scrubbed = input;
+      const matches: Array<{ pattern: string; value: string; token: string }> = [];
+      const counters = new Map<string, number>();
+      const seen = new Map<string, string>();
+
+      for (const p of enabledPatterns) {
+        try {
+          const regex = new RegExp(p.regex, 'gi');
+          scrubbed = scrubbed.replace(regex, (match) => {
+            const normalized = match.toLowerCase();
+            if (seen.has(normalized)) return seen.get(normalized)!;
+            const count = (counters.get(p.letter) ?? 0) + 1;
+            counters.set(p.letter, count);
+            const token = `scrub_${p.letter}${count}`;
+            seen.set(normalized, token);
+            matches.push({ pattern: p.name, value: match, token });
+            return token;
+          });
+        } catch { /* skip bad regex */ }
+      }
+
+      if (outputDiv) outputDiv.style.display = 'block';
+      if (resultPre) resultPre.textContent = scrubbed;
+      if (matchesDiv) {
+        if (matches.length === 0) {
+          matchesDiv.innerHTML = '<span style="color: var(--text-muted);">No matches found.</span>';
+        } else {
+          matchesDiv.innerHTML = `<strong>${matches.length} value(s) scrubbed:</strong><br>` +
+            matches.map(m => `<code>${escapeHtml(m.token)}</code> \u2190 <code>${escapeHtml(m.value)}</code> (${escapeHtml(m.pattern)})`).join('<br>');
+        }
+      }
+    });
   }
 }

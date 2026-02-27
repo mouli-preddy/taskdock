@@ -268,6 +268,20 @@
   text-overflow: ellipsis;
 }
 
+.repo-description-input {
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-2);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  width: 100%;
+}
+
+.repo-description-input::placeholder {
+  color: var(--text-tertiary);
+}
+
 .remove-repo-btn {
   flex-shrink: 0;
 }
@@ -514,4 +528,146 @@
   margin-top: 0;
   padding-top: 0;
   border-top: none;
+}
+
+/* Settings Sub-tabs */
+.settings-tabs {
+  display: flex;
+  gap: var(--space-1);
+  padding: 0 var(--space-6);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.settings-tab-btn {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
+}
+
+.settings-tab-btn:hover {
+  color: var(--text-primary);
+}
+
+.settings-tab-btn.active {
+  color: var(--accent-blue);
+  border-bottom-color: var(--accent-blue);
+}
+
+.settings-tab-content {
+  display: none;
+}
+
+.settings-tab-content.active {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+}
+
+@media (min-width: 768px) {
+  .settings-tab-content.active {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .settings-tab-content .settings-section.full-width {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Service list styles */
+.service-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.service-card {
+  padding: var(--space-4);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.service-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.service-card-name {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.service-card-description {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.service-card-repo {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.service-card-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+
+.service-link-badge {
+  font-size: var(--text-xs);
+  padding: 2px 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+}
+
+.service-empty {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  font-style: italic;
+  padding: var(--space-4);
+  background: var(--bg-primary);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+/* Add service form */
+.service-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+}
+
+.service-add-form .form-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-end;
+}
+
+.service-add-form .form-row .form-group {
+  flex: 1;
 }

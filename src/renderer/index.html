@@ -15,11 +15,15 @@
   <link rel="stylesheet" href="./styles/ai-review.css">
   <link rel="stylesheet" href="./styles/terminals.css">
   <link rel="stylesheet" href="./styles/workitems.css">
+  <link rel="stylesheet" href="./styles/icm.css">
   <link rel="stylesheet" href="./styles/walkthroughs.css">
   <link rel="stylesheet" href="./styles/apply-changes.css">
   <link rel="stylesheet" href="./styles/comment-analysis.css">
   <link rel="stylesheet" href="./styles/about-view.css">
+  <link rel="stylesheet" href="./styles/dgrep.css">
   <link rel="stylesheet" href="./styles/plugins.css">
+  <link rel="stylesheet" href="./styles/cfv.css">
+  <link rel="stylesheet" href="./styles/workspace.css">
   <link rel="stylesheet" href="./lib/xterm/xterm.css">
 </head>
 <body>
@@ -65,6 +69,17 @@
             <div id="workItemTabPanelsContainer"></div>
           </div>
 
+          <!-- DGrep Log Search Section Content -->
+          <div class="section-content hidden" id="dgrepSectionContent">
+            <div class="tab-panel active" id="dgrepSearchPanel"></div>
+          </div>
+
+          <!-- ICM Section Content -->
+          <div class="section-content hidden" id="icmSectionContent">
+            <div class="tab-panel active" id="icmListPanel"></div>
+            <div id="icmTabPanelsContainer"></div>
+          </div>
+
           <!-- Terminals Section Content -->
           <div class="section-content hidden" id="terminalsSectionContent">
             <div id="terminalsScreen" class="screen terminals-screen">
@@ -75,6 +90,17 @@
           <!-- About Section Content -->
           <div class="section-content hidden" id="aboutSectionContent">
             <div class="tab-panel active" id="aboutTabPanel"></div>
+          </div>
+
+          <!-- CFV Section Content -->
+          <div class="section-content hidden" id="cfvSectionContent">
+            <div class="tab-panel active" id="cfvHomePanel"></div>
+            <div id="cfvCallPanelsContainer"></div>
+          </div>
+
+          <!-- Workspace Section Content -->
+          <div class="section-content hidden" id="workspacesSectionContent">
+            <div class="tab-panel active" id="workspacesPanel"></div>
           </div>
 
           <!-- Plugin Section Contents (dynamically populated) -->

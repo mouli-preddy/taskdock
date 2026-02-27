@@ -35,6 +35,8 @@ export interface CreateTerminalOptions {
 export interface LinkedRepository {
   path: string;
   originUrl: string;
+  /** Optional human-readable description of what this repository contains */
+  description?: string;
 }
 
 export interface MonitoredRepository {
@@ -73,6 +75,11 @@ export interface ConsoleReviewSettings {
     showTerminal: boolean;
     timeoutMinutes: number;
   };
+  dgrepAnalysis: {
+    provider: 'claude-sdk' | 'copilot-sdk';
+    /** Path to linked source repo for code correlation (empty = none) */
+    sourceRepository: string;
+  };
 }
 
 export const DEFAULT_CONSOLE_REVIEW_SETTINGS: ConsoleReviewSettings = {
@@ -87,13 +94,35 @@ export const DEFAULT_CONSOLE_REVIEW_SETTINGS: ConsoleReviewSettings = {
   generatedFilePatterns: [],
   enableWorkIQ: true,
   analyzeComments: {
-    provider: 'claude-sdk',
+    provider: 'copilot-sdk',
     showTerminal: false,
     timeoutMinutes: 5,
   },
   applyChanges: {
-    provider: 'claude-terminal',
+    provider: 'copilot-sdk',
     showTerminal: false,
     timeoutMinutes: 5,
   },
+  dgrepAnalysis: {
+    provider: 'copilot-sdk',
+    sourceRepository: '',
+  },
 };
+
+// ==================== Scrub Pattern Settings ====================
+
+export interface ScrubPatternSetting {
+  name: string;
+  letter: string;
+  regex: string;
+  enabled: boolean;
+  isDefault: boolean;
+}
+
+export const DEFAULT_SCRUB_PATTERNS: ScrubPatternSetting[] = [
+  { name: 'GUID', letter: 'g', regex: '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}', enabled: true, isDefault: true },
+  { name: 'Email', letter: 'e', regex: '[\\w.+-]+@[\\w-]+\\.[\\w.]+', enabled: true, isDefault: true },
+  { name: 'IPv4', letter: 'i', regex: '\\b\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\b', enabled: false, isDefault: true },
+  { name: 'Tenant ID', letter: 't', regex: '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}', enabled: true, isDefault: true },
+  { name: 'SIP URI', letter: 's', regex: 'sip:[\\w.+-]+@[\\w.-]+', enabled: true, isDefault: true },
+];

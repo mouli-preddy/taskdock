@@ -331,3 +331,82 @@ pub fn set_notification_settings(settings: NotificationSettings) -> Result<(), S
     save_store_data(&data)?;
     Ok(())
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ServiceEntry {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub repo_path: String,
+    pub linked_service_ids: Vec<String>,
+}
+
+#[tauri::command]
+pub fn get_services() -> Result<Vec<ServiceEntry>, String> {
+    let data = load_store_data()?;
+    let services_value = get_nested_value(&data, "services")
+        .unwrap_or(serde_json::Value::Array(vec![]));
+
+    let services: Vec<ServiceEntry> = serde_json::from_value(services_value)
+        .map_err(|e| format!("Failed to parse services: {}", e))?;
+
+    Ok(services)
+}
+
+#[tauri::command]
+pub fn set_services(services: Vec<ServiceEntry>) -> Result<(), String> {
+    let mut data = load_store_data()?;
+    let services_value = serde_json::to_value(services)
+        .map_err(|e| format!("Failed to serialize services: {}", e))?;
+    set_nested_value(&mut data, "services", services_value)?;
+    save_store_data(&data)?;
+    Ok(())
+}
+
+// ==================== Scrub Pattern Settings ====================
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ScrubPatternSetting {
+    pub name: String,
+    pub letter: String,
+    pub regex: String,
+    pub enabled: bool,
+    pub is_default: bool,
+}
+
+fn default_scrub_patterns() -> Vec<ScrubPatternSetting> {
+    vec![
+        ScrubPatternSetting { name: "GUID".into(), letter: "g".into(), regex: r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}".into(), enabled: true, is_default: true },
+        ScrubPatternSetting { name: "Email".into(), letter: "e".into(), regex: r"[\w.+-]+@[\w-]+\.[\w.]+".into(), enabled: true, is_default: true },
+        ScrubPatternSetting { name: "IPv4".into(), letter: "i".into(), regex: r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b".into(), enabled: false, is_default: true },
+        ScrubPatternSetting { name: "Tenant ID".into(), letter: "t".into(), regex: r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}".into(), enabled: true, is_default: true },
+        ScrubPatternSetting { name: "SIP URI".into(), letter: "s".into(), regex: r"sip:[\w.+-]+@[\w.-]+".into(), enabled: true, is_default: true },
+    ]
+}
+
+#[tauri::command]
+pub fn get_scrub_patterns() -> Result<Vec<ScrubPatternSetting>, String> {
+    let data = load_store_data()?;
+    let patterns_value = get_nested_value(&data, "scrubPatterns");
+
+    match patterns_value {
+        Some(val) => {
+            let patterns: Vec<ScrubPatternSetting> = serde_json::from_value(val)
+                .map_err(|e| format!("Failed to parse scrub patterns: {}", e))?;
+            Ok(patterns)
+        }
+        None => Ok(default_scrub_patterns()),
+    }
+}
+
+#[tauri::command]
+pub fn set_scrub_patterns(patterns: Vec<ScrubPatternSetting>) -> Result<(), String> {
+    let mut data = load_store_data()?;
+    let patterns_value = serde_json::to_value(patterns)
+        .map_err(|e| format!("Failed to serialize scrub patterns: {}", e))?;
+    set_nested_value(&mut data, "scrubPatterns", patterns_value)?;
+    save_store_data(&data)?;
+    Ok(())
+}

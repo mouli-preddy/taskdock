@@ -49,14 +49,24 @@ import { AboutView } from './components/about-view.js';
 import { WorkItemsListView, WorkItemViewType } from './components/workitems-list-view.js';
 import { WorkItemQueryBuilder } from './components/workitem-query-builder.js';
 import { WorkItemDetailView } from './components/workitem-detail-view.js';
+import { CfvHomeView } from './components/cfv/cfv-home-view.js';
+import { CfvCallView } from './components/cfv/cfv-call-view.js';
+import type { CfvCallTab } from '../shared/cfv-types.js';
+import { IcmIncidentsListView, IcmViewType, IcmSharedQueryGroup } from './components/icm-incidents-list-view.js';
+import { IcmIncidentDetailView } from './components/icm-incident-detail-view.js';
+import type { IcmIncidentListItem, IcmIncident, IcmFavoriteQuery, IcmQuery, IcmContact } from '../shared/icm-types.js';
+import { compileIcmCriteria } from '../shared/icm-types.js';
 import { ResizablePanels, setupResizablePanels } from './components/resizable-panels.js';
-import { icons, iconHtml, getIcon, getIconByName, MessageSquare, Bot, BookOpen, Globe, Columns, FileText, ChevronLeft, ChevronRight, ChevronDown, X, File, FileCode, ArrowRight, Link, CheckCircle, Check, Clock, XCircle, Circle, Home, LayoutGrid, Settings, ChevronsLeft, Sparkles, Eye, EyeOff, RefreshCw, Terminal } from './utils/icons.js';
+import { icons, iconHtml, getIcon, getIconByName, MessageSquare, Bot, BookOpen, Globe, Columns, FileText, ChevronLeft, ChevronRight, ChevronDown, X, File, FileCode, ArrowRight, Link, CheckCircle, Check, Clock, XCircle, Circle, Home, LayoutGrid, Settings, ChevronsLeft, Sparkles, Eye, EyeOff, RefreshCw, Terminal, AlertTriangle } from './utils/icons.js';
 import { renderMarkdownSync } from './utils/markdown-renderer.js';
 import { PRPollingService, type PollResult, type PollingState } from './services/pr-polling-service.js';
 import { PluginTabRenderer } from './components/plugin-tab-renderer.js';
 import type { LoadedPlugin, PluginToastEvent, PluginUIUpdateEvent } from '../shared/plugin-types.js';
 import { initDeepLinkHandler } from './deep-link-handler.js';
 import { notificationService } from './services/notification-service.js';
+import { DGrepSearchView } from './components/dgrep-search-view.js';
+import { WorkspaceSection } from './components/workspace-section.js';
+import type { DGrepProgressEvent, DGrepCompleteEvent, DGrepErrorEvent } from '../shared/dgrep-types.js';
 
 // Tab type definitions
 interface ReviewTab {
@@ -80,6 +90,14 @@ interface WorkItemTab {
   label: string;
   closeable: boolean;
   workItemId?: number;
+}
+
+interface IcmTab {
+  id: string;
+  type: 'list' | 'detail';
+  label: string;
+  closeable: boolean;
+  incidentId?: number;
 }
 
 interface PRTabState {
@@ -150,6 +168,8 @@ class PRReviewApp {
   private workItemsListView!: WorkItemsListView;
   private workItemQueryBuilder!: WorkItemQueryBuilder;
   private workItemDetailViews: Map<string, WorkItemDetailView> = new Map();
+  private dgrepSearchView!: DGrepSearchView;
+  private workspaceSection!: WorkspaceSection;
 
   private activeSection: SectionId = 'review';
   private reviewTabs: ReviewTab[] = [];
@@ -159,6 +179,19 @@ class PRReviewApp {
   private workItemsTabs: WorkItemTab[] = [];
   private activeWorkItemsTabId: string = 'list';
   private savedQueries: SavedQuery[] = [];
+
+  // CFV state
+  private cfvHomeView!: CfvHomeView;
+  private cfvCallViews: Map<string, CfvCallView> = new Map();
+  private cfvTabs: CfvCallTab[] = [];
+  private activeCfvTabId: string = 'home';
+
+  // ICM state
+  private icmListView!: IcmIncidentsListView;
+  private icmDetailViews: Map<string, IcmIncidentDetailView> = new Map();
+  private icmTabs: IcmTab[] = [];
+  private activeIcmTabId: string = 'list';
+  private icmCurrentUser: IcmContact | null = null;
 
   // PR tab states map (tabId -> PRTabState)
   private prTabStates: Map<string, PRTabState> = new Map();
@@ -237,6 +270,7 @@ class PRReviewApp {
     this.initEventListeners();
     this.initAIListeners();
     this.initTerminalListeners();
+    this.initDgrepListeners();
     this.initTheme();
     this.initPlugins();
 
@@ -301,6 +335,199 @@ class PRReviewApp {
     this.workItemQueryBuilder = new WorkItemQueryBuilder();
     this.workItemQueryBuilder.onSave((query) => this.saveQuery(query));
 
+    // Initialize DGrep search view
+    this.dgrepSearchView = new DGrepSearchView('dgrepSearchPanel');
+    this.dgrepSearchView.onCheckTokenStatus(async () => {
+      return window.electronAPI.dgrepCheckTokenStatus();
+    });
+    this.dgrepSearchView.onAcquireTokens(async () => {
+      return window.electronAPI.dgrepAcquireTokens();
+    });
+    this.dgrepSearchView.onSearch(async (params) => {
+      return window.electronAPI.dgrepSearch(params);
+    });
+    this.dgrepSearchView.onSearchByLogId(async (logId, startTime, endTime, options) => {
+      return window.electronAPI.dgrepSearchByLogId(logId, startTime, endTime, options);
+    });
+    this.dgrepSearchView.onCancel((sessionId) => {
+      window.electronAPI.dgrepCancelSearch(sessionId);
+    });
+    this.dgrepSearchView.onOpenInGeneva(async (url) => {
+      window.electronAPI.openExternal(url);
+    });
+    this.dgrepSearchView.onFetchNamespaces(async (endpoint) => {
+      return window.electronAPI.dgrepGetNamespaces(endpoint);
+    });
+    this.dgrepSearchView.onFetchEvents(async (endpoint, namespace) => {
+      return window.electronAPI.dgrepGetEvents(endpoint, namespace);
+    });
+    this.dgrepSearchView.onGetResults(async (sessionId) => {
+      return window.electronAPI.dgrepGetResults(sessionId);
+    });
+    this.dgrepSearchView.onGetResultsPage(async (sessionId, offset, limit) => {
+      return window.electronAPI.dgrepGetResultsPage(sessionId, offset, limit);
+    });
+    this.dgrepSearchView.onRunClientQuery(async (sessionId, clientQuery) => {
+      return window.electronAPI.dgrepRunClientQuery(sessionId, clientQuery);
+    });
+
+    // DGrep AI callbacks
+    this.dgrepSearchView.onNLToKQL(async (prompt, columns) => {
+      return window.electronAPI.dgrepAINLToKQL(prompt, columns, []);
+    });
+    this.dgrepSearchView.onSaveQuery(async (name, formState) => {
+      return window.electronAPI.dgrepSaveQuery({ name, formState, timestamp: new Date().toISOString() } as any);
+    });
+    this.dgrepSearchView.onLoadQueries(async () => {
+      return window.electronAPI.dgrepLoadQueries() as any;
+    });
+    this.dgrepSearchView.onDeleteQuery(async (name) => {
+      return window.electronAPI.dgrepDeleteQuery(name);
+    });
+
+    // Initialize Workspace section
+    this.workspaceSection = new WorkspaceSection('workspacesPanel');
+
+    // Wire workspace view callbacks so DGrep/ICM subtab views are functional
+    this.workspaceSection.onWireDgrepView = (view: DGrepSearchView) => {
+      view.onCheckTokenStatus(async () => {
+        return window.electronAPI.dgrepCheckTokenStatus();
+      });
+      view.onAcquireTokens(async () => {
+        return window.electronAPI.dgrepAcquireTokens();
+      });
+      view.onSearch(async (params) => {
+        return window.electronAPI.dgrepSearch(params);
+      });
+      view.onSearchByLogId(async (logId, startTime, endTime, options) => {
+        return window.electronAPI.dgrepSearchByLogId(logId, startTime, endTime, options);
+      });
+      view.onCancel((sessionId) => {
+        window.electronAPI.dgrepCancelSearch(sessionId);
+      });
+      view.onOpenInGeneva(async (url) => {
+        window.electronAPI.openExternal(url);
+      });
+      view.onFetchNamespaces(async (endpoint) => {
+        return window.electronAPI.dgrepGetNamespaces(endpoint);
+      });
+      view.onFetchEvents(async (endpoint, namespace) => {
+        return window.electronAPI.dgrepGetEvents(endpoint, namespace);
+      });
+      view.onGetResults(async (sessionId) => {
+        return window.electronAPI.dgrepGetResults(sessionId);
+      });
+      view.onGetResultsPage(async (sessionId, offset, limit) => {
+        return window.electronAPI.dgrepGetResultsPage(sessionId, offset, limit);
+      });
+      view.onRunClientQuery(async (sessionId, clientQuery) => {
+        return window.electronAPI.dgrepRunClientQuery(sessionId, clientQuery);
+      });
+      view.onNLToKQL(async (prompt, columns) => {
+        return window.electronAPI.dgrepAINLToKQL(prompt, columns, []);
+      });
+      view.onSaveQuery(async (name, formState) => {
+        return window.electronAPI.dgrepSaveQuery({ name, formState, timestamp: new Date().toISOString() } as any);
+      });
+      view.onLoadQueries(async () => {
+        return window.electronAPI.dgrepLoadQueries() as any;
+      });
+      view.onDeleteQuery(async (name) => {
+        return window.electronAPI.dgrepDeleteQuery(name);
+      });
+      // Check token status now that callbacks are wired
+      view.checkTokenStatus();
+    };
+
+    this.workspaceSection.onWireIcmView = (view: IcmIncidentDetailView) => {
+      view.onOpenInBrowser((url) => window.electronAPI.openExternal(url));
+      view.onAction(async (action, incidentId) => {
+        try {
+          switch (action) {
+            case 'acknowledge':
+              await window.electronAPI.icmAcknowledge(incidentId);
+              break;
+            case 'mitigate':
+              await window.electronAPI.icmMitigate(incidentId);
+              break;
+            case 'resolve':
+              await window.electronAPI.icmResolve(incidentId);
+              break;
+          }
+          const refreshed = await window.electronAPI.icmGetIncident(incidentId);
+          view.setIncident(refreshed);
+          Toast.success(`Incident ${incidentId} ${action}d`);
+        } catch (error) {
+          console.error(`[workspace] ICM action ${action} failed:`, error);
+          Toast.error(`Failed to ${action} incident: ${(error as Error).message}`);
+        }
+      });
+      view.onAddDiscussion(async (incidentId, text) => {
+        await window.electronAPI.icmAddDiscussion(incidentId, text);
+      });
+    };
+
+    // Wire workspace ICM incident loading (ensures auth before loading)
+    this.workspaceSection.onLoadIcmIncident = async (incidentId: number) => {
+      await this.initIcmUser();
+      return window.electronAPI.icmGetIncident(incidentId);
+    };
+
+    // Wire workspace cross-reference navigation
+    this.workspaceSection.onNavigateCfv = (callId: string) => {
+      const activeWsId = this.workspaceSection.getActiveWorkspaceId();
+      if (activeWsId) {
+        const shortId = callId.length > 12 ? callId.slice(0, 8) + '...' : callId;
+        this.workspaceSection.addSubtab(activeWsId, 'cfv', shortId, { callId });
+      }
+    };
+    this.workspaceSection.onNavigateIcm = (incidentId: number) => {
+      const activeWsId = this.workspaceSection.getActiveWorkspaceId();
+      if (activeWsId) {
+        this.workspaceSection.addSubtab(activeWsId, 'icm', `#${incidentId}`, { incidentId });
+      }
+    };
+
+    // Initialize CFV home view
+    this.cfvHomeView = new CfvHomeView('cfvHomePanel');
+    this.cfvHomeView.onFetchCall((callId) => this.cfvFetchCall(callId));
+    this.cfvHomeView.onOpenCall((callId) => this.cfvOpenCallTab(callId));
+    this.cfvHomeView.onSetToken((token) => this.cfvSetToken(token));
+    this.cfvHomeView.onDeleteCall((callId) => this.cfvDeleteCall(callId));
+    this.cfvHomeView.onRefresh(() => this.cfvRefreshHome());
+    this.cfvHomeView.onAcquireToken((options) => this.cfvAcquireToken(options));
+    this.cfvHomeView.onCancelAcquireToken(() => this.cfvCancelTokenAcquisition());
+
+    // Listen for CFV progress events
+    window.electronAPI.onCfvProgress((event: any) => {
+      this.cfvHomeView.setFetchProgress(event);
+    });
+
+    // Listen for CFV token acquisition events
+    window.electronAPI.onCfvTokenProgress((event) => {
+      this.cfvHomeView.setTokenAcquisitionProgress(event);
+    });
+
+    window.electronAPI.onCfvTokenResult((event) => {
+      if (event.success) {
+        Toast.success('Token acquired');
+        this.cfvHomeView.setTokenAcquisitionProgress(null);
+        this.cfvRefreshHome();
+      }
+      // On failure, don't clear the acquisition progress — it shows the error with a retry button
+    });
+
+    // Initialize ICM views
+    this.icmListView = new IcmIncidentsListView('icmListPanel');
+    this.icmListView.onSelect((incident) => this.openIcmIncidentTab(incident));
+    this.icmListView.onRefresh(() => this.refreshIcmIncidents());
+    this.icmListView.onOpenById((id) => this.openIcmIncidentById(id));
+
+    this.icmTabs = [
+      { id: 'list', type: 'list', label: 'Incidents', closeable: false },
+    ];
+
+
     // Initialize tabs
     this.reviewTabs = [
       { id: 'home', type: 'home', label: 'Home', closeable: false },
@@ -311,6 +538,9 @@ class PRReviewApp {
     this.workItemsTabs = [
       { id: 'list', type: 'list', label: 'Work Items', closeable: false },
     ];
+    this.cfvTabs = [
+      { id: 'home', type: 'home', label: 'Home', closeable: false },
+    ];
 
     // Set initial state
     this.updateTabBar();
@@ -318,6 +548,126 @@ class PRReviewApp {
   }
 
   private async initPlugins() {
+    // Load and render plugins
+    await this.loadPluginUI();
+
+    // Subscribe to plugin events (one-time, never re-subscribed)
+    window.electronAPI.onPluginUIUpdate((event: PluginUIUpdateEvent) => {
+      const renderer = this.pluginRenderers.get(event.pluginId);
+      if (renderer) renderer.updateComponent(event.componentId, event.data);
+    });
+
+    window.electronAPI.onPluginUIToast((event: PluginToastEvent) => {
+      switch (event.level) {
+        case 'success': Toast.success(event.message); break;
+        case 'error': Toast.error(event.message); break;
+        case 'warning': Toast.warning(event.message); break;
+        default: Toast.info(event.message);
+      }
+    });
+
+    window.electronAPI.onPluginUIInject((event: any) => {
+      // Handle dynamic injection of components into core tabs
+      console.log('Plugin UI inject:', event);
+    });
+
+    window.electronAPI.onPluginNavigate((event: { pluginId: string; section: string }) => {
+      this.switchSection(event.section as SectionId);
+    });
+
+    window.electronAPI.onTriggerPRReview(async (event: { org: string; project: string; prId: number }) => {
+      this.switchSection('review');
+      await this.openPRByUrl(event.org, event.project, event.prId);
+    });
+
+    window.electronAPI.onAutoReviewStarted((event: { org: string; project: string; prId: number; sessionId: string; displayName: string }) => {
+      // Find the PR tab state and wire up the AI review session
+      for (const [tabId, state] of this.prTabStates) {
+        if (state.prId === event.prId && state.org === event.org && state.project === event.project) {
+          state.aiSessionId = event.sessionId;
+          state.aiReviewInProgress = true;
+
+          this.aiCommentsPanel.addTab({
+            sessionId: event.sessionId,
+            displayName: event.displayName,
+            status: 'preparing',
+            isSaved: false,
+          });
+          this.aiCommentsPanel.clear();
+          this.aiCommentsPanel.showProgress('Running AI review...');
+
+          // Open AI comments panel if this is the active tab
+          if (this.activeReviewTabId === tabId) {
+            document.getElementById(`reviewScreen-${tabId}`)?.classList.add('ai-comments-open');
+            this.updatePanelButtonState('toggleAICommentsBtn', true);
+          }
+          break;
+        }
+      }
+    });
+
+    window.electronAPI.onPluginReloaded(async (event: { pluginId: string }) => {
+      const { pluginId } = event;
+      try {
+        // Remove old renderer/sidebar if exists
+        const oldRenderer = this.pluginRenderers.get(pluginId);
+        if (oldRenderer) {
+          this.sectionSidebar.removeSection(`plugin-${pluginId}`);
+          document.getElementById(`pluginSection-${pluginId}`)?.remove();
+          this.pluginRenderers.delete(pluginId);
+        }
+
+        // Re-fetch the updated plugin and re-render if it has UI
+        const plugin = await window.electronAPI.pluginGetPlugin(pluginId);
+        if (plugin?.enabled && plugin.ui) {
+          this.sectionSidebar.addSection({
+            id: `plugin-${plugin.id}`,
+            icon: getIconByName(plugin.ui.tab.icon, 20) || `<span class="plugin-icon-text">\uD83D\uDD0C</span>`,
+            label: plugin.ui.tab.label,
+          });
+
+          const container = document.createElement('div');
+          container.className = 'section-content hidden';
+          container.id = `pluginSection-${plugin.id}`;
+          container.innerHTML = '<div class="tab-panel active plugin-tab-content"></div>';
+          document.getElementById('pluginSectionContents')?.appendChild(container);
+
+          const renderer = new PluginTabRenderer(
+            container.querySelector('.plugin-tab-content')!,
+            plugin
+          );
+          renderer.onTrigger((triggerId, input) => {
+            window.electronAPI.pluginExecuteTrigger(plugin.id, triggerId, input);
+          });
+          renderer.render();
+          this.pluginRenderers.set(plugin.id, renderer);
+        }
+
+        // Rebuild hook buttons
+        const allPlugins: LoadedPlugin[] = await window.electronAPI.pluginGetPlugins();
+        this.pluginHookButtons = [];
+        this.renderPluginHooks(allPlugins.filter(p => p.enabled));
+        Toast.info(plugin ? `Plugin "${pluginId}" reloaded` : `Plugin "${pluginId}" removed`);
+      } catch (err: any) {
+        console.error('Failed to handle plugin reload:', err);
+      }
+    });
+
+    window.electronAPI.onPluginsReloaded(async () => {
+      // Remove existing plugin sections and re-render (without re-subscribing events)
+      for (const [pluginId] of this.pluginRenderers) {
+        this.sectionSidebar.removeSection(`plugin-${pluginId}`);
+        document.getElementById(`pluginSection-${pluginId}`)?.remove();
+      }
+      this.pluginRenderers.clear();
+      this.pluginHookButtons = [];
+      await this.loadPluginUI();
+      Toast.info('All plugins reloaded');
+    });
+  }
+
+  /** Load plugins from backend and render their UI. Re-entrant safe (no event subscriptions). */
+  private async loadPluginUI() {
     try {
       const plugins: LoadedPlugin[] = await window.electronAPI.pluginGetPlugins();
 
@@ -352,43 +702,8 @@ class PRReviewApp {
 
       // Collect hooks from all enabled plugins and render them
       this.renderPluginHooks(plugins.filter(p => p.enabled));
-
-      // Subscribe to plugin events
-      window.electronAPI.onPluginUIUpdate((event: PluginUIUpdateEvent) => {
-        const renderer = this.pluginRenderers.get(event.pluginId);
-        if (renderer) renderer.updateComponent(event.componentId, event.data);
-      });
-
-      window.electronAPI.onPluginUIToast((event: PluginToastEvent) => {
-        switch (event.level) {
-          case 'success': Toast.success(event.message); break;
-          case 'error': Toast.error(event.message); break;
-          case 'warning': Toast.warning(event.message); break;
-          default: Toast.info(event.message);
-        }
-      });
-
-      window.electronAPI.onPluginUIInject((event: any) => {
-        // Handle dynamic injection of components into core tabs
-        console.log('Plugin UI inject:', event);
-      });
-
-      window.electronAPI.onPluginNavigate((event: { pluginId: string; section: string }) => {
-        this.switchSection(event.section as SectionId);
-      });
-
-      window.electronAPI.onPluginsReloaded(() => {
-        // Remove existing plugin sections and re-init
-        for (const [pluginId] of this.pluginRenderers) {
-          this.sectionSidebar.removeSection(`plugin-${pluginId}`);
-          document.getElementById(`pluginSection-${pluginId}`)?.remove();
-        }
-        this.pluginRenderers.clear();
-        this.pluginHookButtons = [];
-        this.initPlugins();
-      });
     } catch (err) {
-      console.error('Failed to initialize plugins:', err);
+      console.error('Failed to load plugins:', err);
     }
   }
 
@@ -884,6 +1199,59 @@ class PRReviewApp {
     });
   }
 
+  private initDgrepListeners(): void {
+    // Helper: broadcast an event to the main DGrep view AND any workspace-hosted DGrep views.
+    // Each view filters by sessionId internally, so only the correct view processes the event.
+    const forAllDgrep = (fn: (view: DGrepSearchView) => void) => {
+      fn(this.dgrepSearchView);
+      if (this.workspaceSection) {
+        for (const view of this.workspaceSection.getDgrepViews()) fn(view);
+      }
+    };
+
+    window.electronAPI.onDgrepProgress((event: DGrepProgressEvent) => {
+      forAllDgrep(v => v.setSearchProgress(event));
+    });
+
+    window.electronAPI.onDgrepComplete((event: DGrepCompleteEvent) => {
+      forAllDgrep(v => v.setSearchComplete(event));
+    });
+
+    window.electronAPI.onDgrepError((event: DGrepErrorEvent) => {
+      forAllDgrep(v => v.setSearchError(event));
+    });
+
+    window.electronAPI.onDgrepIntermediateResults((event: { sessionId: string; columns: string[]; rows: Record<string, any>[]; totalCount: number }) => {
+      forAllDgrep(v => v.setIntermediateResults(event));
+    });
+
+    // DGrep AI event listeners
+    window.electronAPI.onDgrepAISummaryProgress((event: any) => {
+      forAllDgrep(v => v.handleAISummaryProgress(event));
+    });
+    window.electronAPI.onDgrepAISummaryComplete((event: any) => {
+      forAllDgrep(v => v.handleAISummaryComplete(event));
+    });
+    window.electronAPI.onDgrepAIRCAProgress((event: any) => {
+      forAllDgrep(v => v.handleAIRCAProgress(event));
+    });
+    window.electronAPI.onDgrepAIRCAComplete((event: any) => {
+      forAllDgrep(v => v.handleAIRCAComplete(event));
+    });
+    window.electronAPI.onDgrepAIChatEvent((event: any) => {
+      forAllDgrep(v => v.handleAIChatEvent(event));
+    });
+    window.electronAPI.onDgrepAIClientQueryUpdate((event: any) => {
+      forAllDgrep(v => v.handleAIClientQueryUpdate(event));
+    });
+    window.electronAPI.onDgrepAIImproveDisplayProgress((event: any) => {
+      forAllDgrep(v => v.handleAIImproveDisplayProgress(event));
+    });
+    window.electronAPI.onDgrepAIImproveDisplayComplete((event: any) => {
+      forAllDgrep(v => v.handleAIImproveDisplayComplete(event));
+    });
+  }
+
   private async handleTerminalReviewComplete(event: { sessionId: string; result: any }) {
     const { sessionId, result } = event;
 
@@ -1013,7 +1381,7 @@ class PRReviewApp {
             id: walkthroughSessionId,
             prId: state.prId,
             name: 'Deep Review Walkthrough',
-            provider: 'claude-terminal',
+            provider: 'copilot-sdk',
             showTerminal: false,
             status: 'complete',
             createdAt: new Date().toISOString(),
@@ -1096,7 +1464,11 @@ class PRReviewApp {
     document.getElementById('settingsSectionContent')?.classList.toggle('hidden', section !== 'settings');
     document.getElementById('terminalsSectionContent')?.classList.toggle('hidden', section !== 'terminals');
     document.getElementById('workItemsSectionContent')?.classList.toggle('hidden', section !== 'workItems');
+    document.getElementById('icmSectionContent')?.classList.toggle('hidden', section !== 'icm');
+    document.getElementById('dgrepSectionContent')?.classList.toggle('hidden', section !== 'dgrep');
     document.getElementById('aboutSectionContent')?.classList.toggle('hidden', section !== 'about');
+    document.getElementById('cfvSectionContent')?.classList.toggle('hidden', section !== 'cfv');
+    document.getElementById('workspacesSectionContent')?.classList.toggle('hidden', section !== 'workspaces');
 
     // Hide/show plugin sections
     const pluginContents = document.getElementById('pluginSectionContents');
@@ -1121,6 +1493,21 @@ class PRReviewApp {
       this.loadSavedQueries();
     }
 
+    // Load CFV data when switching to CFV section
+    if (section === 'cfv') {
+      this.cfvRefreshHome();
+    }
+
+    // Check DGrep token status when switching to DGrep section
+    if (section === 'dgrep') {
+      this.dgrepSearchView.checkTokenStatus();
+    }
+
+    // Load ICM incidents when switching to ICM section
+    if (section === 'icm') {
+      this.initIcmUser().then(() => this.refreshIcmIncidents());
+    }
+
     // Update tab bar
     this.updateTabBar();
   }
@@ -1136,8 +1523,8 @@ class PRReviewApp {
       }));
       this.reviewTabBar.setTabs(tabs);
       this.reviewTabBar.setActive(this.activeReviewTabId);
-    } else if (this.activeSection === 'about') {
-      // About section has no tabs - hide the tab bar
+    } else if (this.activeSection === 'about' || this.activeSection === 'dgrep') {
+      // About and DGrep sections have no tabs - hide the tab bar
       this.reviewTabBar.setTabs([]);
     } else if (this.activeSection === 'settings') {
       const tabs: Tab[] = this.settingsTabs.map(t => ({
@@ -1148,19 +1535,19 @@ class PRReviewApp {
       }));
       this.reviewTabBar.setTabs(tabs);
       this.reviewTabBar.setActive(this.activeSettingsTabId);
+    } else if (this.activeSection === 'cfv') {
+      // CFV uses inline tabs, hide the main tab bar
+      this.reviewTabBar.setTabs([]);
+      this.updateCfvTabBar();
+    } else if (this.activeSection === 'icm') {
+      // ICM section uses its own inline tabs - hide the main tab bar
+      this.reviewTabBar.setTabs([]);
     } else if (this.activeSection.startsWith('plugin-')) {
       // Plugin sections have no tab bar
       this.reviewTabBar.setTabs([]);
     } else {
-      // Default: show settings tabs for other sections (workItems, terminals)
-      const tabs: Tab[] = this.settingsTabs.map(t => ({
-        id: t.id,
-        label: t.label,
-        closeable: t.closeable,
-        icon: getIcon(Settings, 14),
-      }));
-      this.reviewTabBar.setTabs(tabs);
-      this.reviewTabBar.setActive(this.activeSettingsTabId);
+      // Work items, terminals, and other sections use their own inline tabs - hide the main tab bar
+      this.reviewTabBar.setTabs([]);
     }
   }
 
@@ -1843,7 +2230,19 @@ class PRReviewApp {
 
   // First launch flow
   private async checkFirstLaunch() {
-    const isConfigured = await window.electronAPI.isConfigured();
+    let isConfigured = false;
+    try {
+      isConfigured = await window.electronAPI.isConfigured();
+    } catch {
+      // Tauri native invoke may not be available (e.g. running in browser)
+      // Fall back to checking via bridge settings
+      try {
+        const settings = await window.electronAPI.getSettings() as Record<string, unknown> | null;
+        if (settings?.organization && settings?.project) {
+          isConfigured = true;
+        }
+      } catch { /* not configured */ }
+    }
 
     // Load saved diff view mode preference
     try {
@@ -1861,13 +2260,24 @@ class PRReviewApp {
       document.getElementById('setupModalBackdrop')?.classList.remove('hidden');
     } else {
       // Load config and initialize
-      const config = await window.electronAPI.loadConfig();
-      if (config) {
-        this.organization = config.ado.organization;
-        this.project = config.ado.project;
-        this.settingsView.setSettings(config.ado);
-        await this.loadPRLists();
+      try {
+        const config = await window.electronAPI.loadConfig();
+        if (config) {
+          this.organization = config.ado.organization;
+          this.project = config.ado.project;
+          this.settingsView.setSettings(config.ado);
+        }
+      } catch {
+        // Tauri native invoke may not be available, fall back to bridge settings
+        try {
+          const settings = await window.electronAPI.getSettings() as Record<string, unknown> | null;
+          if (settings?.organization && settings?.project) {
+            this.organization = settings.organization as string;
+            this.project = settings.project as string;
+          }
+        } catch { /* unable to load settings */ }
       }
+      await this.loadPRLists();
     }
   }
 
@@ -2927,7 +3337,7 @@ class PRReviewApp {
     try {
       // Get settings for provider configuration
       const settings = await window.electronAPI.getConsoleReviewSettings();
-      const analyzeSettings = settings.analyzeComments || { provider: 'claude-sdk' };
+      const analyzeSettings = settings.analyzeComments || { provider: 'copilot-sdk' };
 
       // Get file contents for context
       const fileContents: Record<string, string> = {};
@@ -2997,7 +3407,7 @@ class PRReviewApp {
     try {
       // Get settings for provider configuration
       const settings = await window.electronAPI.getConsoleReviewSettings();
-      const analyzeSettings = settings.analyzeComments || { provider: 'claude-sdk' };
+      const analyzeSettings = settings.analyzeComments || { provider: 'copilot-sdk' };
 
       const filePath = thread.threadContext?.filePath;
       const fileContents: Record<string, string> = {};
@@ -3784,7 +4194,7 @@ After this, respond with a simple text response to greet the user and ask them w
     const reviewSession = await window.electronAPI.aiGetSession(event.sessionId);
     const walkthroughSessionId = `review-wt-${event.sessionId}`;
     const displayName = event.walkthrough.displayName || reviewSession?.displayName || 'Review Walkthrough';
-    const provider = reviewSession?.provider || 'claude-sdk';
+    const provider = reviewSession?.provider || 'copilot-sdk';
 
     // Add to walkthroughs sidebar - this is a walkthrough from a review session
     const walkthroughsView = this.walkthroughsViews.get(this.activeReviewTabId);
@@ -4166,7 +4576,7 @@ After this, respond with a simple text response to greet the user and ask them w
         // Get session info for metadata
         const session = await window.electronAPI.walkthroughGetSession(event.sessionId);
         const displayName = session?.name || 'Walkthrough';
-        const provider = session?.provider || 'claude-sdk';
+        const provider = session?.provider || 'copilot-sdk';
 
         await window.electronAPI.aiSaveWalkthroughSession(
           state.org,
@@ -4506,6 +4916,8 @@ After this, respond with a simple text response to greet the user and ask them w
       this.workItemsListView.setWorkItems([]);
       this.workItemsListView.setSubtitle('Failed to load work items');
       Toast.error('Failed to load work items');
+    } finally {
+      this.workItemsListView.setLoading(false);
     }
   }
 
@@ -4735,6 +5147,239 @@ After this, respond with a simple text response to greet the user and ask them w
     inputEl.focus();
   }
 
+  // =========================================================================
+  // CFV Section Methods
+  // =========================================================================
+
+  private async cfvRefreshHome() {
+    try {
+      const [tokenStatus, calls, profiles] = await Promise.all([
+        window.electronAPI.cfvGetTokenStatus(),
+        window.electronAPI.cfvListCachedCalls(),
+        window.electronAPI.cfvListEdgeProfiles(),
+      ]);
+      this.cfvHomeView.setTokenStatus(tokenStatus);
+      this.cfvHomeView.setCalls(calls);
+      this.cfvHomeView.setEdgeProfiles(profiles);
+      this.cfvHomeView.setSubtitle(`${calls.length} cached call${calls.length !== 1 ? 's' : ''}`);
+    } catch (error) {
+      console.error('Failed to refresh CFV home:', error);
+      this.cfvHomeView.setCalls([]);
+    }
+  }
+
+  private async cfvSetToken(token: string) {
+    try {
+      await window.electronAPI.cfvSetToken(token);
+      const status = await window.electronAPI.cfvGetTokenStatus();
+      this.cfvHomeView.setTokenStatus(status);
+      Toast.success('CFV token saved');
+    } catch (error) {
+      Toast.error('Failed to set CFV token: ' + (error as Error).message);
+    }
+  }
+
+  private async cfvAcquireToken(options?: { forceVisible?: boolean; edgeProfile?: string }) {
+    try {
+      await window.electronAPI.cfvAcquireToken(options);
+      // Results come via cfv:token-progress and cfv:token-result events
+    } catch (error) {
+      Toast.error('Failed to start token acquisition: ' + (error as Error).message);
+    }
+  }
+
+  private async cfvCancelTokenAcquisition() {
+    try {
+      await window.electronAPI.cfvCancelTokenAcquisition();
+    } catch (error) {
+      console.error('Failed to cancel token acquisition:', error);
+    }
+  }
+
+  private async cfvFetchCall(callId: string) {
+    try {
+      // Check token status first; auto-acquire if missing/expired
+      const tokenStatus = await window.electronAPI.cfvGetTokenStatus();
+      if (!tokenStatus.hasToken || !tokenStatus.valid) {
+        Toast.info('No valid token. Starting auto-login...');
+        await window.electronAPI.cfvAcquireToken();
+        return; // User will re-trigger fetch after token is acquired
+      }
+
+      this.cfvHomeView.setFetchProgress({ step: 0, totalSteps: 5, label: 'Starting...' });
+      const result = await window.electronAPI.cfvFetchCall(callId);
+      this.cfvHomeView.setFetchProgress(null);
+      Toast.success(`Fetched call: ${result.stats.callflowMessages} messages`);
+      await this.cfvRefreshHome();
+      this.cfvOpenCallTab(callId);
+    } catch (error) {
+      this.cfvHomeView.setFetchProgress(null);
+      Toast.error('Failed to fetch call: ' + (error as Error).message);
+    }
+  }
+
+  private cfvOpenCallTab(callId: string) {
+    const tabId = `cfv-${callId}`;
+
+    // Check if tab already exists
+    const existingTab = this.cfvTabs.find(t => t.id === tabId);
+    if (existingTab) {
+      this.switchCfvTab(tabId);
+      return;
+    }
+
+    // Create new tab
+    const shortId = callId.length > 12 ? callId.slice(0, 8) + '...' : callId;
+    const tab: CfvCallTab = {
+      id: tabId,
+      type: 'call',
+      label: shortId,
+      closeable: true,
+      callId,
+    };
+    this.cfvTabs.push(tab);
+
+    // Create panel container
+    const container = document.getElementById('cfvCallPanelsContainer')!;
+    const panel = document.createElement('div');
+    panel.id = `cfvPanel-${tabId}`;
+    panel.className = 'tab-panel cfv-call-panel';
+    container.appendChild(panel);
+
+    // Create call view
+    const callView = new CfvCallView(panel, callId);
+    this.cfvCallViews.set(tabId, callView);
+
+    // Switch to new tab
+    this.switchCfvTab(tabId);
+    this.updateCfvTabBar();
+  }
+
+  private switchCfvTab(tabId: string) {
+    this.activeCfvTabId = tabId;
+
+    // Show/hide panels
+    const homePanel = document.getElementById('cfvHomePanel');
+    if (homePanel) {
+      homePanel.classList.toggle('active', tabId === 'home');
+      homePanel.style.display = tabId === 'home' ? '' : 'none';
+    }
+
+    this.cfvCallViews.forEach((_, id) => {
+      const panel = document.getElementById(`cfvPanel-${id}`);
+      if (panel) {
+        panel.classList.toggle('active', id === tabId);
+        panel.style.display = id === tabId ? '' : 'none';
+      }
+    });
+
+    this.updateCfvTabBar();
+  }
+
+  private closeCfvTab(tabId: string) {
+    const index = this.cfvTabs.findIndex(t => t.id === tabId);
+    if (index === -1) return;
+
+    // Remove tab
+    this.cfvTabs.splice(index, 1);
+
+    // Dispose and remove view
+    const view = this.cfvCallViews.get(tabId);
+    if (view) {
+      view.dispose();
+      this.cfvCallViews.delete(tabId);
+    }
+
+    // Remove panel
+    document.getElementById(`cfvPanel-${tabId}`)?.remove();
+
+    // Switch to another tab if we closed the active one
+    if (this.activeCfvTabId === tabId) {
+      const newTab = this.cfvTabs[Math.max(0, index - 1)];
+      if (newTab) {
+        this.switchCfvTab(newTab.id);
+      }
+    }
+
+    this.updateCfvTabBar();
+  }
+
+  private async cfvDeleteCall(callId: string) {
+    try {
+      await window.electronAPI.cfvDeleteCall(callId);
+
+      // Close tab if open
+      const tabId = `cfv-${callId}`;
+      if (this.cfvTabs.find(t => t.id === tabId)) {
+        this.closeCfvTab(tabId);
+      }
+
+      await this.cfvRefreshHome();
+      Toast.success('Call deleted');
+    } catch (error) {
+      Toast.error('Failed to delete call: ' + (error as Error).message);
+    }
+  }
+
+  private updateCfvTabBar() {
+    if (this.cfvTabs.length <= 1) {
+      this.hideCfvTabs();
+      return;
+    }
+
+    const container = document.getElementById('cfvSectionContent');
+    if (!container) return;
+
+    let tabBar = container.querySelector('.cfv-tab-bar') as HTMLElement;
+    if (!tabBar) {
+      tabBar = document.createElement('div');
+      tabBar.className = 'cfv-tab-bar';
+      container.insertBefore(tabBar, container.firstChild);
+    }
+
+    tabBar.innerHTML = this.cfvTabs.map(tab => `
+      <button class="cfv-tab-btn ${tab.id === this.activeCfvTabId ? 'active' : ''}" data-tab-id="${tab.id}">
+        <span>${tab.label}</span>
+        ${tab.closeable ? `<span class="cfv-tab-close" data-tab-id="${tab.id}">&times;</span>` : ''}
+      </button>
+    `).join('');
+
+    tabBar.querySelectorAll('.cfv-tab-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        if (target.classList.contains('cfv-tab-close')) {
+          e.stopPropagation();
+          const tabId = target.dataset.tabId!;
+          this.closeCfvTab(tabId);
+        } else {
+          const tabId = (btn as HTMLElement).dataset.tabId!;
+          this.switchCfvTab(tabId);
+        }
+      });
+    });
+
+    // Context menu for Move to Workspace
+    tabBar.querySelectorAll('.cfv-tab-btn').forEach(btn => {
+      const tabId = (btn as HTMLElement).dataset.tabId!;
+      if (tabId === 'home') return;
+      btn.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        this.showMoveToWorkspaceMenu(e as MouseEvent, 'cfv', tabId);
+      });
+    });
+  }
+
+  private hideCfvTabs() {
+    const container = document.getElementById('cfvSectionContent');
+    if (!container) return;
+    const tabBar = container.querySelector('.cfv-tab-bar');
+    tabBar?.remove();
+  }
+
+  // =========================================================================
+  // Work Items Section Methods
+  // =========================================================================
+
   private async openWorkItemTab(item: WorkItem) {
     const tabId = `wi-${item.id}`;
 
@@ -4820,6 +5465,7 @@ After this, respond with a simple text response to greet the user and ask them w
       }
     } catch (error) {
       console.error('Failed to load work item:', error);
+      detailView.setLoading(false);
       Toast.error('Failed to load work item');
     }
 
@@ -4850,19 +5496,12 @@ After this, respond with a simple text response to greet the user and ask them w
     }
 
     this.workItemDetailViews.forEach((_, id) => {
-      const panel = document.getElementById(`workItemPanel-wi-${id.replace('wi-', '')}`);
+      const panel = document.getElementById(`workItemPanel-${id}`);
       if (panel) {
         panel.classList.toggle('active', id === tabId);
         panel.style.display = id === tabId ? '' : 'none';
       }
     });
-
-    // Explicitly show the active detail panel
-    const activePanel = document.getElementById(`workItemPanel-${tabId}`);
-    if (activePanel) {
-      activePanel.classList.add('active');
-      activePanel.style.display = '';
-    }
 
     this.updateWorkItemsTabBar();
   }
@@ -4924,7 +5563,7 @@ After this, respond with a simple text response to greet the user and ask them w
     tabBar.innerHTML = tabs.map(tab => `
       <button class="workitems-tab-btn ${tab.id === this.activeWorkItemsTabId ? 'active' : ''}" data-tab-id="${tab.id}">
         ${tab.icon || ''}
-        <span>${tab.label}</span>
+        <span class="workitems-tab-title">${tab.label}</span>
         ${tab.closeable ? `<span class="workitems-tab-close" data-tab-id="${tab.id}">&times;</span>` : ''}
       </button>
     `).join('');
@@ -4966,6 +5605,537 @@ After this, respond with a simple text response to greet the user and ask them w
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  // ==================== ICM Methods ====================
+
+  private async initIcmUser() {
+    if (this.icmCurrentUser) return;
+
+    try {
+      // Ensure we have a valid token (acquires via Playwright if needed)
+      const hasToken = await window.electronAPI.icmHasValidToken();
+      if (!hasToken) {
+        this.icmListView.setSubtitle('Authenticating to ICM...');
+        await window.electronAPI.icmAcquireToken();
+      }
+
+      const user = await window.electronAPI.icmGetCurrentUser();
+      console.log('[ICM] Current user:', user?.Alias, 'Id:', user?.Id);
+      this.icmCurrentUser = user;
+      this.icmListView.setCurrentUser(user);
+      await this.loadIcmQueries();
+    } catch (error) {
+      console.error('Failed to get ICM current user:', error);
+      Toast.error('Failed to connect to ICM. Ensure you are signed into Edge.');
+    }
+  }
+
+  private async refreshIcmIncidents() {
+    this.icmListView.setLoading(true);
+
+    try {
+      const view = this.icmListView.getActiveView();
+      const queryId = this.icmListView.getActiveQueryId();
+      let filter: string | undefined;
+
+      if ((view === 'favorite' || view === 'saved' || view === 'shared') && queryId) {
+        // Find the query criteria and compile it to OData
+        filter = this.findAndCompileIcmQuery(view, queryId);
+        if (!filter) {
+          this.icmListView.setIncidents([]);
+          this.icmListView.setSubtitle('Could not compile query criteria');
+          return;
+        }
+      } else if (view === 'myIncidents' && this.icmCurrentUser) {
+        filter = `ContactAlias eq '${this.icmCurrentUser.Alias}' and State ne 'Resolved'`;
+      } else if (view === 'myTeams' && this.icmCurrentUser?.Teams) {
+        const teamIds = Object.keys(this.icmCurrentUser.Teams);
+        if (teamIds.length > 0) {
+          const teamFilter = teamIds.map(id => `OwningTeamId eq ${id}`).join(' or ');
+          filter = `(${teamFilter}) and State ne 'Resolved'`;
+        } else {
+          filter = "State ne 'Resolved'";
+        }
+      } else if (view === 'myServices' && this.icmCurrentUser?.Teams) {
+        const serviceIds = new Set<number>();
+        for (const team of Object.values(this.icmCurrentUser.Teams)) {
+          if (team.ServiceId) serviceIds.add(team.ServiceId);
+        }
+        if (serviceIds.size > 0) {
+          const svcFilter = Array.from(serviceIds).map(id => `OwningServiceId eq ${id}`).join(' or ');
+          filter = `(${svcFilter}) and State ne 'Resolved'`;
+        } else {
+          filter = "State ne 'Resolved'";
+        }
+      } else if (view === 'myTracked' && this.icmCurrentUser) {
+        // Tracked incidents: ones where user is in the tracking list (approximation via ContactAlias or HitCount)
+        filter = `ContactAlias eq '${this.icmCurrentUser.Alias}'`;
+      } else if (view === 'myRestricted' && this.icmCurrentUser) {
+        filter = `ContactAlias eq '${this.icmCurrentUser.Alias}' and IsNoise eq false`;
+      } else {
+        // 'active' - all active
+        filter = "State ne 'Resolved'";
+      }
+
+      const result = await window.electronAPI.icmQueryIncidents(filter, 100, undefined, undefined, 'CreatedDate desc');
+      const incidents: IcmIncidentListItem[] = result || [];
+      this.icmListView.setIncidents(incidents);
+      this.icmListView.setSubtitle(`${incidents.length} incident${incidents.length !== 1 ? 's' : ''}`);
+    } catch (error) {
+      console.error('Failed to load ICM incidents:', error);
+      this.icmListView.setIncidents([]);
+      this.icmListView.setSubtitle('Failed to load incidents');
+      Toast.error('Failed to load ICM incidents');
+    }
+  }
+
+  private findAndCompileIcmQuery(view: 'favorite' | 'saved' | 'shared', queryId: string): string | undefined {
+    let criteria: string | null = null;
+
+    if (view === 'favorite') {
+      const fq = this.icmFavoriteQueries.find(q => String(q.Query.QueryId) === queryId);
+      criteria = fq?.Query?.Criteria || null;
+    } else if (view === 'shared') {
+      for (const group of this.icmSharedQueryGroups) {
+        const sq = group.queries.find(q => String(q.QueryId) === queryId);
+        if (sq) { criteria = sq.Criteria; break; }
+      }
+    } else {
+      const sq = this.icmSavedQueries.find(q => String(q.QueryId) === queryId);
+      criteria = sq?.Criteria || null;
+    }
+
+    if (!criteria) return undefined;
+    return compileIcmCriteria(criteria);
+  }
+
+  // Cached query data for compilation lookup
+  private icmFavoriteQueries: IcmFavoriteQuery[] = [];
+  private icmSavedQueries: IcmQuery[] = [];
+  private icmSharedQueryGroups: IcmSharedQueryGroup[] = [];
+
+  private async loadIcmQueries() {
+    if (!this.icmCurrentUser) return;
+
+    const userId = this.icmCurrentUser.Id;
+    console.log('[ICM] Loading queries for user ID:', userId);
+
+    // Load favorites
+    try {
+      const favorites = await window.electronAPI.icmGetFavoriteQueries(userId);
+      console.log('[ICM] Loaded favorites:', favorites?.length ?? 0);
+      this.icmFavoriteQueries = favorites || [];
+      this.icmListView.setFavoriteQueries(this.icmFavoriteQueries);
+    } catch (error) {
+      console.error('[ICM] Failed to load favorite queries:', error);
+    }
+
+    // Load saved queries
+    try {
+      const saved = await window.electronAPI.icmGetSavedQueries(userId);
+      console.log('[ICM] Loaded saved queries:', saved?.length ?? 0);
+      this.icmSavedQueries = saved || [];
+      this.icmListView.setSavedQueries(this.icmSavedQueries);
+    } catch (error) {
+      console.error('[ICM] Failed to load saved queries:', error);
+    }
+
+    // Load shared queries per unique service (non-blocking)
+    this.loadIcmSharedQueries();
+  }
+
+  private async loadIcmSharedQueries() {
+    if (!this.icmCurrentUser) return;
+
+    try {
+      const allShared = await window.electronAPI.icmGetSharedQueries(this.icmCurrentUser.Id);
+      console.log('[ICM] Loaded shared queries:', allShared?.length ?? 0);
+
+      if (!allShared || allShared.length === 0) {
+        this.icmSharedQueryGroups = [];
+        this.icmListView.setSharedQueries([]);
+        return;
+      }
+
+      // Build service name lookup from user's teams
+      const serviceNames = new Map<number, string>();
+      if (this.icmCurrentUser.Teams) {
+        for (const team of Object.values(this.icmCurrentUser.Teams)) {
+          if (team.ServiceId && team.ServiceName) {
+            serviceNames.set(team.ServiceId, team.ServiceName);
+          }
+        }
+      }
+
+      // Group queries by TenantId (service)
+      const groupMap = new Map<number, IcmQuery[]>();
+      for (const q of allShared) {
+        const sid = q.TenantId || 0;
+        if (!groupMap.has(sid)) groupMap.set(sid, []);
+        groupMap.get(sid)!.push(q);
+      }
+
+      const groups: IcmSharedQueryGroup[] = [];
+      for (const [serviceId, queries] of groupMap) {
+        const serviceName = serviceNames.get(serviceId) || `Service ${serviceId}`;
+        groups.push({ serviceId, serviceName, queries });
+      }
+
+      groups.sort((a, b) => a.serviceName.localeCompare(b.serviceName));
+      this.icmSharedQueryGroups = groups;
+      this.icmListView.setSharedQueries(groups);
+      console.log('[ICM] Shared query groups:', groups.length);
+    } catch (error) {
+      console.warn('[ICM] Failed to load shared queries:', error);
+    }
+  }
+
+  private async openIcmIncidentTab(incident: IcmIncidentListItem) {
+    const tabId = `icm-${incident.Id}`;
+
+    // Check if tab already exists
+    const existingTab = this.icmTabs.find(t => t.id === tabId);
+    if (existingTab) {
+      this.switchIcmTab(tabId);
+      return;
+    }
+
+    // Create new tab
+    const tab: IcmTab = {
+      id: tabId,
+      type: 'detail',
+      label: `#${incident.Id}`,
+      closeable: true,
+      incidentId: incident.Id,
+    };
+
+    this.icmTabs.push(tab);
+
+    // Create tab panel container
+    const container = document.getElementById('icmTabPanelsContainer')!;
+    const panel = document.createElement('div');
+    panel.id = `icmPanel-${tabId}`;
+    panel.className = 'tab-panel icm-detail-panel';
+    container.appendChild(panel);
+
+    // Create detail view
+    const detailView = new IcmIncidentDetailView(panel);
+    detailView.onOpenInBrowser((url) => window.electronAPI.openExternal(url));
+    detailView.onRefreshRequest(async () => {
+      try {
+        const refreshed = await window.electronAPI.icmGetIncident(incident.Id);
+        detailView.setIncident(refreshed);
+      } catch (error) {
+        console.error('Failed to refresh incident:', error);
+      }
+    });
+    detailView.onAction(async (action, incidentId) => {
+      try {
+        switch (action) {
+          case 'acknowledge':
+            await window.electronAPI.icmAcknowledge(incidentId);
+            break;
+          case 'mitigate':
+            await window.electronAPI.icmMitigate(incidentId);
+            break;
+          case 'resolve':
+            await window.electronAPI.icmResolve(incidentId);
+            break;
+        }
+        // Refresh the incident after action
+        const refreshed = await window.electronAPI.icmGetIncident(incidentId);
+        detailView.setIncident(refreshed);
+        Toast.success(`Incident ${incidentId} ${action}d`);
+        this.refreshIcmIncidents();
+      } catch (error) {
+        console.error(`Failed to ${action} incident:`, error);
+        Toast.error(`Failed to ${action} incident: ${(error as Error).message}`);
+      }
+    });
+    detailView.onAddDiscussion(async (incidentId, text) => {
+      await window.electronAPI.icmAddDiscussion(incidentId, text);
+    });
+    this.icmDetailViews.set(tabId, detailView);
+
+    // Load full incident data
+    detailView.setLoading(true);
+    try {
+      const fullIncident = await window.electronAPI.icmGetIncident(incident.Id);
+      detailView.setIncident(fullIncident);
+    } catch (error) {
+      console.error('Failed to load incident:', error);
+      Toast.error('Failed to load incident details');
+    }
+
+    this.switchIcmTab(tabId);
+    this.updateIcmTabBar();
+  }
+
+  private async openIcmIncidentById(id: number) {
+    try {
+      const incident = await window.electronAPI.icmGetIncident(id);
+      // Convert to list item shape for the tab open
+      const listItem: IcmIncidentListItem = {
+        Id: incident.Id,
+        Severity: incident.Severity,
+        State: incident.State,
+        Title: incident.Title,
+        CreatedDate: incident.CreatedDate,
+        OwningTenantName: incident.OwningTenantName,
+        OwningTeamName: incident.OwningTeamName,
+        OwningServiceId: incident.OwningServiceId,
+        OwningTeamId: incident.OwningTeamId,
+        ContactAlias: incident.ContactAlias,
+        NotificationStatus: incident.NotificationStatus,
+        HitCount: incident.HitCount,
+        ChildCount: incident.ChildCount,
+        ParentId: incident.ParentId,
+        IsCustomerImpacting: incident.IsCustomerImpacting,
+        IsNoise: incident.IsNoise,
+        IsOutage: incident.IsOutage,
+        ExternalLinksCount: incident.ExternalLinksCount,
+        AcknowledgeBy: incident.AcknowledgeBy,
+        ImpactStartTime: incident.ImpactStartTime,
+      };
+      this.openIcmIncidentTab(listItem);
+    } catch (error) {
+      console.error('Failed to load incident:', error);
+      Toast.error('Failed to load incident');
+    }
+  }
+
+  private switchIcmTab(tabId: string) {
+    this.activeIcmTabId = tabId;
+
+    // Show/hide panels
+    const listPanel = document.getElementById('icmListPanel');
+    if (listPanel) {
+      listPanel.classList.toggle('active', tabId === 'list');
+      listPanel.style.display = tabId === 'list' ? '' : 'none';
+    }
+
+    this.icmDetailViews.forEach((_, id) => {
+      const panel = document.getElementById(`icmPanel-${id}`);
+      if (panel) {
+        panel.classList.toggle('active', id === tabId);
+        panel.style.display = id === tabId ? '' : 'none';
+      }
+    });
+
+    // Explicitly show the active detail panel
+    const activePanel = document.getElementById(`icmPanel-${tabId}`);
+    if (activePanel) {
+      activePanel.classList.add('active');
+      activePanel.style.display = '';
+    }
+
+    this.updateIcmTabBar();
+  }
+
+  private closeIcmTab(tabId: string) {
+    const index = this.icmTabs.findIndex(t => t.id === tabId);
+    if (index === -1) return;
+
+    // Remove tab
+    this.icmTabs.splice(index, 1);
+
+    // Remove detail view
+    this.icmDetailViews.delete(tabId);
+
+    // Remove panel
+    const panel = document.getElementById(`icmPanel-${tabId}`);
+    panel?.remove();
+
+    // Switch to another tab if we closed the active one
+    if (this.activeIcmTabId === tabId) {
+      const newTab = this.icmTabs[Math.max(0, index - 1)];
+      if (newTab) {
+        this.switchIcmTab(newTab.id);
+      }
+    }
+
+    this.updateIcmTabBar();
+  }
+
+  private updateIcmTabBar() {
+    const tabs: Tab[] = this.icmTabs.map(t => ({
+      id: t.id,
+      label: t.label,
+      closeable: t.closeable,
+      icon: t.type === 'list' ? getIcon(AlertTriangle, 14) : undefined,
+    }));
+
+    if (this.icmTabs.length > 1) {
+      this.renderIcmTabs(tabs);
+    } else {
+      this.hideIcmTabs();
+    }
+  }
+
+  private renderIcmTabs(tabs: Tab[]) {
+    const container = document.getElementById('icmSectionContent');
+    if (!container) return;
+
+    let tabBar = container.querySelector('.icm-tab-bar') as HTMLElement;
+    if (!tabBar) {
+      tabBar = document.createElement('div');
+      tabBar.className = 'icm-tab-bar';
+      container.insertBefore(tabBar, container.firstChild);
+    }
+
+    tabBar.innerHTML = tabs.map(tab => `
+      <button class="icm-tab-btn ${tab.id === this.activeIcmTabId ? 'active' : ''}" data-tab-id="${tab.id}">
+        ${tab.icon || ''}
+        <span>${tab.label}</span>
+        ${tab.closeable ? `<span class="icm-tab-close" data-tab-id="${tab.id}">&times;</span>` : ''}
+      </button>
+    `).join('');
+
+    // Attach event listeners
+    tabBar.querySelectorAll('.icm-tab-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        if (target.classList.contains('icm-tab-close')) {
+          e.stopPropagation();
+          const tabId = target.dataset.tabId!;
+          this.closeIcmTab(tabId);
+        } else {
+          const tabId = (btn as HTMLElement).dataset.tabId!;
+          this.switchIcmTab(tabId);
+        }
+      });
+    });
+
+    // Context menu for Move to Workspace
+    tabBar.querySelectorAll('.icm-tab-btn').forEach(btn => {
+      const tabId = (btn as HTMLElement).dataset.tabId!;
+      if (tabId === 'list') return;
+      btn.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        this.showMoveToWorkspaceMenu(e as MouseEvent, 'icm', tabId);
+      });
+    });
+  }
+
+  private hideIcmTabs() {
+    const container = document.getElementById('icmSectionContent');
+    if (!container) return;
+
+    const tabBar = container.querySelector('.icm-tab-bar');
+    tabBar?.remove();
+  }
+
+  // =========================================================================
+  // Workspace Move-to Methods
+  // =========================================================================
+
+  private moveToWorkspaceMenuEl: HTMLElement | null = null;
+
+  private showMoveToWorkspaceMenu(e: MouseEvent, sectionType: 'cfv' | 'dgrep' | 'icm', tabId: string): void {
+    this.closeMoveToWorkspaceMenu();
+
+    const workspaces = this.workspaceSection.getWorkspaceList();
+    const menu = document.createElement('div');
+    menu.className = 'workspace-context-menu';
+    menu.style.left = `${e.clientX}px`;
+    menu.style.top = `${e.clientY}px`;
+
+    menu.innerHTML = `
+      <div class="workspace-context-menu-header">Move to Workspace</div>
+      <div class="workspace-context-menu-item" data-action="new">New Workspace...</div>
+      ${workspaces.length > 0 ? '<div class="workspace-context-menu-separator"></div>' : ''}
+      ${workspaces.map(ws =>
+        `<div class="workspace-context-menu-item" data-action="existing" data-ws-id="${ws.id}">${this.escapeHtml(ws.name)}</div>`
+      ).join('')}
+    `;
+
+    menu.querySelectorAll('.workspace-context-menu-item').forEach(item => {
+      item.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const action = (item as HTMLElement).dataset.action;
+        if (action === 'new') {
+          this.moveTabToWorkspace(sectionType, tabId);
+        } else if (action === 'existing') {
+          const wsId = (item as HTMLElement).dataset.wsId!;
+          this.moveTabToWorkspace(sectionType, tabId, wsId);
+        }
+        this.closeMoveToWorkspaceMenu();
+      });
+    });
+
+    document.body.appendChild(menu);
+    this.moveToWorkspaceMenuEl = menu;
+
+    // Adjust if off-screen
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) menu.style.left = `${e.clientX - rect.width}px`;
+    if (rect.bottom > window.innerHeight) menu.style.top = `${e.clientY - rect.height}px`;
+
+    // Close on click outside
+    const closeHandler = () => {
+      this.closeMoveToWorkspaceMenu();
+      document.removeEventListener('click', closeHandler);
+    };
+    setTimeout(() => document.addEventListener('click', closeHandler), 0);
+  }
+
+  private closeMoveToWorkspaceMenu(): void {
+    if (this.moveToWorkspaceMenuEl) {
+      this.moveToWorkspaceMenuEl.remove();
+      this.moveToWorkspaceMenuEl = null;
+    }
+  }
+
+  private moveTabToWorkspace(sectionType: 'cfv' | 'dgrep' | 'icm', tabId: string, workspaceId?: string): void {
+    const { label, state } = this.extractTabState(sectionType, tabId);
+    if (workspaceId) {
+      this.workspaceSection.addSubtab(workspaceId, sectionType, label, state);
+    } else {
+      this.workspaceSection.createWorkspaceWithSubtab(label, sectionType, label, state);
+    }
+    this.closeTabInOriginalSection(sectionType, tabId);
+  }
+
+  private extractTabState(sectionType: 'cfv' | 'dgrep' | 'icm', tabId: string): { label: string; state: any } {
+    switch (sectionType) {
+      case 'cfv': {
+        const tab = this.cfvTabs.find(t => t.id === tabId);
+        return {
+          label: tab?.label || tabId,
+          state: { callId: tab?.callId || tabId.replace('cfv-', '') },
+        };
+      }
+      case 'icm': {
+        const tab = this.icmTabs.find(t => t.id === tabId);
+        return {
+          label: tab?.label || tabId,
+          state: { incidentId: tab?.incidentId || parseInt(tabId.replace('icm-', ''), 10) },
+        };
+      }
+      case 'dgrep': {
+        return {
+          label: 'Log Search',
+          state: { searchQuery: '', timeRange: { start: '', end: '' } },
+        };
+      }
+      default:
+        return { label: tabId, state: {} };
+    }
+  }
+
+  private closeTabInOriginalSection(sectionType: 'cfv' | 'dgrep' | 'icm', tabId: string): void {
+    switch (sectionType) {
+      case 'cfv':
+        this.closeCfvTab(tabId);
+        break;
+      case 'icm':
+        this.closeIcmTab(tabId);
+        break;
+      case 'dgrep':
+        // DGrep is a singleton view - don't close
+        break;
+    }
   }
 }
 

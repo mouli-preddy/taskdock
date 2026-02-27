@@ -1,0 +1,1551 @@
+- generic [ref=e10]:
+  - generic [ref=e11]:
+    - link "Jarvis Home" [ref=e12] [cursor=pointer]:
+      - /url: /
+      - img [ref=e13]
+    - generic [ref=e26]:
+      - text:  
+      - generic [ref=e29]:
+        - button "Account" [ref=e30] [cursor=pointer]:
+          - generic [ref=e31]: Account
+        - button "Change Selection" [ref=e32] [cursor=pointer]:
+          - generic [ref=e33]: 
+    - generic [ref=e34]:
+      - menubar [ref=e38]:
+        - link "Docs" [ref=e40] [cursor=pointer]:
+          - /url: /docs/products/geneva
+          - text: Docs
+          - generic [ref=e41]: 
+        - button [ref=e43] [cursor=pointer]:
+          - generic [ref=e44]: 
+        - button "Announcements" [ref=e46] [cursor=pointer]:
+          - generic [ref=e47]: 
+          - generic [ref=e48]: "4"
+        - button "Feedback" [ref=e50] [cursor=pointer]:
+          - generic [ref=e51]: 
+        - button "Support" [ref=e53] [cursor=pointer]:
+          - generic [ref=e54]: 
+      - button "Profile" [ref=e56] [cursor=pointer]:
+        - generic [ref=e58]: K
+  - generic [ref=e59]:
+    - generic [ref=e60]:
+      - button "expand navigation" [ref=e62] [cursor=pointer]:
+        - generic [ref=e63]: 
+      - generic [ref=e64]:
+        - link "Service Health" [ref=e67] [cursor=pointer]:
+          - /url: /health/brain/product
+          - img [ref=e69]
+        - link "Dashboard" [ref=e76] [cursor=pointer]:
+          - /url: /dashboard
+          - img [ref=e78]
+        - generic [ref=e82]:
+          - link "Health" [ref=e83] [cursor=pointer]:
+            - /url: /health
+            - img [ref=e85]
+          - generic [ref=e90]:
+            - generic [ref=e91]: Health
+            - generic [ref=e92]:
+              - link "Geneva Health" [ref=e94] [cursor=pointer]:
+                - /url: /health
+                - img [ref=e96]
+                - generic [ref=e98]: Geneva Health
+              - link "Brain Cloud Health" [ref=e100] [cursor=pointer]:
+                - /url: /health/brain/events
+                - img [ref=e102]
+                - generic [ref=e109]: Brain Cloud Health
+        - generic [ref=e110]:
+          - link "Logs" [ref=e111] [cursor=pointer]:
+            - /url: /logs
+            - img [ref=e113]
+          - generic [ref=e119]:
+            - generic [ref=e120]: Logs
+            - generic [ref=e121]:
+              - link "DGrep" [ref=e123] [cursor=pointer]:
+                - /url: /logs/dgrep
+                - img [ref=e125]
+                - generic [ref=e127]: DGrep
+              - link "Kusto" [ref=e129] [cursor=pointer]:
+                - /url: /logs/kusto
+                - img [ref=e131]
+                - generic [ref=e133]: Kusto
+        - link "Actions" [ref=e136] [cursor=pointer]:
+          - /url: /actions
+          - img [ref=e138]
+        - generic [ref=e141]:
+          - link "Trace" [ref=e142] [cursor=pointer]:
+            - /url: /trace
+            - img [ref=e144]
+          - generic [ref=e151]:
+            - generic [ref=e152]: Trace
+            - generic [ref=e153]:
+              - link "Transaction Search" [ref=e155] [cursor=pointer]:
+                - /url: /trace/explorer
+                - img [ref=e157]
+                - generic [ref=e159]: Transaction Search
+              - link "ID Lookup" [ref=e161] [cursor=pointer]:
+                - /url: /trace/details
+                - img [ref=e163]
+                - generic [ref=e165]: ID Lookup
+              - link "Application Map" [ref=e167] [cursor=pointer]:
+                - /url: /trace/map
+                - img [ref=e169]
+                - generic [ref=e171]: Application Map
+        - generic [ref=e172]:
+          - link "Insights" [ref=e173] [cursor=pointer]:
+            - /url: /insights
+            - img [ref=e175]
+          - generic [ref=e181]:
+            - generic [ref=e182]: Insights
+            - generic [ref=e183]:
+              - link "SLI Insights" [ref=e185] [cursor=pointer]:
+                - /url: /insights/SLI/streamingInsights
+                - img [ref=e187]
+                - generic [ref=e189]: SLI Insights
+              - link "SLI Live Site Review" [ref=e191] [cursor=pointer]:
+                - /url: /insights/SLI/lsr
+                - img [ref=e193]
+                - generic [ref=e195]: SLI Live Site Review
+              - link "Investigation Leads" [ref=e197] [cursor=pointer]:
+                - /url: /insights/braintroubleshooting
+                - img [ref=e199]
+                - generic [ref=e203]: Investigation Leads
+        - link "Service Hub" [ref=e207] [cursor=pointer]:
+          - /url: /services/hub
+          - img [ref=e209]
+        - generic [ref=e215]:
+          - link "Manage" [ref=e216] [cursor=pointer]:
+            - /url: /manage
+            - img [ref=e218]
+          - generic [ref=e225]:
+            - generic [ref=e226]: Manage
+            - generic [ref=e227]:
+              - link "Metrics" [ref=e229] [cursor=pointer]:
+                - /url: /manage/metrics
+                - img [ref=e231]
+                - generic [ref=e233]: Metrics
+              - link "Metric Views (Preview)" [ref=e235] [cursor=pointer]:
+                - /url: /manage/metric-views
+                - img [ref=e237]
+                - generic [ref=e239]: Metric Views (Preview)
+              - link "Monitors" [ref=e241] [cursor=pointer]:
+                - /url: /manage/monitors
+                - img [ref=e243]
+                - generic [ref=e247]: Monitors
+              - link "Brain Monitors" [ref=e249] [cursor=pointer]:
+                - /url: /manage/brain
+                - img [ref=e251]
+                - generic [ref=e258]: Brain Monitors
+              - link "Health Model" [ref=e260] [cursor=pointer]:
+                - /url: /manage/health-model
+                - img [ref=e262]
+                - generic [ref=e264]: Health Model
+              - link "Configurations (Preview)" [ref=e266] [cursor=pointer]:
+                - /url: /manage/logs
+                - img [ref=e268]
+                - generic [ref=e270]: Configurations (Preview)
+              - link "Dashboards to Grafana Migration" [ref=e272] [cursor=pointer]:
+                - /url: /manage/grafana-migration
+                - img [ref=e274]
+                - generic [ref=e276]: Dashboards to Grafana Migration
+              - link "Logs to Metrics" [ref=e278] [cursor=pointer]:
+                - /url: /manage/connectors/logs-to-metrics
+                - img [ref=e280]
+                - generic [ref=e282]: Logs to Metrics
+              - link "Kusto to Metrics" [ref=e284] [cursor=pointer]:
+                - /url: /manage/connectors/kusto-to-metrics
+                - img [ref=e286]
+                - generic [ref=e288]: Kusto to Metrics
+        - generic [ref=e289]:
+          - link "Account" [ref=e290] [cursor=pointer]:
+            - /url: /account
+            - img [ref=e292]
+          - generic [ref=e298]:
+            - generic [ref=e299]: Account
+            - generic [ref=e300]:
+              - link "Getting Started" [ref=e302] [cursor=pointer]:
+                - /url: /account/onboard
+                - img [ref=e304]
+                - generic [ref=e306]: Getting Started
+              - link "Metrics Account Settings" [ref=e308] [cursor=pointer]:
+                - /url: /account/metrics
+                - img [ref=e310]
+                - generic [ref=e314]: Metrics Account Settings
+              - link "Logs Account Settings" [ref=e316] [cursor=pointer]:
+                - /url: /account/logs
+                - img [ref=e318]
+                - generic [ref=e320]: Logs Account Settings
+              - link "Source Control With EV2" [ref=e322] [cursor=pointer]:
+                - /url: /account/configurations
+                - img [ref=e324]
+                - generic [ref=e326]: Source Control With EV2
+        - generic [ref=e327]:
+          - link "Diagnose" [ref=e328] [cursor=pointer]:
+            - /url: /diagnose
+            - img [ref=e330]
+          - generic [ref=e333]:
+            - generic [ref=e334]: Diagnose
+            - generic [ref=e335]:
+              - link "Troubleshoot" [ref=e337] [cursor=pointer]:
+                - /url: /diagnose/troubleshoot
+                - img [ref=e339]
+                - generic [ref=e341]: Troubleshoot
+              - link "Agent Explorer" [ref=e343] [cursor=pointer]:
+                - /url: /diagnose/agentExplorer
+                - img [ref=e345]
+                - generic [ref=e348]: Agent Explorer
+              - link "Agent Update" [ref=e350] [cursor=pointer]:
+                - /url: /diagnose/agentUpdate
+                - img [ref=e352]
+                - generic [ref=e355]: Agent Update
+              - link "Node Diagnostics" [ref=e357] [cursor=pointer]:
+                - /url: /diagnose/nodeDiagnostics
+                - img [ref=e359]
+                - generic [ref=e361]: Node Diagnostics
+              - link "Test Standing Query" [ref=e363] [cursor=pointer]:
+                - /url: /diagnose/standingQuery
+                - img [ref=e365]
+                - generic [ref=e367]: Test Standing Query
+    - iframe [ref=e369]:
+      - generic [active] [ref=f1e1]:
+        - text: 
+        - generic [ref=f1e10]:
+          - navigation [ref=f1e11]:
+            - heading "Browse Dashboards" [level=2] [ref=f1e12]
+            - tablist "Dashboard Browser" [ref=f1e15]:
+              - tab "All" [selected] [ref=f1e16] [cursor=pointer]
+              - tab "Favorites" [ref=f1e17] [cursor=pointer]
+              - tab "Search" [ref=f1e18] [cursor=pointer]
+            - generic [ref=f1e19]:
+              - 'button "Accounts : TeamsScheduler, +6 " [ref=f1e21] [cursor=pointer]':
+                - generic [ref=f1e22]: Accounts
+                - text: ":"
+                - generic "TeamsScheduler, +6" [ref=f1e23]
+                - text: 
+              - generic [ref=f1e24]: "Filter:"
+              - generic [ref=f1e25]:
+                - textbox "Dashboard filter" [ref=f1e26]:
+                  - /placeholder: Dashboard Filter
+                - button "More options" [ref=f1e27] [cursor=pointer]:
+                  - generic [ref=f1e28]: 
+              - tree [ref=f1e31]:
+                - treeitem "mstCoreProd" [ref=f1e32]:
+                  - link "mstCoreProd" [ref=f1e35] [cursor=pointer]:
+                    - /url: /dashboard/mstCoreProd
+                    - generic [ref=f1e36]:
+                      - generic [ref=f1e37]: 
+                      - text:  mstCoreProd
+                - treeitem "SkypeCastMG" [ref=f1e38]:
+                  - link "SkypeCastMG" [ref=f1e41] [cursor=pointer]:
+                    - /url: /dashboard/SkypeCastMG
+                    - generic [ref=f1e42]:
+                      - generic [ref=f1e43]: 
+                      - text:  SkypeCastMG
+                - treeitem "SkypeCCTS" [ref=f1e44]:
+                  - link "SkypeCCTS" [ref=f1e47] [cursor=pointer]:
+                    - /url: /dashboard/SkypeCCTS
+                    - generic [ref=f1e48]:
+                      - generic [ref=f1e49]: 
+                      - text:  SkypeCCTS
+                - treeitem "SkypeCoreConv" [expanded] [ref=f1e50]:
+                  - link "SkypeCoreConv" [ref=f1e53] [cursor=pointer]:
+                    - /url: /dashboard/SkypeCoreConv
+                    - generic [ref=f1e54]:
+                      - generic [ref=f1e55]: 
+                      - text:  SkypeCoreConv
+                  - group [ref=f1e56]:
+                    - treeitem "0. Standard Dashboards" [ref=f1e57]:
+                      - link "0. Standard Dashboards" [ref=f1e60] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/0%252E%2520Standard%2520Dashboards
+                        - generic [ref=f1e61]:
+                          - generic [ref=f1e62]: 
+                          - text:  0. Standard Dashboards
+                    - treeitem "AdalMigration" [ref=f1e63]:
+                      - link "AdalMigration" [ref=f1e66] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/AdalMigration
+                        - generic [ref=f1e67]:
+                          - generic [ref=f1e68]: 
+                          - text:  AdalMigration
+                    - treeitem "AdmitAll" [ref=f1e69]:
+                      - link "AdmitAll" [ref=f1e72] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/AdmitAll
+                        - generic [ref=f1e73]:
+                          - generic [ref=f1e74]: 
+                          - text:  AdmitAll
+                    - treeitem "AdmitFailures" [ref=f1e75]:
+                      - link "AdmitFailures" [ref=f1e78] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/AdmitFailures
+                        - generic [ref=f1e79]:
+                          - generic [ref=f1e80]: 
+                          - text:  AdmitFailures
+                    - treeitem "AllowedCallbackURIMetrics" [ref=f1e81]:
+                      - link "AllowedCallbackURIMetrics" [ref=f1e84] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/AllowedCallbackURIMetrics
+                        - generic "AllowedCallbackURIMetrics for Conversation Service" [ref=f1e85]:
+                          - generic [ref=f1e86]: 
+                          - text:  AllowedCallbackURIMetrics
+                    - treeitem "Auth" [ref=f1e87]:
+                      - link "Auth" [ref=f1e90] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Auth
+                        - generic [ref=f1e91]:
+                          - generic [ref=f1e92]: 
+                          - text:  Auth
+                    - treeitem "Backedup Persisted Object Store" [ref=f1e93]:
+                      - link "Backedup Persisted Object Store" [ref=f1e96] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Backedup%2520Persisted%2520Object%2520Store
+                        - generic [ref=f1e97]:
+                          - generic [ref=f1e98]: 
+                          - text:  Backedup Persisted Object Store
+                    - treeitem "BreakoutRooms" [ref=f1e99]:
+                      - link "BreakoutRooms" [ref=f1e102] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/BreakoutRooms
+                        - generic "Breakout Distributions" [ref=f1e103]:
+                          - generic [ref=f1e104]: 
+                          - text:  BreakoutRooms
+                    - treeitem "Captcha" [ref=f1e105]:
+                      - link "Captcha" [ref=f1e108] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Captcha
+                        - generic [ref=f1e109]:
+                          - generic [ref=f1e110]: 
+                          - text:  Captcha
+                    - treeitem "CertificateValidation" [ref=f1e111]:
+                      - link "CertificateValidation" [ref=f1e114] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/CertificateValidation
+                        - generic [ref=f1e115]:
+                          - generic [ref=f1e116]: 
+                          - text:  CertificateValidation
+                    - treeitem "ClientErrorMismatch" [ref=f1e117]:
+                      - link "ClientErrorMismatch" [ref=f1e120] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/ClientErrorMismatch
+                        - generic [ref=f1e121]:
+                          - generic [ref=f1e122]: 
+                          - text:  ClientErrorMismatch
+                    - treeitem "CompositeTransportMetrics" [ref=f1e123]:
+                      - link "CompositeTransportMetrics" [ref=f1e126] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/CompositeTransportMetrics
+                        - generic [ref=f1e127]:
+                          - generic [ref=f1e128]: 
+                          - text:  CompositeTransportMetrics
+                    - treeitem "ContentSharingServiceOverview" [ref=f1e129]:
+                      - link "ContentSharingServiceOverview" [ref=f1e132] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/ContentSharingServiceOverview
+                        - generic [ref=f1e133]:
+                          - generic [ref=f1e134]: 
+                          - text:  ContentSharingServiceOverview
+                    - treeitem "ConversationCounters" [ref=f1e135]:
+                      - link "ConversationCounters" [ref=f1e138] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/ConversationCounters
+                        - generic [ref=f1e139]:
+                          - generic [ref=f1e140]: 
+                          - text:  ConversationCounters
+                    - treeitem "ConversationServiceOverview" [ref=f1e141]:
+                      - link "ConversationServiceOverview" [ref=f1e144] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/ConversationServiceOverview
+                        - generic [ref=f1e145]:
+                          - generic [ref=f1e146]: 
+                          - text:  ConversationServiceOverview
+                    - treeitem "Cosmic" [ref=f1e147]:
+                      - link "Cosmic" [ref=f1e150] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Cosmic
+                        - generic [ref=f1e151]:
+                          - generic [ref=f1e152]: 
+                          - text:  Cosmic
+                    - treeitem "CS" [ref=f1e153]:
+                      - link "CS" [ref=f1e156] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/CS
+                        - generic [ref=f1e157]:
+                          - generic [ref=f1e158]: 
+                          - text:  CS
+                    - treeitem "CS Store Metrics" [ref=f1e159]:
+                      - link "CS Store Metrics" [ref=f1e162] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/CS%2520Store%2520Metrics
+                        - generic [ref=f1e163]:
+                          - generic [ref=f1e164]: 
+                          - text:  CS Store Metrics
+                    - treeitem "CS Store Metrics _New" [ref=f1e165]:
+                      - link "CS Store Metrics _New" [ref=f1e168] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/CS%2520Store%2520Metrics%2520_New
+                        - generic "In Memory Store Metrics" [ref=f1e169]:
+                          - generic [ref=f1e170]: 
+                          - text:  CS Store Metrics _New
+                    - treeitem "DependencyHealthMetrics" [ref=f1e171]:
+                      - link "DependencyHealthMetrics" [ref=f1e174] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/DependencyHealthMetrics
+                        - generic [ref=f1e175]:
+                          - generic [ref=f1e176]: 
+                          - text:  DependencyHealthMetrics
+                    - treeitem "Deployments" [ref=f1e177]:
+                      - link "Deployments" [ref=f1e180] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Deployments
+                        - generic [ref=f1e181]:
+                          - generic [ref=f1e182]: 
+                          - text:  Deployments
+                    - treeitem "DisablePreHeatJoinHold" [ref=f1e183]:
+                      - link "DisablePreHeatJoinHold" [ref=f1e186] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/DisablePreHeatJoinHold
+                        - generic [ref=f1e187]:
+                          - generic [ref=f1e188]: 
+                          - text:  DisablePreHeatJoinHold
+                    - treeitem "DnsClientCache" [ref=f1e189]:
+                      - link "DnsClientCache" [ref=f1e192] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/DnsClientCache
+                        - generic [ref=f1e193]:
+                          - generic [ref=f1e194]: 
+                          - text:  DnsClientCache
+                    - treeitem "DocDb" [ref=f1e195]:
+                      - link "DocDb" [ref=f1e198] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/DocDb
+                        - generic [ref=f1e199]:
+                          - generic [ref=f1e200]: 
+                          - text:  DocDb
+                    - treeitem "Dotnet8" [ref=f1e201]:
+                      - link "Dotnet8" [ref=f1e204] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Dotnet8
+                        - generic [ref=f1e205]:
+                          - generic [ref=f1e206]: 
+                          - text:  Dotnet8
+                    - treeitem "E2EE e2ee tag" [ref=f1e207]:
+                      - link "E2EE e2ee tag" [ref=f1e210] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/E2EE
+                        - generic "End-to-end encryption (E2EE)" [ref=f1e211]:
+                          - generic [ref=f1e212]: 
+                          - text:  E2EE
+                        - text: e2ee
+                    - treeitem "EcsConfigurations" [ref=f1e213]:
+                      - link "EcsConfigurations" [ref=f1e216] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/EcsConfigurations
+                        - generic [ref=f1e217]:
+                          - generic [ref=f1e218]: 
+                          - text:  EcsConfigurations
+                    - treeitem "ExplicitRecordingConsent" [ref=f1e219]:
+                      - link "ExplicitRecordingConsent" [ref=f1e222] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/ExplicitRecordingConsent
+                        - generic "Explicit recording consent" [ref=f1e223]:
+                          - generic [ref=f1e224]: 
+                          - text:  ExplicitRecordingConsent
+                    - treeitem "FaultInjectionPartners" [ref=f1e225]:
+                      - link "FaultInjectionPartners" [ref=f1e228] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/FaultInjectionPartners
+                        - generic [ref=f1e229]:
+                          - generic [ref=f1e230]: 
+                          - text:  FaultInjectionPartners
+                    - treeitem "Features" [ref=f1e231]:
+                      - link "Features" [ref=f1e234] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Features
+                        - generic [ref=f1e235]:
+                          - generic [ref=f1e236]: 
+                          - text:  Features
+                    - treeitem "ForMonitors" [ref=f1e237]:
+                      - link "ForMonitors" [ref=f1e240] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/ForMonitors
+                        - generic [ref=f1e241]:
+                          - generic [ref=f1e242]: 
+                          - text:  ForMonitors
+                    - treeitem "Gcp Dashboards" [ref=f1e243]:
+                      - link "Gcp Dashboards" [ref=f1e246] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Gcp%2520Dashboards
+                        - generic [ref=f1e247]:
+                          - generic [ref=f1e248]: 
+                          - text:  Gcp Dashboards
+                    - treeitem "Guardians" [ref=f1e249]:
+                      - link "Guardians" [ref=f1e252] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Guardians
+                        - generic [ref=f1e253]:
+                          - generic [ref=f1e254]: 
+                          - text:  Guardians
+                    - treeitem "HPA" [ref=f1e255]:
+                      - link "HPA" [ref=f1e258] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/HPA
+                        - generic [ref=f1e259]:
+                          - generic [ref=f1e260]: 
+                          - text:  HPA
+                    - treeitem "HPA Dashboard Sample" [ref=f1e261]:
+                      - link "HPA Dashboard Sample" [ref=f1e264] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/HPA%2520Dashboard%2520Sample
+                        - generic [ref=f1e265]:
+                          - generic [ref=f1e266]: 
+                          - text:  HPA Dashboard Sample
+                    - treeitem "Http2 Enablement" [ref=f1e267]:
+                      - link "Http2 Enablement" [ref=f1e270] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Http2%2520Enablement
+                        - generic [ref=f1e271]:
+                          - generic [ref=f1e272]: 
+                          - text:  Http2 Enablement
+                    - treeitem "HTTPMetrics" [ref=f1e273]:
+                      - link "HTTPMetrics" [ref=f1e276] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/HTTPMetrics
+                        - generic "Roster reliability over Trouter" [ref=f1e277]:
+                          - generic [ref=f1e278]: 
+                          - text:  HTTPMetrics
+                    - treeitem "ICM" [ref=f1e279]:
+                      - link "ICM" [ref=f1e282] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/ICM
+                        - generic [ref=f1e283]:
+                          - generic [ref=f1e284]: 
+                          - text:  ICM
+                    - treeitem "Incidents" [ref=f1e285]:
+                      - link "Incidents" [ref=f1e288] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Incidents
+                        - generic [ref=f1e289]:
+                          - generic [ref=f1e290]: 
+                          - text:  Incidents
+                    - treeitem "Incoming FlightProxy Requests" [ref=f1e291]:
+                      - link "Incoming FlightProxy Requests" [ref=f1e294] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Incoming%2520FlightProxy%2520Requests
+                        - generic [ref=f1e295]:
+                          - generic [ref=f1e296]: 
+                          - text:  Incoming FlightProxy Requests
+                    - treeitem "Infrastructure Performance Counters" [ref=f1e297]:
+                      - link "Infrastructure Performance Counters" [ref=f1e300] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Infrastructure%2520Performance%2520Counters
+                        - generic [ref=f1e301]:
+                          - generic [ref=f1e302]: 
+                          - text:  Infrastructure Performance Counters
+                    - treeitem "Investigation" [ref=f1e303]:
+                      - link "Investigation" [ref=f1e306] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Investigation
+                        - generic [ref=f1e307]:
+                          - generic [ref=f1e308]: 
+                          - text:  Investigation
+                    - treeitem "Investigations" [ref=f1e309]:
+                      - link "Investigations" [ref=f1e312] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Investigations
+                        - generic [ref=f1e313]:
+                          - generic [ref=f1e314]: 
+                          - text:  Investigations
+                    - treeitem "LargeMeeting_HighCPU_Rosterupdate_Memory" [ref=f1e315]:
+                      - link "LargeMeeting_HighCPU_Rosterupdate_Memory" [ref=f1e318] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/LargeMeeting_HighCPU_Rosterupdate_Memory
+                        - generic [ref=f1e319]:
+                          - generic [ref=f1e320]: 
+                          - text:  LargeMeeting_HighCPU_Rosterupdate_Memory
+                    - treeitem "Lifecycle" [ref=f1e321]:
+                      - link "Lifecycle" [ref=f1e324] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Lifecycle
+                        - generic [ref=f1e325]:
+                          - generic [ref=f1e326]: 
+                          - text:  Lifecycle
+                    - treeitem "Linux Rollout" [ref=f1e327]:
+                      - link "Linux Rollout" [ref=f1e330] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Linux%2520Rollout
+                        - generic [ref=f1e331]:
+                          - generic [ref=f1e332]: 
+                          - text:  Linux Rollout
+                    - treeitem "Live Interpretation" [ref=f1e333]:
+                      - link "Live Interpretation" [ref=f1e336] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Live%2520Interpretation
+                        - generic [ref=f1e337]:
+                          - generic [ref=f1e338]: 
+                          - text:  Live Interpretation
+                    - treeitem "loadshedding" [ref=f1e339]:
+                      - link "loadshedding" [ref=f1e342] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/loadshedding
+                        - generic [ref=f1e343]:
+                          - generic [ref=f1e344]: 
+                          - text:  loadshedding
+                    - treeitem "MeetingCode & Passcode" [ref=f1e345]:
+                      - link "MeetingCode & Passcode" [ref=f1e348] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/MeetingCode%2520%2526%2520Passcode
+                        - generic [ref=f1e349]:
+                          - generic [ref=f1e350]: 
+                          - text:  MeetingCode & Passcode
+                    - treeitem "MemoryUsage_RosterUpdate" [ref=f1e351]:
+                      - link "MemoryUsage_RosterUpdate" [ref=f1e354] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/MemoryUsage_RosterUpdate
+                        - generic [ref=f1e355]:
+                          - generic [ref=f1e356]: 
+                          - text:  MemoryUsage_RosterUpdate
+                    - treeitem "Monitors" [ref=f1e357]:
+                      - link "Monitors" [ref=f1e360] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Monitors
+                        - generic [ref=f1e361]:
+                          - generic [ref=f1e362]: 
+                          - text:  Monitors
+                    - treeitem "MultiMaster" [ref=f1e363]:
+                      - link "MultiMaster" [ref=f1e366] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/MultiMaster
+                        - generic "Dashboards needed for Multi Master Investigation" [ref=f1e367]:
+                          - generic [ref=f1e368]: 
+                          - text:  MultiMaster
+                    - treeitem "NaasHeader Rollout" [ref=f1e369]:
+                      - link "NaasHeader Rollout" [ref=f1e372] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/NaasHeader%2520Rollout
+                        - generic [ref=f1e373]:
+                          - generic [ref=f1e374]: 
+                          - text:  NaasHeader Rollout
+                    - treeitem "NetCore" [ref=f1e375]:
+                      - link "NetCore" [ref=f1e378] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/NetCore
+                        - generic [ref=f1e379]:
+                          - generic [ref=f1e380]: 
+                          - text:  NetCore
+                    - treeitem "New HA Metrics" [ref=f1e381]:
+                      - link "New HA Metrics" [ref=f1e384] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/New%2520HA%2520Metrics
+                        - generic [ref=f1e385]:
+                          - generic [ref=f1e386]: 
+                          - text:  New HA Metrics
+                    - treeitem "On-Call Health" [ref=f1e387]:
+                      - link "On-Call Health" [ref=f1e390] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/On-Call%2520Health
+                        - generic [ref=f1e391]:
+                          - generic [ref=f1e392]: 
+                          - text:  On-Call Health
+                    - treeitem "PartialRosterVisibleParticipantCount partialroster tagpartial roster tag" [ref=f1e393]:
+                      - link "PartialRosterVisibleParticipantCount partialroster tagpartial roster tag" [ref=f1e396] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/PartialRosterVisibleParticipantCount
+                        - generic "A dashboard that tracks the number of roster visible participants in partial roster." [ref=f1e397]:
+                          - generic [ref=f1e398]: 
+                          - text:  PartialRosterVisibleParticipantCount
+                        - text: partialrosterpartial roster
+                    - treeitem "PartnerServiceMetrics" [ref=f1e399]:
+                      - link "PartnerServiceMetrics" [ref=f1e402] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/PartnerServiceMetrics
+                        - generic [ref=f1e403]:
+                          - generic [ref=f1e404]: 
+                          - text:  PartnerServiceMetrics
+                    - treeitem "Paywall" [ref=f1e405]:
+                      - link "Paywall" [ref=f1e408] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Paywall
+                        - generic [ref=f1e409]:
+                          - generic [ref=f1e410]: 
+                          - text:  Paywall
+                    - treeitem "Perf" [ref=f1e411]:
+                      - link "Perf" [ref=f1e414] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Perf
+                        - generic [ref=f1e415]:
+                          - generic [ref=f1e416]: 
+                          - text:  Perf
+                    - treeitem "PersistedCountMetrics" [ref=f1e417]:
+                      - link "PersistedCountMetrics" [ref=f1e420] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/PersistedCountMetrics
+                        - generic [ref=f1e421]:
+                          - generic [ref=f1e422]: 
+                          - text:  PersistedCountMetrics
+                    - treeitem "Plaza Plaza tag" [ref=f1e423]:
+                      - link "Plaza Plaza tag" [ref=f1e426] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Plaza
+                        - generic "Dashboards for the Plaza feature" [ref=f1e427]:
+                          - generic [ref=f1e428]: 
+                          - text:  Plaza
+                        - text: Plaza
+                    - treeitem "PPT Live -> NGC Migration" [ref=f1e429]:
+                      - link "PPT Live -> NGC Migration" [ref=f1e432] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/PPT%2520Live%2520-%253E%2520NGC%2520Migration
+                        - generic [ref=f1e433]:
+                          - generic [ref=f1e434]: 
+                          - text:  PPT Live -> NGC Migration
+                    - treeitem "preheat" [ref=f1e435]:
+                      - link "preheat" [ref=f1e438] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/preheat
+                        - generic [ref=f1e439]:
+                          - generic [ref=f1e440]: 
+                          - text:  preheat
+                    - treeitem "ProxyMetrics" [ref=f1e441]:
+                      - link "ProxyMetrics" [ref=f1e444] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/ProxyMetrics
+                        - generic [ref=f1e445]:
+                          - generic [ref=f1e446]: 
+                          - text:  ProxyMetrics
+                    - treeitem "RaiseHands" [ref=f1e447]:
+                      - link "RaiseHands" [ref=f1e450] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/RaiseHands
+                        - generic [ref=f1e451]:
+                          - generic [ref=f1e452]: 
+                          - text:  RaiseHands
+                    - treeitem "RedisMetrics" [ref=f1e453]:
+                      - link "RedisMetrics" [ref=f1e456] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/RedisMetrics
+                        - generic [ref=f1e457]:
+                          - generic [ref=f1e458]: 
+                          - text:  RedisMetrics
+                    - treeitem "Region Pinning region pinning tag" [ref=f1e459]:
+                      - link "Region Pinning region pinning tag" [ref=f1e462] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Region%2520Pinning
+                        - generic "Dashboards for the Region Pinning feature" [ref=f1e463]:
+                          - generic [ref=f1e464]: 
+                          - text:  Region Pinning
+                        - text: region pinning
+                    - treeitem "Region Resolution" [ref=f1e465]:
+                      - link "Region Resolution" [ref=f1e468] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Region%2520Resolution
+                        - generic [ref=f1e469]:
+                          - generic [ref=f1e470]: 
+                          - text:  Region Resolution
+                    - treeitem "Region Resolution Legacy" [ref=f1e471]:
+                      - link "Region Resolution Legacy" [ref=f1e474] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Region%2520Resolution%2520Legacy
+                        - generic "Dashboard for instances of failure between Cache and backup Region Resolution source Partition Lookup Service & Middletier and Cache." [ref=f1e475]:
+                          - generic [ref=f1e476]: 
+                          - text:  Region Resolution Legacy
+                    - treeitem "ReserveSpaceMetrics" [ref=f1e477]:
+                      - link "ReserveSpaceMetrics" [ref=f1e480] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/ReserveSpaceMetrics
+                        - generic "Metrics for the reserve space feature" [ref=f1e481]:
+                          - generic [ref=f1e482]: 
+                          - text:  ReserveSpaceMetrics
+                    - treeitem "RingAndPartitionRouting" [ref=f1e483]:
+                      - link "RingAndPartitionRouting" [ref=f1e486] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/RingAndPartitionRouting
+                        - generic [ref=f1e487]:
+                          - generic [ref=f1e488]: 
+                          - text:  RingAndPartitionRouting
+                    - treeitem "RosterMetrics" [ref=f1e489]:
+                      - link "RosterMetrics" [ref=f1e492] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/RosterMetrics
+                        - generic [ref=f1e493]:
+                          - generic [ref=f1e494]: 
+                          - text:  RosterMetrics
+                    - treeitem "SchedulerAPIMetrics" [ref=f1e495]:
+                      - link "SchedulerAPIMetrics" [ref=f1e498] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/SchedulerAPIMetrics
+                        - generic [ref=f1e499]:
+                          - generic [ref=f1e500]: 
+                          - text:  SchedulerAPIMetrics
+                    - treeitem "SchedulerDocDB" [ref=f1e501]:
+                      - link "SchedulerDocDB" [ref=f1e504] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/SchedulerDocDB
+                        - generic [ref=f1e505]:
+                          - generic [ref=f1e506]: 
+                          - text:  SchedulerDocDB
+                    - treeitem "SchedulingServiceOverview" [ref=f1e507]:
+                      - link "SchedulingServiceOverview" [ref=f1e510] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/SchedulingServiceOverview
+                        - generic "SchedulingServiceOverview" [ref=f1e511]:
+                          - generic [ref=f1e512]: 
+                          - text:  SchedulingServiceOverview
+                    - treeitem "SEAL" [ref=f1e513]:
+                      - link "SEAL" [ref=f1e516] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/SEAL
+                        - generic [ref=f1e517]:
+                          - generic [ref=f1e518]: 
+                          - text:  SEAL
+                    - treeitem "SendMessage" [ref=f1e519]:
+                      - link "SendMessage" [ref=f1e522] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/SendMessage
+                        - generic [ref=f1e523]:
+                          - generic [ref=f1e524]: 
+                          - text:  SendMessage
+                    - treeitem "ServiceHealth" [expanded] [ref=f1e525]:
+                      - link "ServiceHealth" [ref=f1e528] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/ServiceHealth
+                        - generic [ref=f1e529]:
+                          - generic [ref=f1e530]: 
+                          - text:  ServiceHealth
+                      - group [ref=f1e531]:
+                        - treeitem "AF" [ref=f1e532]:
+                          - link "AF" [ref=f1e535] [cursor=pointer]:
+                            - /url: /dashboard/SkypeCoreConv/ServiceHealth/AF
+                            - generic [ref=f1e536]:
+                              - generic [ref=f1e537]: 
+                              - text:  AF
+                        - treeitem "CS" [expanded] [ref=f1e538]:
+                          - link "CS" [ref=f1e541] [cursor=pointer]:
+                            - /url: /dashboard/SkypeCoreConv/ServiceHealth/CS
+                            - generic [ref=f1e542]:
+                              - generic [ref=f1e543]: 
+                              - text:  CS
+                          - group [ref=f1e544]:
+                            - treeitem "Cutover dashboard" [ref=f1e545]:
+                              - link "Cutover dashboard" [ref=f1e548] [cursor=pointer]:
+                                - /url: /dashboard/SkypeCoreConv/ServiceHealth/CS/Cutover%2520dashboard
+                                - generic "CutoverDashboard" [ref=f1e549]:
+                                  - generic [ref=f1e550]: 
+                                  - text:  Cutover dashboard
+                            - treeitem "Cutover dashboard Special Clouds" [ref=f1e551]:
+                              - link "Cutover dashboard Special Clouds" [ref=f1e554] [cursor=pointer]:
+                                - /url: /dashboard/SkypeCoreConv/ServiceHealth/CS/Cutover%2520dashboard%2520Special%2520Clouds
+                                - generic "CutoverDashboard" [ref=f1e555]:
+                                  - generic [ref=f1e556]: 
+                                  - text:  Cutover dashboard Special Clouds
+                            - treeitem "Deployment Health" [ref=f1e557]:
+                              - link "Deployment Health" [ref=f1e560] [cursor=pointer]:
+                                - /url: /dashboard/SkypeCoreConv/ServiceHealth/CS/Deployment%2520Health
+                                - generic "icm charts" [ref=f1e561]:
+                                  - generic [ref=f1e562]: 
+                                  - text:  Deployment Health
+                            - treeitem "GlobalCPU" [ref=f1e563]:
+                              - link "GlobalCPU" [ref=f1e566] [cursor=pointer]:
+                                - /url: /dashboard/SkypeCoreConv/ServiceHealth/CS/GlobalCPU
+                                - generic "CPU Percentile for All Clusters - Including AKS" [ref=f1e567]:
+                                  - generic [ref=f1e568]: 
+                                  - text:  GlobalCPU
+                            - treeitem "MQL" [selected] [ref=f1e569]:
+                              - link "MQL" [ref=f1e572] [cursor=pointer]:
+                                - /url: /dashboard/SkypeCoreConv/ServiceHealth/CS/MQL
+                                - generic [ref=f1e573]:
+                                  - generic [ref=f1e574]: 
+                                  - text:  MQL
+                            - treeitem "ServiceHealth-AMER" [ref=f1e575]:
+                              - link "ServiceHealth-AMER" [ref=f1e578] [cursor=pointer]:
+                                - /url: /dashboard/SkypeCoreConv/ServiceHealth/CS/ServiceHealth-AMER
+                                - generic [ref=f1e579]:
+                                  - generic [ref=f1e580]: 
+                                  - text:  ServiceHealth-AMER
+                            - treeitem "ServiceHealth-APAC" [ref=f1e581]:
+                              - link "ServiceHealth-APAC" [ref=f1e584] [cursor=pointer]:
+                                - /url: /dashboard/SkypeCoreConv/ServiceHealth/CS/ServiceHealth-APAC
+                                - generic [ref=f1e585]:
+                                  - generic [ref=f1e586]: 
+                                  - text:  ServiceHealth-APAC
+                            - treeitem "ServiceHealth-Cluster" [ref=f1e587]:
+                              - link "ServiceHealth-Cluster" [ref=f1e590] [cursor=pointer]:
+                                - /url: /dashboard/SkypeCoreConv/ServiceHealth/CS/ServiceHealth-Cluster
+                                - generic "Add role start and stop" [ref=f1e591]:
+                                  - generic [ref=f1e592]: 
+                                  - text:  ServiceHealth-Cluster
+                            - treeitem "ServiceHealth-DOD" [ref=f1e593]:
+                              - link "ServiceHealth-DOD" [ref=f1e596] [cursor=pointer]:
+                                - /url: /dashboard/SkypeCoreConv/ServiceHealth/CS/ServiceHealth-DOD
+                                - generic [ref=f1e597]:
+                                  - generic [ref=f1e598]: 
+                                  - text:  ServiceHealth-DOD
+                            - treeitem "ServiceHealth-EMEA" [ref=f1e599]:
+                              - link "ServiceHealth-EMEA" [ref=f1e602] [cursor=pointer]:
+                                - /url: /dashboard/SkypeCoreConv/ServiceHealth/CS/ServiceHealth-EMEA
+                                - generic [ref=f1e603]:
+                                  - generic [ref=f1e604]: 
+                                  - text:  ServiceHealth-EMEA
+                            - treeitem "ServiceHealth-Gallatin" [ref=f1e605]:
+                              - link "ServiceHealth-Gallatin" [ref=f1e608] [cursor=pointer]:
+                                - /url: /dashboard/SkypeCoreConv/ServiceHealth/CS/ServiceHealth-Gallatin
+                                - generic [ref=f1e609]:
+                                  - generic [ref=f1e610]: 
+                                  - text:  ServiceHealth-Gallatin
+                            - treeitem "ServiceHealth-GCCH" [ref=f1e611]:
+                              - link "ServiceHealth-GCCH" [ref=f1e614] [cursor=pointer]:
+                                - /url: /dashboard/SkypeCoreConv/ServiceHealth/CS/ServiceHealth-GCCH
+                                - generic [ref=f1e615]:
+                                  - generic [ref=f1e616]: 
+                                  - text:  ServiceHealth-GCCH
+                            - treeitem "ServiceHealth-GCCH (Distributed)" [ref=f1e617]:
+                              - link "ServiceHealth-GCCH (Distributed)" [ref=f1e620] [cursor=pointer]:
+                                - /url: /dashboard/SkypeCoreConv/ServiceHealth/CS/ServiceHealth-GCCH%2520(Distributed)
+                                - generic [ref=f1e621]:
+                                  - generic [ref=f1e622]: 
+                                  - text:  ServiceHealth-GCCH (Distributed)
+                            - treeitem "ServiceHealth-Global" [ref=f1e623]:
+                              - link "ServiceHealth-Global" [ref=f1e626] [cursor=pointer]:
+                                - /url: /dashboard/SkypeCoreConv/ServiceHealth/CS/ServiceHealth-Global
+                                - generic [ref=f1e627]:
+                                  - generic [ref=f1e628]: 
+                                  - text:  ServiceHealth-Global
+                            - treeitem "ServiceHealth-Global (Distributed)" [ref=f1e629]:
+                              - link "ServiceHealth-Global (Distributed)" [ref=f1e632] [cursor=pointer]:
+                                - /url: /dashboard/SkypeCoreConv/ServiceHealth/CS/ServiceHealth-Global%2520(Distributed)
+                                - generic "Update distributed/streaming setup widgets" [ref=f1e633]:
+                                  - generic [ref=f1e634]: 
+                                  - text:  ServiceHealth-Global (Distributed)
+                        - treeitem "CSS" [ref=f1e635]:
+                          - link "CSS" [ref=f1e638] [cursor=pointer]:
+                            - /url: /dashboard/SkypeCoreConv/ServiceHealth/CSS
+                            - generic [ref=f1e639]:
+                              - generic [ref=f1e640]: 
+                              - text:  CSS
+                        - treeitem "TS" [ref=f1e641]:
+                          - link "TS" [ref=f1e644] [cursor=pointer]:
+                            - /url: /dashboard/SkypeCoreConv/ServiceHealth/TS
+                            - generic [ref=f1e645]:
+                              - generic [ref=f1e646]: 
+                              - text:  TS
+                    - treeitem "Share" [ref=f1e647]:
+                      - link "Share" [ref=f1e650] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Share
+                        - generic [ref=f1e651]:
+                          - generic [ref=f1e652]: 
+                          - text:  Share
+                    - treeitem "SNAT Port Usage" [ref=f1e653]:
+                      - link "SNAT Port Usage" [ref=f1e656] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/SNAT%2520Port%2520Usage
+                        - generic [ref=f1e657]:
+                          - generic [ref=f1e658]: 
+                          - text:  SNAT Port Usage
+                    - treeitem "Staging Room" [ref=f1e659]:
+                      - link "Staging Room" [ref=f1e662] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Staging%2520Room
+                        - generic [ref=f1e663]:
+                          - generic [ref=f1e664]: 
+                          - text:  Staging Room
+                    - treeitem "Streaming Dashboard" [ref=f1e665]:
+                      - link "Streaming Dashboard" [ref=f1e668] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Streaming%2520Dashboard
+                        - generic [ref=f1e669]:
+                          - generic [ref=f1e670]: 
+                          - text:  Streaming Dashboard
+                    - treeitem "Sync Infrastructure" [ref=f1e671]:
+                      - link "Sync Infrastructure" [ref=f1e674] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Sync%2520Infrastructure
+                        - generic "Dashboards for the sync infrastructure used for features such as 100k Reactions." [ref=f1e675]:
+                          - generic [ref=f1e676]: 
+                          - text:  Sync Infrastructure
+                    - treeitem "SystemCounters" [ref=f1e677]:
+                      - link "SystemCounters" [ref=f1e680] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/SystemCounters
+                        - generic [ref=f1e681]:
+                          - generic [ref=f1e682]: 
+                          - text:  SystemCounters
+                    - treeitem "Teams Enterprise TE tag" [ref=f1e683]:
+                      - link "Teams Enterprise TE tag" [ref=f1e686] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Teams%2520Enterprise
+                        - generic "Dashboard for Teams Enterprise scenarios in Conversation Service" [ref=f1e687]:
+                          - generic [ref=f1e688]: 
+                          - text:  Teams Enterprise
+                        - text: TE
+                    - treeitem "TFL ic3esp-bm tag" [ref=f1e689]:
+                      - link "TFL ic3esp-bm tag" [ref=f1e692] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/TFL
+                        - generic [ref=f1e693]:
+                          - generic [ref=f1e694]: 
+                          - text:  TFL
+                        - text: ic3esp-bm
+                    - treeitem "ThrottlingMetrics" [ref=f1e695]:
+                      - link "ThrottlingMetrics" [ref=f1e698] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/ThrottlingMetrics
+                        - generic [ref=f1e699]:
+                          - generic [ref=f1e700]: 
+                          - text:  ThrottlingMetrics
+                    - treeitem "Transport" [ref=f1e701]:
+                      - link "Transport" [ref=f1e704] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Transport
+                        - generic [ref=f1e705]:
+                          - generic [ref=f1e706]: 
+                          - text:  Transport
+                    - treeitem "XL Meeting Analysis" [ref=f1e707]:
+                      - link "XL Meeting Analysis" [ref=f1e710] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/XL%2520Meeting%2520Analysis
+                        - generic [ref=f1e711]:
+                          - generic [ref=f1e712]: 
+                          - text:  XL Meeting Analysis
+                    - treeitem "XL_Meetings" [ref=f1e713]:
+                      - link "XL_Meetings" [ref=f1e716] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/XL_Meetings
+                        - generic [ref=f1e717]:
+                          - generic [ref=f1e718]: 
+                          - text:  XL_Meetings
+                    - treeitem "Zhe" [ref=f1e719]:
+                      - link "Zhe" [ref=f1e722] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Zhe
+                        - generic [ref=f1e723]:
+                          - generic [ref=f1e724]: 
+                          - text:  Zhe
+                    - treeitem "Dependency Monitoring" [ref=f1e725]:
+                      - link "Dependency Monitoring" [ref=f1e728] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/Dependency%2520Monitoring
+                        - generic [ref=f1e729]:
+                          - generic [ref=f1e730]: 
+                          - text:  Dependency Monitoring
+                    - treeitem "GenevaQos" [ref=f1e731]:
+                      - link "GenevaQos" [ref=f1e734] [cursor=pointer]:
+                        - /url: /dashboard/SkypeCoreConv/GenevaQos
+                        - generic [ref=f1e735]:
+                          - generic [ref=f1e736]: 
+                          - text:  GenevaQos
+                - treeitem "SkypeCoreFlightProxy" [ref=f1e737]:
+                  - link "SkypeCoreFlightProxy" [ref=f1e740] [cursor=pointer]:
+                    - /url: /dashboard/SkypeCoreFlightProxy
+                    - generic [ref=f1e741]:
+                      - generic [ref=f1e742]: 
+                      - text:  SkypeCoreFlightProxy
+                - treeitem "SkypeUserStore" [ref=f1e743]:
+                  - link "SkypeUserStore" [ref=f1e746] [cursor=pointer]:
+                    - /url: /dashboard/SkypeUserStore
+                    - generic [ref=f1e747]:
+                      - generic [ref=f1e748]: 
+                      - text:  SkypeUserStore
+                - treeitem "TeamsScheduler" [ref=f1e749]:
+                  - link "TeamsScheduler" [ref=f1e752] [cursor=pointer]:
+                    - /url: /dashboard/TeamsScheduler
+                    - generic [ref=f1e753]:
+                      - generic [ref=f1e754]: 
+                      - text:  TeamsScheduler
+                - treeitem "User/kirmadi" [ref=f1e755]:
+                  - link "User/kirmadi" [ref=f1e758] [cursor=pointer]:
+                    - /url: /dashboard/User%252Fkirmadi
+                    - generic [ref=f1e759]:
+                      - generic [ref=f1e760]: 
+                      - text:  User/kirmadi
+            - text:   
+          - button "Collapse" [expanded] [ref=f1e763] [cursor=pointer]:
+            - generic [ref=f1e764]: 
+          - generic [ref=f1e765]:
+            - generic [ref=f1e766]:
+              - generic [ref=f1e767]:
+                - generic [ref=f1e768]:
+                  - heading "MQL" [level=1] [ref=f1e769] [cursor=pointer]
+                  - button "Add to favorites" [ref=f1e770] [cursor=pointer]:
+                    - generic [ref=f1e771]: 
+                - toolbar "Dashboard" [ref=f1e772]:
+                  - button "View in Grafana" [expanded] [ref=f1e773] [cursor=pointer]:
+                    - img [ref=f1e774]
+                    - text: View in Grafana
+                  - button "Add a widget (alt+A)" [ref=f1e775] [cursor=pointer]:
+                    - generic [ref=f1e776]: 
+                    - text: Widget
+                  - button "Share (alt+L)" [ref=f1e777] [cursor=pointer]:
+                    - generic [ref=f1e778]: 
+                    - text: Share
+                  - button "Refresh all chart data sources (alt+R)" [ref=f1e779] [cursor=pointer]:
+                    - generic [ref=f1e780]: 
+                    - text: Refresh
+                  - button "Save As (ctrl+S)" [ref=f1e781] [cursor=pointer]:
+                    - generic [ref=f1e782]: 
+                  - button "Hide filter bar (alt+F)" [expanded] [ref=f1e783] [cursor=pointer]:
+                    - generic [ref=f1e784]: 
+                  - button "More settings" [ref=f1e785] [cursor=pointer]:
+                    - generic [ref=f1e786]: 
+                  - button "More options" [ref=f1e787] [cursor=pointer]:
+                    - generic [ref=f1e788]: 
+              - generic "Filter Options" [ref=f1e789]:
+                - 'button "Time : Last 1d " [ref=f1e790] [cursor=pointer]':
+                  - generic [ref=f1e791]: Time
+                  - text: ":"
+                  - generic [ref=f1e792]: Last 1d
+                  - text: 
+                - generic [ref=f1e793]:
+                  - button "Parameters" [ref=f1e794] [cursor=pointer]:
+                    - generic [ref=f1e795]: 
+                    - text: Parameters
+                  - button "Overrides" [ref=f1e796] [cursor=pointer]:
+                    - generic [ref=f1e797]: 
+                    - text: Overrides
+            - text: 
+            - main "Widgets" [ref=f1e799]:
+              - generic [ref=f1e800]:
+                - generic [ref=f1e801]:
+                  - heading "Global" [level=2] [ref=f1e802]
+                  - toolbar "Widget Actions" [ref=f1e804]:
+                    - button "Edit Widget" [ref=f1e805]:
+                      - generic [ref=f1e806] [cursor=pointer]: 
+                    - text: 
+                    - textbox "Global (Click to edit)" [ref=f1e807]:
+                      - /placeholder: (Click to add a title)
+                      - text: Global
+                    - text: 
+                    - button "View query information - No Errors or Warnings" [ref=f1e809]:
+                      - generic [ref=f1e810] [cursor=pointer]: 
+                    - button "Open on Azure Managed Grafana playground" [ref=f1e811]:
+                      - img [ref=f1e812] [cursor=pointer]
+                    - button "Refresh" [ref=f1e813]:
+                      - generic [ref=f1e814] [cursor=pointer]: 
+                    - button "Share" [ref=f1e815]:
+                      - generic [ref=f1e816] [cursor=pointer]: 
+                    - button "More commands" [ref=f1e817]:
+                      - generic [ref=f1e818] [cursor=pointer]: 
+                    - text: 
+                  - generic "Press alt m to view data as a screen reader accessible table" [ref=f1e820]:
+                    - generic [ref=f1e822]:
+                      - img [ref=f1e823]:
+                        - generic [ref=f1e885]:
+                          - generic [ref=f1e887] [cursor=pointer]: All
+                          - generic [ref=f1e889] [cursor=pointer]: None
+                        - generic [ref=f1e894]:
+                          - generic [ref=f1e895]: 19:00
+                          - generic [ref=f1e896]: 20:00
+                          - generic [ref=f1e897]: 21:00
+                          - generic [ref=f1e898]: 22:00
+                          - generic [ref=f1e899]: 23:00
+                          - generic [ref=f1e900]: 8. Feb
+                          - generic [ref=f1e901]: 01:00
+                          - generic [ref=f1e902]: 02:00
+                          - generic [ref=f1e903]: 03:00
+                          - generic [ref=f1e904]: 04:00
+                          - generic [ref=f1e905]: 05:00
+                          - generic [ref=f1e906]: 06:00
+                          - generic [ref=f1e907]: 07:00
+                          - generic [ref=f1e908]: 08:00
+                          - generic [ref=f1e909]: 09:00
+                          - generic [ref=f1e910]: 10:00
+                          - generic [ref=f1e911]: 11:00
+                          - generic [ref=f1e912]: 12:00
+                          - generic [ref=f1e913]: 13:00
+                          - generic [ref=f1e914]: 14:00
+                          - generic [ref=f1e915]: 15:00
+                          - generic [ref=f1e916]: 16:00
+                          - generic [ref=f1e917]: 17:00
+                          - generic [ref=f1e918]: 18:00
+                        - generic [ref=f1e919]:
+                          - generic [ref=f1e920]: "97.5"
+                          - generic [ref=f1e921]: "98"
+                          - generic [ref=f1e922]: "98.5"
+                          - generic [ref=f1e923]: "99"
+                          - generic [ref=f1e924]: "99.5"
+                          - generic [ref=f1e925]: "100"
+                          - generic [ref=f1e926]: "100.5"
+                      - generic [ref=f1e927]: UTC-8
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic [ref=f1e928] [cursor=pointer]: Reliability CreateConversation_ConversationFactory
+                            - generic [ref=f1e929] [cursor=pointer]: Reliability UpdateEndpointMetadata_ConversationApi
+                            - generic [ref=f1e930] [cursor=pointer]: Reliability UpdateEndpointState_ConversationApi
+                            - generic [ref=f1e931] [cursor=pointer]: Reliability JoinConversation_ConversationApi
+                            - generic [ref=f1e932] [cursor=pointer]: Reliability JoinConversation_InternalApi
+                            - generic [ref=f1e933] [cursor=pointer]: Reliability SubscribeConversation_ConversationApi
+                            - generic [ref=f1e934] [cursor=pointer]: Reliability LeaveConversation_ConversationApi
+                            - generic [ref=f1e935] [cursor=pointer]: Reliability Unmute_ConversationApi
+                            - generic [ref=f1e936] [cursor=pointer]: Reliability AddParticipantAndModality_ConversationApi
+                            - generic [ref=f1e937] [cursor=pointer]: Reliability AdmitAllParticipants_ConversationApi
+                            - generic [ref=f1e938] [cursor=pointer]: Reliability AdmitUsers_ConversationApi
+                            - generic [ref=f1e939] [cursor=pointer]: Reliability DeleteConversation_ConversationApi
+                            - generic [ref=f1e940] [cursor=pointer]: Reliability PublishState_ConversationApi
+                            - generic [ref=f1e941] [cursor=pointer]: Reliability Mute_ConversationApi
+                            - generic [ref=f1e942] [cursor=pointer]: Reliability RemoveState_ConversationApi
+                            - generic [ref=f1e943] [cursor=pointer]: Reliability FunneledJoinConversation_InternalApi
+                            - generic [ref=f1e944] [cursor=pointer]: Reliability AddParticipant_ConversationApi
+                            - generic [ref=f1e945] [cursor=pointer]: Reliability AddModality_ConversationApi
+                            - generic [ref=f1e946] [cursor=pointer]: Reliability FunneledLeaveConversation_InternalApi
+                            - generic [ref=f1e947] [cursor=pointer]: Reliability LeaveConversation_InternalApi
+                            - generic [ref=f1e948] [cursor=pointer]: Reliability SendMessage_ConversationApi
+                - generic [ref=f1e952]:
+                  - heading "By APIMethod" [level=2] [ref=f1e953]
+                  - toolbar "Widget Actions" [ref=f1e955]:
+                    - button "Edit Widget" [ref=f1e956]:
+                      - generic [ref=f1e957] [cursor=pointer]: 
+                    - text: 
+                    - textbox "By APIMethod (Click to edit)" [ref=f1e958]:
+                      - /placeholder: (Click to add a title)
+                      - text: By APIMethod
+                    - text: 
+                    - button "View query information - No Errors or Warnings" [ref=f1e960]:
+                      - generic [ref=f1e961] [cursor=pointer]: 
+                    - button "Open on Azure Managed Grafana playground" [ref=f1e962]:
+                      - img [ref=f1e963] [cursor=pointer]
+                    - button "Refresh" [ref=f1e964]:
+                      - generic [ref=f1e965] [cursor=pointer]: 
+                    - button "Share" [ref=f1e966]:
+                      - generic [ref=f1e967] [cursor=pointer]: 
+                    - button "More commands" [ref=f1e968]:
+                      - generic [ref=f1e969] [cursor=pointer]: 
+                    - text: 
+                  - generic "Press alt m to view data as a screen reader accessible table" [ref=f1e971]:
+                    - generic [ref=f1e973]:
+                      - img [ref=f1e974]:
+                        - generic [ref=f1e1276]:
+                          - generic [ref=f1e1278] [cursor=pointer]: All
+                          - generic [ref=f1e1280] [cursor=pointer]: None
+                        - generic [ref=f1e1287]: 1/25
+                        - generic [ref=f1e1289]:
+                          - generic [ref=f1e1290]: 8. Feb
+                          - generic [ref=f1e1291]: 06:00
+                          - generic [ref=f1e1292]: 12:00
+                          - generic [ref=f1e1293]: 18:00
+                        - generic [ref=f1e1294]:
+                          - generic [ref=f1e1295]: "94"
+                          - generic [ref=f1e1296]: "95"
+                          - generic [ref=f1e1297]: "96"
+                          - generic [ref=f1e1298]: "97"
+                          - generic [ref=f1e1299]: "98"
+                          - generic [ref=f1e1300]: "99"
+                          - generic [ref=f1e1301]: "100"
+                          - generic [ref=f1e1302]: "101"
+                      - generic [ref=f1e1303]: UTC-8
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic [ref=f1e1304] [cursor=pointer]: Reliability conv-maso-04-prod-aks.conv.skype.com
+                            - generic [ref=f1e1305] [cursor=pointer]: Reliability conv-euno-03-prod-aks.conv.skype.com
+                            - generic [ref=f1e1306] [cursor=pointer]: Reliability conv-sano-03-prod-aks.conv.skype.com
+                            - generic [ref=f1e1307] [cursor=pointer]: Reliability conv-auea-01-prod-aks.conv.skype.com
+                            - generic [ref=f1e1308] [cursor=pointer]: Reliability conv-maso-03-prod-aks.conv.skype.com
+                            - generic [ref=f1e1309] [cursor=pointer]: Reliability dod-govaz-01.conv.dod.teams.microsoft.us
+                            - generic [ref=f1e1310] [cursor=pointer]: Reliability conv-euno-02-msit-aks.conv.skype.com
+                            - generic [ref=f1e1311] [cursor=pointer]: Reliability conv-usea-06-prod-aks.conv.skype.com
+                            - generic [ref=f1e1312] [cursor=pointer]: Reliability conv-usea-01-prod-aks.conv.skype.com
+                            - generic [ref=f1e1313] [cursor=pointer]: Reliability conv-usea-05-prod-aks.conv.skype.com
+                            - generic [ref=f1e1314] [cursor=pointer]: Reliability conv-usea2-04-prod-aks.conv.skype.com
+                            - generic [ref=f1e1315] [cursor=pointer]: Reliability conv-usea2-03-prod-aks.conv.skype.com
+                            - generic [ref=f1e1316] [cursor=pointer]: Reliability conv-usea2-01-prod-aks.conv.skype.com
+                            - generic [ref=f1e1317] [cursor=pointer]: Reliability conv-jpwe-03-prod-aks.conv.skype.com
+                            - generic [ref=f1e1318] [cursor=pointer]: Reliability conv-brso-05-prod-aks.conv.skype.com
+                            - generic [ref=f1e1319] [cursor=pointer]: Reliability conv-auea-03-prod-aks.conv.skype.com
+                            - generic [ref=f1e1320] [cursor=pointer]: Reliability conv-euno-02-prod-aks.conv.skype.com
+                            - generic [ref=f1e1321] [cursor=pointer]: Reliability conv-uswe-04-prod-aks.conv.skype.com
+                            - generic [ref=f1e1322] [cursor=pointer]: Reliability conv-frce-02-prod-aks.conv.skype.com
+                            - generic [ref=f1e1323] [cursor=pointer]: Reliability conv-maso-02-prod-aks.conv.skype.com
+                            - generic [ref=f1e1324] [cursor=pointer]: Reliability conv-brso-01-prod-aks.conv.skype.com
+                            - generic [ref=f1e1325] [cursor=pointer]: Reliability conv-usea-02-prod-aks.conv.skype.com
+                            - generic [ref=f1e1326] [cursor=pointer]: Reliability conv-inso-02-prod-aks.conv.skype.com
+                            - generic [ref=f1e1327] [cursor=pointer]: Reliability conv-jpwe-04-prod-aks.conv.skype.com
+                            - generic [ref=f1e1328] [cursor=pointer]: Reliability conv-usea2-02-prod-aks.conv.skype.com
+                            - generic [ref=f1e1329] [cursor=pointer]: Reliability conv-frce-04-prod-aks.conv.skype.com
+                            - generic [ref=f1e1330] [cursor=pointer]: Reliability conv-uaen-01-prod-aks.conv.skype.com
+                            - generic [ref=f1e1331] [cursor=pointer]: Reliability conv-euwe-03-prod-aks.conv.skype.com
+                            - generic [ref=f1e1332] [cursor=pointer]: Reliability conv-uswe-02-prod-aks.conv.skype.com
+                            - generic [ref=f1e1333] [cursor=pointer]: Reliability conv-frce-05-prod-aks.conv.skype.com
+                            - generic [ref=f1e1334] [cursor=pointer]: Reliability conv-uswe-01-sdf-aks.conv.skype.com
+                            - generic [ref=f1e1335] [cursor=pointer]: Reliability conv-euno-05-prod-aks.conv.skype.com
+                            - generic [ref=f1e1336] [cursor=pointer]: Reliability conv-jpwe-02-msit-aks.conv.skype.com
+                            - generic [ref=f1e1337] [cursor=pointer]: Reliability conv-usce-02-prod-aks.conv.skype.com
+                            - generic [ref=f1e1338] [cursor=pointer]: Reliability conv-krce-03-prod-aks.conv.skype.com
+                            - generic [ref=f1e1339] [cursor=pointer]: Reliability conv-euwe-02-prod-aks.conv.skype.com
+                            - generic [ref=f1e1340] [cursor=pointer]: Reliability conv-usce-05-prod-aks.conv.skype.com
+                            - generic [ref=f1e1341] [cursor=pointer]: Reliability conv-jpea-01-prod-aks.conv.skype.com
+                            - generic [ref=f1e1342] [cursor=pointer]: Reliability conv-swce-02-prod-aks.conv.skype.com
+                            - generic [ref=f1e1343] [cursor=pointer]: Reliability conv-inso-04-prod-aks.conv.skype.com
+                            - generic [ref=f1e1344] [cursor=pointer]: Reliability conv-ince-05-prod-aks.conv.skype.com
+                            - generic [ref=f1e1345] [cursor=pointer]: Reliability conv-euno-04-prod-aks.conv.skype.com
+                            - generic [ref=f1e1346] [cursor=pointer]: Reliability govtx-02.conv.gov.teams.microsoft.us
+                            - generic [ref=f1e1347] [cursor=pointer]: Reliability conv-uswe-02-msit-aks.conv.skype.com
+                            - generic [ref=f1e1348] [cursor=pointer]: Reliability conv-auea-04-prod-aks.conv.skype.com
+                            - generic [ref=f1e1349] [cursor=pointer]: Reliability conv-uswe-01-prod-aks.conv.skype.com
+                            - generic [ref=f1e1350] [cursor=pointer]: Reliability conv-usea-04-prod-aks.conv.skype.com
+                            - generic [ref=f1e1351] [cursor=pointer]: Reliability conv-jpea-03-prod-aks.conv.skype.com
+                            - generic [ref=f1e1352] [cursor=pointer]: Reliability conv-jpwe-01-prod-aks.conv.skype.com
+                            - generic [ref=f1e1353] [cursor=pointer]: Reliability conv-usea-03-prod-aks.conv.skype.com
+                            - generic [ref=f1e1354] [cursor=pointer]: Reliability conv-usce-03-prod-aks.conv.skype.com
+                            - generic [ref=f1e1355] [cursor=pointer]: Reliability conv-brso-02-prod-aks.conv.skype.com
+                            - generic [ref=f1e1356] [cursor=pointer]: Reliability conv-euwe-01-prod-aks.conv.skype.com
+                            - generic [ref=f1e1357] [cursor=pointer]: Reliability conv-krce-02-prod-aks.conv.skype.com
+                            - generic [ref=f1e1358] [cursor=pointer]: Reliability conv-auea-02-prod-aks.conv.skype.com
+                            - generic [ref=f1e1359] [cursor=pointer]: Reliability conv-sano-01-prod-aks.conv.skype.com
+                            - generic [ref=f1e1360] [cursor=pointer]: Reliability conv-uaen-04-prod-aks.conv.skype.com
+                            - generic [ref=f1e1361] [cursor=pointer]: Reliability conv-swce-05-prod-aks.conv.skype.com
+                            - generic [ref=f1e1362] [cursor=pointer]: Reliability conv-uaen-02-prod-aks.conv.skype.com
+                            - generic [ref=f1e1363] [cursor=pointer]: Reliability conv-usce-01-prod-aks.conv.skype.com
+                            - generic [ref=f1e1364] [cursor=pointer]: Reliability conv-ince-01-prod-aks.conv.skype.com
+                            - generic [ref=f1e1365] [cursor=pointer]: Reliability conv-auea-05-prod-aks.conv.skype.com
+                            - generic [ref=f1e1366] [cursor=pointer]: Reliability conv-krce-01-prod-aks.conv.skype.com
+                            - generic [ref=f1e1367] [cursor=pointer]: Reliability conv-uswe-05-prod-aks.conv.skype.com
+                            - generic [ref=f1e1368] [cursor=pointer]: Reliability conv-uaen-03-prod-aks.conv.skype.com
+                            - generic [ref=f1e1369] [cursor=pointer]: Reliability conv-swce-04-prod-aks.conv.skype.com
+                            - generic [ref=f1e1370] [cursor=pointer]: Reliability dod-govtx-01.conv.dod.teams.microsoft.us
+                            - generic [ref=f1e1371] [cursor=pointer]: Reliability conv-euwe-04-prod-aks.conv.skype.com
+                            - generic [ref=f1e1372] [cursor=pointer]: Reliability conv-uaen-05-prod-aks.conv.skype.com
+                            - generic [ref=f1e1373] [cursor=pointer]: Reliability conv-euno-01-prod-aks.conv.skype.com
+                            - generic [ref=f1e1374] [cursor=pointer]: Reliability conv-frce-01-prod-aks.conv.skype.com
+                            - generic [ref=f1e1375] [cursor=pointer]: Reliability conv-maso-01-prod-aks.conv.skype.com
+                            - generic [ref=f1e1376] [cursor=pointer]: Reliability conv-jpea-02-prod-aks.conv.skype.com
+                            - generic [ref=f1e1377] [cursor=pointer]: Reliability govaz-02.conv.gov.teams.microsoft.us
+                            - generic [ref=f1e1378] [cursor=pointer]: Reliability conv-krce-04-prod-aks.conv.skype.com
+                            - generic [ref=f1e1379] [cursor=pointer]: Reliability conv-inso-05-prod-aks.conv.skype.com
+                            - generic [ref=f1e1380] [cursor=pointer]: Reliability conv-jpwe-05-prod-aks.conv.skype.com
+                            - generic [ref=f1e1381] [cursor=pointer]: Reliability conv-sano-04-prod-aks.conv.skype.com
+                            - generic [ref=f1e1382] [cursor=pointer]: Reliability conv-usce-04-prod-aks.conv.skype.com
+                            - generic [ref=f1e1383] [cursor=pointer]: Reliability cnno3-02.conv.teams.microsoftonline.cn
+                            - generic [ref=f1e1384] [cursor=pointer]: Reliability conv-euno-01-sdf-aks.conv.skype.com
+                            - generic [ref=f1e1385] [cursor=pointer]: Reliability conv-krce-05-prod-aks.conv.skype.com
+                            - generic [ref=f1e1386] [cursor=pointer]: Reliability conv-jpea-04-prod-aks.conv.skype.com
+                            - generic [ref=f1e1387] [cursor=pointer]: Reliability conv-brso-04-prod-aks.conv.skype.com
+                            - generic [ref=f1e1388] [cursor=pointer]: Reliability conv-usea-01-sdf-aks.conv.skype.com
+                            - generic [ref=f1e1389] [cursor=pointer]: Reliability conv-euwe-02-msit-aks.conv.skype.com
+                            - generic [ref=f1e1390] [cursor=pointer]: Reliability conv-frce-03-prod-aks.conv.skype.com
+                            - generic [ref=f1e1391] [cursor=pointer]: Reliability conv-maso-05-prod-aks.conv.skype.com
+                            - generic [ref=f1e1392] [cursor=pointer]: Reliability conv-euwe-05-prod-aks.conv.skype.com
+                            - generic [ref=f1e1393] [cursor=pointer]: Reliability conv-jpea-01-sdf-aks.conv.skype.com
+                            - generic [ref=f1e1394] [cursor=pointer]: Reliability conv-jpea-02-msit-aks.conv.skype.com
+                            - generic [ref=f1e1395] [cursor=pointer]: Reliability conv-inso-03-prod-aks.conv.skype.com
+                            - generic [ref=f1e1396] [cursor=pointer]: Reliability conv-swce-01-prod-aks.conv.skype.com
+                            - generic [ref=f1e1397] [cursor=pointer]: Reliability conv-usea-02-msit-aks.conv.skype.com
+                            - generic [ref=f1e1398] [cursor=pointer]: Reliability conv-usea2-05-prod-aks.conv.skype.com
+                            - generic [ref=f1e1399] [cursor=pointer]: Reliability conv-jpea-05-prod-aks.conv.skype.com
+                            - generic [ref=f1e1400] [cursor=pointer]: Reliability conv-jpwe-02-prod-aks.conv.skype.com
+                            - generic [ref=f1e1401] [cursor=pointer]: Reliability conv-swce-03-prod-aks.conv.skype.com
+                            - generic [ref=f1e1402] [cursor=pointer]: Reliability cnea3-02.conv.teams.microsoftonline.cn
+                            - generic [ref=f1e1403] [cursor=pointer]: Reliability conv-sano-02-prod-aks.conv.skype.com
+                - generic [ref=f1e1407]:
+                  - heading "By ServiceTenant" [level=2] [ref=f1e1408]
+                  - toolbar "Widget Actions" [ref=f1e1410]:
+                    - button "Edit Widget" [ref=f1e1411]:
+                      - generic [ref=f1e1412] [cursor=pointer]: 
+                    - text: 
+                    - textbox "By ServiceTenant (Click to edit)" [ref=f1e1413]:
+                      - /placeholder: (Click to add a title)
+                      - text: By ServiceTenant
+                    - text: 
+                    - button "View query information - No Errors or Warnings" [ref=f1e1415]:
+                      - generic [ref=f1e1416] [cursor=pointer]: 
+                    - button "Open on Azure Managed Grafana playground" [ref=f1e1417]:
+                      - img [ref=f1e1418] [cursor=pointer]
+                    - button "Refresh" [ref=f1e1419]:
+                      - generic [ref=f1e1420] [cursor=pointer]: 
+                    - button "Share" [ref=f1e1421]:
+                      - generic [ref=f1e1422] [cursor=pointer]: 
+                    - button "More commands" [ref=f1e1423]:
+                      - generic [ref=f1e1424] [cursor=pointer]: 
+                    - text: 
+                  - generic "Press alt m to view data as a screen reader accessible table" [ref=f1e1426]:
+                    - generic [ref=f1e1428]:
+                      - img [ref=f1e1429]:
+                        - generic [ref=f1e1709]:
+                          - generic [ref=f1e1711] [cursor=pointer]: All
+                          - generic [ref=f1e1713] [cursor=pointer]: None
+                        - generic [ref=f1e1720]: 1/23
+                        - generic [ref=f1e1722]:
+                          - generic [ref=f1e1723]: 8. Feb
+                          - generic [ref=f1e1724]: 06:00
+                          - generic [ref=f1e1725]: 12:00
+                          - generic [ref=f1e1726]: 18:00
+                        - generic [ref=f1e1727]:
+                          - generic [ref=f1e1728]: "99.2"
+                          - generic [ref=f1e1729]: "99.4"
+                          - generic [ref=f1e1730]: "99.6"
+                          - generic [ref=f1e1731]: "99.8"
+                          - generic [ref=f1e1732]: "100"
+                          - generic [ref=f1e1733]: "100.2"
+                      - generic [ref=f1e1734]: UTC-8
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic [ref=f1e1735] [cursor=pointer]: Reliability ParticipantListUpdated_LobbyNotifications
+                            - generic [ref=f1e1736] [cursor=pointer]: Reliability JoinConversation_ConversationApi
+                            - generic [ref=f1e1737] [cursor=pointer]: Reliability GetConversation_ConversationApi
+                            - generic [ref=f1e1738] [cursor=pointer]: Reliability ParticipantInvitationSuccess_LobbyNotifications
+                            - generic [ref=f1e1739] [cursor=pointer]: Reliability SearchParticipants_ConversationApi
+                            - generic [ref=f1e1740] [cursor=pointer]: Reliability FanoutNotification_NotificationFanout
+                            - generic [ref=f1e1741] [cursor=pointer]: Reliability UpdateEndpointState_ConversationApi
+                            - generic [ref=f1e1742] [cursor=pointer]: Reliability LeaveConversation_InternalApi
+                            - generic [ref=f1e1743] [cursor=pointer]: Reliability PostArtifactsEntriesV2_RealTimeActivityFeedStorageApi
+                            - generic [ref=f1e1744] [cursor=pointer]: Reliability UpdateNotificationLinks_ConversationApi
+                            - generic [ref=f1e1745] [cursor=pointer]: Reliability FunneledLeaveConversation_InternalApi
+                            - generic [ref=f1e1746] [cursor=pointer]: Reliability LeaveMeetingGroup_StructuredMeeting
+                            - generic [ref=f1e1747] [cursor=pointer]: Reliability SubscribeConversation_ConversationApi
+                            - generic [ref=f1e1748] [cursor=pointer]: Reliability AdmitUsers_ConversationApi
+                            - generic [ref=f1e1749] [cursor=pointer]: Reliability UpdateEndpointMetadata_ConversationApi
+                            - generic [ref=f1e1750] [cursor=pointer]: Reliability CallEnd_CallNotifications
+                            - generic [ref=f1e1751] [cursor=pointer]: Reliability AddParticipant_ConversationApi
+                            - generic [ref=f1e1752] [cursor=pointer]: Reliability JoinMediaGroupCompleted_MediaControllerNotification
+                            - generic [ref=f1e1753] [cursor=pointer]: Reliability RemoveState_ConversationApi
+                            - generic [ref=f1e1754] [cursor=pointer]: Reliability CreateConversation_ConversationFactory
+                            - generic [ref=f1e1755] [cursor=pointer]: Reliability SendMessage_ConversationApi
+                            - generic [ref=f1e1756] [cursor=pointer]: Reliability FunneledUpdateEndpointMetadata_InternalApi
+                            - generic [ref=f1e1757] [cursor=pointer]: Reliability GetParticipant_ConversationApi
+                            - generic [ref=f1e1758] [cursor=pointer]: Reliability UpdateLiveState_StructuredMeeting
+                            - generic [ref=f1e1759] [cursor=pointer]: Reliability AnnoucementComplete_CasNotification
+                            - generic [ref=f1e1760] [cursor=pointer]: Reliability UpdateLocalAudioMuteStatusCompleted_MediaControllerNotification
+                            - generic [ref=f1e1761] [cursor=pointer]: Reliability ParticipantJoinFailure_LobbyNotifications
+                            - generic [ref=f1e1762] [cursor=pointer]: Reliability SessionEnd_ContentSharingNotifications
+                            - generic [ref=f1e1763] [cursor=pointer]: Reliability UpdateMeetingSettings_ConversationApi
+                            - generic [ref=f1e1764] [cursor=pointer]: Reliability JoinMeetingGroup_StructuredMeeting
+                            - generic [ref=f1e1765] [cursor=pointer]: Reliability JoinConversation_InternalApi
+                            - generic [ref=f1e1766] [cursor=pointer]: Reliability NotifyDialoutSuccess_CasNotification
+                            - generic [ref=f1e1767] [cursor=pointer]: Reliability FunneledUpdateEndpointState_InternalApi
+                            - generic [ref=f1e1768] [cursor=pointer]: Reliability JoinModality_ConversationApi
+                            - generic [ref=f1e1769] [cursor=pointer]: Reliability AddParticipantAndModality_ConversationApi
+                            - generic [ref=f1e1770] [cursor=pointer]: Reliability LeaveMediaGroupCompleted_MediaControllerNotification
+                            - generic [ref=f1e1771] [cursor=pointer]: Reliability ParticipantListUpdated_ContentSharingNotifications
+                            - generic [ref=f1e1772] [cursor=pointer]: Reliability StreamingSetupSuccess_BroadcastNotifications
+                            - generic [ref=f1e1773] [cursor=pointer]: Reliability RemoveParticipant_ConversationApi
+                            - generic [ref=f1e1774] [cursor=pointer]: Reliability MoveParticipantsCompleted_MediaControllerNotification
+                            - generic [ref=f1e1775] [cursor=pointer]: Reliability FunneledJoinConversation_InternalApi
+                            - generic [ref=f1e1776] [cursor=pointer]: Reliability KeepAlive_LobbyNotifications
+                            - generic [ref=f1e1777] [cursor=pointer]: Reliability UpdateParticipantProperties_ConversationApi
+                            - generic [ref=f1e1778] [cursor=pointer]: Reliability UpdateInteractivityLevelCompleted_CallNotifications
+                            - generic [ref=f1e1779] [cursor=pointer]: Reliability GetChallenge_Captcha
+                            - generic [ref=f1e1780] [cursor=pointer]: Reliability DeleteConversation_ConversationApi
+                            - generic [ref=f1e1781] [cursor=pointer]: Reliability AddModality_ConversationApi
+                            - generic [ref=f1e1782] [cursor=pointer]: Reliability ChatOperationCompletion_CallNotifications
+                            - generic [ref=f1e1783] [cursor=pointer]: Reliability GetOngoingMeeting_OngoingMeeting
+                            - generic [ref=f1e1784] [cursor=pointer]: Reliability Mute_ConversationApi
+                            - generic [ref=f1e1785] [cursor=pointer]: Reliability GET_Health
+                            - generic [ref=f1e1786] [cursor=pointer]: Reliability AdmitAllParticipants_ConversationApi
+                            - generic [ref=f1e1787] [cursor=pointer]: Reliability MediaControllerOperationsUpdate_CallNotifications
+                            - generic [ref=f1e1788] [cursor=pointer]: Reliability Unmute_ConversationApi
+                            - generic [ref=f1e1789] [cursor=pointer]: Reliability ParticipantJoinFailure_CallNotifications
+                            - generic [ref=f1e1790] [cursor=pointer]: Reliability LeaveConversation_ConversationApi
+                            - generic [ref=f1e1791] [cursor=pointer]: Reliability UpdateArtifactEntry_RealTimeActivityFeedStorageApi
+                            - generic [ref=f1e1792] [cursor=pointer]: Reliability PublishState_ConversationApi
+                            - generic [ref=f1e1793] [cursor=pointer]: Reliability ParticipantListUpdated_BroadcastNotifications
+                            - generic [ref=f1e1794] [cursor=pointer]: Reliability UpdateArtifact_RealTimeActivityFeedStorageApi
+                            - generic [ref=f1e1795] [cursor=pointer]: Reliability GetParticipant_MeetingParticipants
+                            - generic [ref=f1e1796] [cursor=pointer]: Reliability GetConversationLevelArtifacts_RealTimeActivityFeedStorageApi
+                            - generic [ref=f1e1797] [cursor=pointer]: Reliability UpdateMeetingSettings_MeetingSettings
+                            - generic [ref=f1e1798] [cursor=pointer]: Reliability setMeetingLayout_Layout
+                            - generic [ref=f1e1799] [cursor=pointer]: Reliability UpdateParticipantMapping_ConversationApi
+                            - generic [ref=f1e1800] [cursor=pointer]: Reliability CallEnd_LobbyNotifications
+                            - generic [ref=f1e1801] [cursor=pointer]: Reliability ParticipantInvitationFailure_CallNotifications
+                            - generic [ref=f1e1802] [cursor=pointer]: Reliability KeepAlive_CallNotifications
+                            - generic [ref=f1e1803] [cursor=pointer]: Reliability NotifyDialoutFailure_CasNotification
+                            - generic [ref=f1e1804] [cursor=pointer]: Reliability ParticipantListUpdated_CallNotifications
+                            - generic [ref=f1e1805] [cursor=pointer]: Reliability ParticipantInvitationFailure_LobbyNotifications
+                            - generic [ref=f1e1806] [cursor=pointer]: Reliability MediaControllerOperationsUpdate_LobbyNotifications
+                            - generic [ref=f1e1807] [cursor=pointer]: Reliability Update_MeetingStates
+                            - generic [ref=f1e1808] [cursor=pointer]: Reliability PostConversationLevelArtifacts_RealTimeActivityFeedStorageApi
+                            - generic [ref=f1e1809] [cursor=pointer]: Reliability CreateAndJoinMediaGroupCompleted_MediaControllerNotification
+                            - generic [ref=f1e1810] [cursor=pointer]: Reliability UpdateEndpointState_InternalApi
+                            - generic [ref=f1e1811] [cursor=pointer]: Reliability UpdateParticipantRole_ConversationApi
+                            - generic [ref=f1e1812] [cursor=pointer]: Reliability ParticipantInvitationSuccess_CallNotifications
+                            - generic [ref=f1e1813] [cursor=pointer]: Reliability Unknown
+                            - generic [ref=f1e1814] [cursor=pointer]: Reliability Delete_RealTimeActivityFeedApi
+                            - generic [ref=f1e1815] [cursor=pointer]: Reliability UpdateParticipantInterpretationState_StructuredMeeting
+                            - generic [ref=f1e1816] [cursor=pointer]: Reliability Configure_RealTimeActivityFeedApi
+                            - generic [ref=f1e1817] [cursor=pointer]: Reliability UpdateEndpointMetadata_InternalApi
+                            - generic [ref=f1e1818] [cursor=pointer]: Reliability PostArtifactsV2_RealTimeActivityFeedStorageApi
+                            - generic [ref=f1e1819] [cursor=pointer]: Reliability JoinLanguageGroupSuccess_McrNotifications
+                            - generic [ref=f1e1820] [cursor=pointer]: Reliability MergeConversation_ConversationApi
+                            - generic [ref=f1e1821] [cursor=pointer]: Reliability SetLayoutCallback_BroadcastNotifications
+                            - generic [ref=f1e1822] [cursor=pointer]: Reliability PublishTranscriptEvent_RealTimeActivityFeedApi
+                            - generic [ref=f1e1823] [cursor=pointer]: Reliability Get_LoadBalancerProbe
+                            - generic [ref=f1e1824] [cursor=pointer]: Reliability Create_RealTimeActivityFeedApi
+                            - generic [ref=f1e1825] [cursor=pointer]: Reliability PublishRosterEvent_RealTimeActivityFeedApi
+                            - generic [ref=f1e1826] [cursor=pointer]: Reliability PublishConversationUpdateEvent_RealTimeActivityFeedApi
+                - generic [ref=f1e1830]:
+                  - heading "Errors by ErrorCodes" [level=2] [ref=f1e1831]
+                  - toolbar "Widget Actions" [ref=f1e1833]:
+                    - button "Edit Widget" [ref=f1e1834]:
+                      - generic [ref=f1e1835] [cursor=pointer]: 
+                    - text: 
+                    - textbox "Errors by ErrorCodes (Click to edit)" [ref=f1e1836]:
+                      - /placeholder: (Click to add a title)
+                      - text: Errors by ErrorCodes
+                    - text: 
+                    - button "View query information - No Errors or Warnings" [ref=f1e1838]:
+                      - generic [ref=f1e1839] [cursor=pointer]: 
+                    - button "Open on Azure Managed Grafana playground" [ref=f1e1840]:
+                      - img [ref=f1e1841] [cursor=pointer]
+                    - button "Refresh" [ref=f1e1842]:
+                      - generic [ref=f1e1843] [cursor=pointer]: 
+                    - button "Share" [ref=f1e1844]:
+                      - generic [ref=f1e1845] [cursor=pointer]: 
+                    - button "More commands" [ref=f1e1846]:
+                      - generic [ref=f1e1847] [cursor=pointer]: 
+                    - text: 
+                  - generic "Press alt m to view data as a screen reader accessible table" [ref=f1e1849]:
+                    - generic [ref=f1e1851]:
+                      - img [ref=f1e1852]:
+                        - generic [ref=f1e1863]:
+                          - generic [ref=f1e1865] [cursor=pointer]: All
+                          - generic [ref=f1e1867] [cursor=pointer]: None
+                        - generic [ref=f1e1870]:
+                          - generic [ref=f1e1871]: 18:00
+                          - generic [ref=f1e1872]: 18:15
+                        - generic [ref=f1e1873]:
+                          - generic [ref=f1e1874]: "4"
+                          - generic [ref=f1e1875]: "6"
+                          - generic [ref=f1e1876]: "8"
+                          - generic [ref=f1e1877]: "10"
+                          - generic [ref=f1e1878]: "12"
+                          - generic [ref=f1e1879]: "14"
+                      - generic [ref=f1e1880]: UTC-8
+                      - generic [ref=f1e1881] [cursor=pointer]: Success 504 70051
+                - generic [ref=f1e1885]:
+                  - heading "Errors by ErrorCodes+ServiceTenant" [level=2] [ref=f1e1886]
+                  - toolbar "Widget Actions" [ref=f1e1888]:
+                    - button "Edit Widget" [ref=f1e1889]:
+                      - generic [ref=f1e1890] [cursor=pointer]: 
+                    - text: 
+                    - textbox "Errors by ErrorCodes+ServiceTenant (Click to edit)" [ref=f1e1891]:
+                      - /placeholder: (Click to add a title)
+                      - text: Errors by ErrorCodes+ServiceTenant
+                    - text: 
+                    - button "View query information - No Errors or Warnings" [ref=f1e1893]:
+                      - generic [ref=f1e1894] [cursor=pointer]: 
+                    - button "Open on Azure Managed Grafana playground" [ref=f1e1895]:
+                      - img [ref=f1e1896] [cursor=pointer]
+                    - button "Refresh" [ref=f1e1897]:
+                      - generic [ref=f1e1898] [cursor=pointer]: 
+                    - button "Share" [ref=f1e1899]:
+                      - generic [ref=f1e1900] [cursor=pointer]: 
+                    - button "More commands" [ref=f1e1901]:
+                      - generic [ref=f1e1902] [cursor=pointer]: 
+                    - text: 
+                  - generic "Press alt m to view data as a screen reader accessible table" [ref=f1e1904]:
+                    - generic [ref=f1e1906]:
+                      - img [ref=f1e1907]:
+                        - generic [ref=f1e1918]:
+                          - generic [ref=f1e1920] [cursor=pointer]: All
+                          - generic [ref=f1e1922] [cursor=pointer]: None
+                        - generic [ref=f1e1925]:
+                          - generic [ref=f1e1926]: 18:00
+                          - generic [ref=f1e1927]: 18:15
+                        - generic [ref=f1e1928]:
+                          - generic [ref=f1e1929]: "4"
+                          - generic [ref=f1e1930]: "6"
+                          - generic [ref=f1e1931]: "8"
+                          - generic [ref=f1e1932]: "10"
+                          - generic [ref=f1e1933]: "12"
+                          - generic [ref=f1e1934]: "14"
+                      - generic [ref=f1e1935]: UTC-8
+                      - generic [ref=f1e1936] [cursor=pointer]: Success 504 70051 conv-jpea-05-prod-aks.conv.skype.com
+                - generic [ref=f1e1940]:
+                  - heading "Global Partner" [level=2] [ref=f1e1941]
+                  - toolbar "Widget Actions" [ref=f1e1943]:
+                    - button "Edit Widget" [ref=f1e1944]:
+                      - generic [ref=f1e1945] [cursor=pointer]: 
+                    - text: 
+                    - textbox "Global Partner (Click to edit)" [ref=f1e1946]:
+                      - /placeholder: (Click to add a title)
+                      - text: Global Partner
+                    - text: 
+                    - button "View query information - No Errors or Warnings" [ref=f1e1948]:
+                      - generic [ref=f1e1949] [cursor=pointer]: 
+                    - button "Open on Azure Managed Grafana playground" [ref=f1e1950]:
+                      - img [ref=f1e1951] [cursor=pointer]
+                    - button "Refresh" [ref=f1e1952]:
+                      - generic [ref=f1e1953] [cursor=pointer]: 
+                    - button "Share" [ref=f1e1954]:
+                      - generic [ref=f1e1955] [cursor=pointer]: 
+                    - button "More commands" [ref=f1e1956]:
+                      - generic [ref=f1e1957] [cursor=pointer]: 
+                    - text: 
+                  - generic "Press alt m to view data as a screen reader accessible table" [ref=f1e1959]:
+                    - generic [ref=f1e1961]:
+                      - img [ref=f1e1962]:
+                        - generic [ref=f1e2024]:
+                          - generic [ref=f1e2026] [cursor=pointer]: All
+                          - generic [ref=f1e2028] [cursor=pointer]: None
+                        - generic [ref=f1e2033]:
+                          - generic [ref=f1e2034]: 19:00
+                          - generic [ref=f1e2035]: 20:00
+                          - generic [ref=f1e2036]: 21:00
+                          - generic [ref=f1e2037]: 22:00
+                          - generic [ref=f1e2038]: 23:00
+                          - generic [ref=f1e2039]: 8. Feb
+                          - generic [ref=f1e2040]: 01:00
+                          - generic [ref=f1e2041]: 02:00
+                          - generic [ref=f1e2042]: 03:00
+                          - generic [ref=f1e2043]: 04:00
+                          - generic [ref=f1e2044]: 05:00
+                          - generic [ref=f1e2045]: 06:00
+                          - generic [ref=f1e2046]: 07:00
+                          - generic [ref=f1e2047]: 08:00
+                          - generic [ref=f1e2048]: 09:00
+                          - generic [ref=f1e2049]: 10:00
+                          - generic [ref=f1e2050]: 11:00
+                          - generic [ref=f1e2051]: 12:00
+                          - generic [ref=f1e2052]: 13:00
+                          - generic [ref=f1e2053]: 14:00
+                          - generic [ref=f1e2054]: 15:00
+                          - generic [ref=f1e2055]: 16:00
+                          - generic [ref=f1e2056]: 17:00
+                          - generic [ref=f1e2057]: 18:00
+                        - generic [ref=f1e2058]:
+                          - generic [ref=f1e2059]: "97.5"
+                          - generic [ref=f1e2060]: "98"
+                          - generic [ref=f1e2061]: "98.5"
+                          - generic [ref=f1e2062]: "99"
+                          - generic [ref=f1e2063]: "99.5"
+                          - generic [ref=f1e2064]: "100"
+                          - generic [ref=f1e2065]: "100.5"
+                      - generic [ref=f1e2066]: UTC-8
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic [ref=f1e2067] [cursor=pointer]: Reliability CreateConversation_ConversationFactory
+                            - generic [ref=f1e2068] [cursor=pointer]: Reliability UpdateEndpointMetadata_ConversationApi
+                            - generic [ref=f1e2069] [cursor=pointer]: Reliability UpdateEndpointState_ConversationApi
+                            - generic [ref=f1e2070] [cursor=pointer]: Reliability JoinConversation_ConversationApi
+                            - generic [ref=f1e2071] [cursor=pointer]: Reliability JoinConversation_InternalApi
+                            - generic [ref=f1e2072] [cursor=pointer]: Reliability SubscribeConversation_ConversationApi
+                            - generic [ref=f1e2073] [cursor=pointer]: Reliability LeaveConversation_ConversationApi
+                            - generic [ref=f1e2074] [cursor=pointer]: Reliability Unmute_ConversationApi
+                            - generic [ref=f1e2075] [cursor=pointer]: Reliability AddParticipantAndModality_ConversationApi
+                            - generic [ref=f1e2076] [cursor=pointer]: Reliability AdmitAllParticipants_ConversationApi
+                            - generic [ref=f1e2077] [cursor=pointer]: Reliability AdmitUsers_ConversationApi
+                            - generic [ref=f1e2078] [cursor=pointer]: Reliability DeleteConversation_ConversationApi
+                            - generic [ref=f1e2079] [cursor=pointer]: Reliability PublishState_ConversationApi
+                            - generic [ref=f1e2080] [cursor=pointer]: Reliability Mute_ConversationApi
+                            - generic [ref=f1e2081] [cursor=pointer]: Reliability RemoveState_ConversationApi
+                            - generic [ref=f1e2082] [cursor=pointer]: Reliability FunneledJoinConversation_InternalApi
+                            - generic [ref=f1e2083] [cursor=pointer]: Reliability AddParticipant_ConversationApi
+                            - generic [ref=f1e2084] [cursor=pointer]: Reliability AddModality_ConversationApi
+                            - generic [ref=f1e2085] [cursor=pointer]: Reliability FunneledLeaveConversation_InternalApi
+                            - generic [ref=f1e2086] [cursor=pointer]: Reliability LeaveConversation_InternalApi
+                            - generic [ref=f1e2087] [cursor=pointer]: Reliability SendMessage_ConversationApi
+        - status [ref=f1e7]: 1 dashboards available
+        - log [ref=f1e2091]
+        - log [ref=f1e2092]:
+          - generic [ref=f1e2093]: Global (Click to edit)
+        - log [ref=f1e2094]
+        - log [ref=f1e2095]
+        - log [ref=f1e2096]
+        - log [ref=f1e2097]
+        - log [ref=f1e2098]

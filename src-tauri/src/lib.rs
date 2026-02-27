@@ -51,7 +51,7 @@ fn check_and_restart_backend() {
 
     if needs_restart {
         if is_backend_running() {
-            log::info!("Backend already running on port {} (external process), skipping spawn", BACKEND_PORT);
+            // Backend already running externally (e.g. dev server), skip spawn
             *guard = None; // Clear stale handle so we don't keep polling a dead child
             return;
         }
@@ -165,6 +165,10 @@ pub fn run() {
             commands::storage::set_polling_settings,
             commands::storage::get_notification_settings,
             commands::storage::set_notification_settings,
+            commands::storage::get_services,
+            commands::storage::set_services,
+            commands::storage::get_scrub_patterns,
+            commands::storage::set_scrub_patterns,
             commands::file_io::read_review_output,
             commands::deep_link::get_initial_deep_link,
         ])
@@ -178,7 +182,7 @@ pub fn run() {
 
             // Start the Node.js backend (skip if already running, e.g. via `npm run dev`)
             if is_backend_running() {
-                log::info!("Backend already running on port {}, skipping spawn", BACKEND_PORT);
+                // Backend already running (e.g. dev server), skip spawn
             } else {
                 match spawn_backend() {
                     Ok(child) => {
