@@ -465,6 +465,12 @@ class PRReviewApp {
       });
     };
 
+    // Wire workspace ICM incident loading (ensures auth before loading)
+    this.workspaceSection.onLoadIcmIncident = async (incidentId: number) => {
+      await this.initIcmUser();
+      return window.electronAPI.icmGetIncident(incidentId);
+    };
+
     // Wire workspace cross-reference navigation
     this.workspaceSection.onNavigateCfv = (callId: string) => {
       const activeWsId = this.workspaceSection.getActiveWorkspaceId();

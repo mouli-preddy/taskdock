@@ -30,6 +30,9 @@ export class WorkspaceSection {
   public onWireDgrepView: ((view: DGrepSearchView) => void) | null = null;
   public onWireIcmView: ((view: IcmIncidentDetailView) => void) | null = null;
 
+  // ICM auth + load callback - set by app.ts to ensure auth before loading incidents
+  public onLoadIcmIncident: ((incidentId: number) => Promise<any>) | null = null;
+
   constructor(containerId: string) {
     this.container = document.getElementById(containerId)!;
     this.render();
@@ -391,12 +394,7 @@ export class WorkspaceSection {
           const view = new IcmIncidentDetailView(panel);
           this.onWireIcmView?.(view);
           view.setLoading(true);
-          window.electronAPI.icmGetIncident(state.incidentId).then(incident => {
-            view.setIncident(incident);
-          }).catch(err => {
-            console.error('[workspace] Failed to load incident:', err);
-            view.setLoading(false);
-          });
+          this.loadIcmIncidentIntoView(state.incidentId, view);
           this.viewInstances.set(subtab.id, view);
         }
         break;
@@ -546,18 +544,29 @@ export class WorkspaceSection {
       const view = new IcmIncidentDetailView(newPanel);
       this.onWireIcmView?.(view);
       view.setLoading(true);
-      window.electronAPI.icmGetIncident(incidentId).then(incident => {
-        view.setIncident(incident);
-      }).catch(err => {
-        console.error('[workspace] Failed to load incident:', err);
-        view.setLoading(false);
-      });
+      this.loadIcmIncidentIntoView(incidentId, view);
       this.viewInstances.set(subtab.id, view);
       this.renderSubtabBar();
       this.saveWorkspaces();
     };
     btn.addEventListener('click', load);
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') load(); });
+  }
+
+  private async loadIcmIncidentIntoView(incidentId: number, view: IcmIncidentDetailView): Promise<void> {
+    try {
+      const loadFn = this.onLoadIcmIncident || ((id: number) => window.electronAPI.icmGetIncident(id));
+      const incident = await loadFn(incidentId);
+      if (incident) {
+        view.setIncident(incident);
+      } else {
+        console.error('[workspace] icmGetIncident returned null for', incidentId);
+        view.setLoading(false);
+      }
+    } catch (err) {
+      console.error('[workspace] Failed to load incident:', err);
+      view.setLoading(false);
+    }
   }
 
   private destroySubtabView(subtabId: string): void {
