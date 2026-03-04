@@ -99,6 +99,7 @@ Full-featured Azure DevOps Pull Request reviewer:
 ## Prerequisites
 
 - Node.js 20+
+- Rust (install from [rust-lang.org](https://rust-lang.org/tools/install/))
 - Azure CLI (`az`) installed and logged in
 - Access to Azure DevOps organization
 
@@ -118,6 +119,16 @@ az version
 ```
 
 For more details, see the [Azure CLI documentation](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli-windows).
+
+### Rust
+
+Rust is required to build the Tauri backend. Install it from [https://rust-lang.org/tools/install/](https://rust-lang.org/tools/install/).
+
+Verify installation:
+```powershell
+rustc --version
+cargo --version
+```
 
 ### Claude Code
 
