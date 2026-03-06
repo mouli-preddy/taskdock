@@ -11,7 +11,7 @@
     "build:renderer": "vite build",
     "build:backend": "tsc -p tsconfig.backend.json",
     "build:bundle": "esbuild src-backend/bridge.ts --bundle --platform=node --target=node20 --outfile=dist/sidecar/bridge.cjs --format=cjs --external:@lydell/node-pty --external:@lydell/node-pty-win32-x64 --external:playwright-core",
-    "build:sidecar": "npm run build:bundle && pkg dist/sidecar/bridge.cjs --config pkg.config.json --targets node20-win-x64 --output src-tauri/binaries/backend && node -e \"require('fs').renameSync('src-tauri/binaries/backend.exe', 'src-tauri/binaries/backend-x86_64-pc-windows-msvc.exe')\"",
+    "build:sidecar": "node scripts/build-sidecar.js",
     "typecheck": "tsc --noEmit",
     "tauri": "tauri"
   },
