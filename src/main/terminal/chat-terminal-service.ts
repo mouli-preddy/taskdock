@@ -41,6 +41,7 @@ export interface CreateChatTerminalOptions {
   workingDir: string;
   contextPath: string;
   initialPrompt: string;
+  autoExit?: boolean; // If true, shell exits automatically after the CLI finishes
 }
 
 export class ChatTerminalService extends EventEmitter {
@@ -132,13 +133,17 @@ export class ChatTerminalService extends EventEmitter {
         const cliCommand = options.ai === 'copilot' ? 'copilot' : 'claude';
         const cliArgs = options.ai === 'copilot'
           ? ['--allow-all', '--add-dir', options.contextPath, '-i']
-          : ['--dangerously-skip-permissions'];
+          : options.autoExit
+            ? ['--dangerously-skip-permissions', '--print'] // non-interactive: runs task and exits
+            : ['--dangerously-skip-permissions'];
 
         const safeInstruction = `Follow the instructions in: ${promptFile}`;
         const argsStr = cliArgs.join(' ');
 
-        logger.info(LOG_CATEGORY, 'Launching CLI', { cliCommand, argsStr });
-        session.ptyProcess.write(`${cliCommand} ${argsStr} "${safeInstruction.replace(/"/g, '\\"')}"\r`);
+        logger.info(LOG_CATEGORY, 'Launching CLI', { cliCommand, argsStr, autoExit: options.autoExit });
+        // autoExit: --print makes claude non-interactive (exits after task); `; exit` closes the shell
+        const exitSuffix = options.autoExit ? '; exit' : '';
+        session.ptyProcess.write(`${cliCommand} ${argsStr} "${safeInstruction.replace(/"/g, '\\"')}"${exitSuffix}\r`);
         session.status = 'running';
         this.emit('status-change', { sessionId: id, status: 'running' });
       }

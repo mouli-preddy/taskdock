@@ -184,6 +184,8 @@ export const tauriAPI = {
     invoke('ado:get-my-prs', org, project),
   getCreatedPRs: (org: string, project: string) =>
     invoke('ado:get-created-prs', org, project),
+  getCreatedPRsForRepo: (org: string, project: string, repositoryName: string) =>
+    invoke('ado:get-created-prs-for-repo', org, project, repositoryName),
   getRepoPRs: (org: string, project: string, repositoryName: string) =>
     invoke('ado:get-repo-prs', org, project, repositoryName),
 
@@ -196,10 +198,26 @@ export const tauriAPI = {
     invoke('wi:get-items', org, project, ids),
   wiGetItem: (org: string, project: string, id: number) =>
     invoke('wi:get-item', org, project, id),
+  // Tasks
+  tasksGetAll: () =>
+    invoke('tasks:get-all'),
+  tasksSave: (task: any) =>
+    invoke('tasks:save', task),
+  tasksDelete: (id: string) =>
+    invoke('tasks:delete', id),
+  tasksParseRaw: (raw: string) =>
+    invoke('tasks:parse-raw', raw),
+  tasksRunNow: (id: string) =>
+    invoke('tasks:run-now', id),
+  tasksToggleAi: (id: string, enabled: boolean) =>
+    invoke('tasks:toggle-ai', id, enabled),
+
   wiGetMyItems: (org: string, project: string) =>
     invoke('wi:get-my-items', org, project),
   wiGetCreatedByMe: (org: string, project: string) =>
     invoke('wi:get-created-by-me', org, project),
+  wiGetGroupedByType: (org: string, project: string, wiql: string) =>
+    invoke('wi:get-grouped-by-type', org, project, wiql),
   wiGetUpdates: (org: string, project: string, id: number) =>
     invoke('wi:get-updates', org, project, id),
   wiGetTypes: (org: string, project: string) =>
@@ -761,6 +779,13 @@ export const tauriAPI = {
   onDgrepAIClientQueryUpdate: (callback: (event: any) => void) => subscribe('dgrep:ai:client-query-update', callback),
   onDgrepAIImproveDisplayProgress: (callback: (event: any) => void) => subscribe('dgrep:ai:improve-display-progress', callback),
   onDgrepAIImproveDisplayComplete: (callback: (event: any) => void) => subscribe('dgrep:ai:improve-display-complete', callback),
+
+  // Task scheduler events
+  onTaskRan: (callback: (event: any) => void) => subscribe('task:ran', callback),
+  onTaskCompleted: (callback: (event: any) => void) => subscribe('task:completed', callback),
+  onTaskError: (callback: (event: any) => void) => subscribe('task:error', callback),
+  onTaskResult: (callback: (event: any) => void) => subscribe('task:result', callback),
+  onTaskTerminalStarted: (callback: (event: any) => void) => subscribe('task:terminal-started', callback),
 };
 
 // Initialize connection when module loads

@@ -5,9 +5,18 @@ import { getIcon, RefreshCw, User, Plus, Download, Search, Edit, Trash2, LayoutG
 
 export type WorkItemViewType = 'assigned' | 'created' | 'custom';
 
+interface WorkItemGroup {
+  type: string;
+  items: WorkItem[];
+  totalCount: number;
+}
+
 export class WorkItemsListView {
   private container: HTMLElement;
   private workItems: WorkItem[] = [];
+  private groupedItems: WorkItemGroup[] = [];
+  private activeTypeTab = '';
+  private isGroupedMode = false;
   private savedQueries: SavedQuery[] = [];
   private activeView: WorkItemViewType = 'assigned';
   private activeQueryId: string | null = null;
@@ -56,7 +65,21 @@ export class WorkItemsListView {
 
   setWorkItems(items: WorkItem[]) {
     this.workItems = items;
+    this.isGroupedMode = false;
     this.loading = false;
+    this.renderTypeTabs();
+    this.renderWorkItemsList();
+  }
+
+  setWorkItemsGrouped(groups: WorkItemGroup[]) {
+    this.groupedItems = groups;
+    this.isGroupedMode = true;
+    this.loading = false;
+    // Select first tab if current tab doesn't exist in new groups
+    if (groups.length > 0 && !groups.find(g => g.type === this.activeTypeTab)) {
+      this.activeTypeTab = groups[0].type;
+    }
+    this.renderTypeTabs();
     this.renderWorkItemsList();
   }
 
@@ -131,6 +154,7 @@ export class WorkItemsListView {
 
           <!-- Main content area with work items -->
           <main class="workitems-main">
+            <div id="workItemsTypeTabs"></div>
             <div class="workitems-list" id="workItemsList"></div>
           </main>
         </div>
@@ -139,16 +163,15 @@ export class WorkItemsListView {
 
     this.attachEventListeners();
     this.renderQueriesList();
+    this.renderTypeTabs();
     this.renderWorkItemsList();
   }
 
   private attachEventListeners() {
-    // Refresh button
     this.container.querySelector('#refreshWorkItemsBtn')?.addEventListener('click', () => {
       this.onRefreshCallback?.();
     });
 
-    // View buttons
     this.container.querySelectorAll('.workitems-view-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const view = (btn as HTMLElement).dataset.view as WorkItemViewType;
@@ -159,25 +182,21 @@ export class WorkItemsListView {
       });
     });
 
-    // New query button
     this.container.querySelector('#newQueryBtn')?.addEventListener('click', () => {
       this.onNewQueryCallback?.();
     });
 
-    // Import from ADO button
     this.container.querySelector('#importAdoQueryBtn')?.addEventListener('click', () => {
       this.onImportAdoQueryCallback?.();
     });
   }
 
   private updateActiveState() {
-    // Update view buttons
     this.container.querySelectorAll('.workitems-view-btn').forEach(btn => {
       const view = (btn as HTMLElement).dataset.view;
       btn.classList.toggle('active', view === this.activeView && !this.activeQueryId);
     });
 
-    // Update query buttons
     this.container.querySelectorAll('.workitems-query-btn').forEach(btn => {
       const queryId = (btn as HTMLElement).dataset.queryId;
       btn.classList.toggle('active', queryId === this.activeQueryId);
@@ -187,6 +206,40 @@ export class WorkItemsListView {
   setSubtitle(text: string) {
     const el = this.container.querySelector('.workitems-subtitle');
     if (el) el.textContent = text;
+  }
+
+  private renderTypeTabs() {
+    const container = this.container.querySelector('#workItemsTypeTabs')!;
+
+    if (!this.isGroupedMode || this.groupedItems.length === 0) {
+      container.innerHTML = '';
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="workitems-type-tab-bar">
+        ${this.groupedItems.map(group => {
+          const color = WORK_ITEM_TYPE_COLORS[group.type] || '#666';
+          const isActive = group.type === this.activeTypeTab;
+          const showing = Math.min(50, group.totalCount);
+          return `
+            <button class="workitems-type-tab ${isActive ? 'active' : ''}" data-type="${escapeHtml(group.type)}">
+              <span class="workitems-type-dot" style="background-color: ${color}"></span>
+              <span>${escapeHtml(group.type)}</span>
+              <span class="workitems-type-tab-count">${showing}/${group.totalCount}</span>
+            </button>
+          `;
+        }).join('')}
+      </div>
+    `;
+
+    container.querySelectorAll('.workitems-type-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        this.activeTypeTab = (tab as HTMLElement).dataset.type!;
+        this.renderTypeTabs();
+        this.renderWorkItemsList();
+      });
+    });
   }
 
   private renderQueriesList() {
@@ -203,9 +256,7 @@ export class WorkItemsListView {
 
     container.innerHTML = this.savedQueries.map(query => {
       const isAdoQuery = !!query.adoQueryId;
-      const iconSvg = isAdoQuery
-        ? getIcon(Cloud, 14)
-        : getIcon(Search, 14);
+      const iconSvg = isAdoQuery ? getIcon(Cloud, 14) : getIcon(Search, 14);
 
       return `
       <div class="workitems-query-item ${query.id === this.activeQueryId ? 'active' : ''} ${isAdoQuery ? 'ado-query' : ''}" data-query-id="${query.id}">
@@ -227,7 +278,6 @@ export class WorkItemsListView {
     `;
     }).join('');
 
-    // Attach event listeners for query items
     container.querySelectorAll('.workitems-query-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const queryId = (btn as HTMLElement).dataset.queryId!;
@@ -276,7 +326,11 @@ export class WorkItemsListView {
       return;
     }
 
-    if (this.workItems.length === 0) {
+    const items = this.isGroupedMode
+      ? (this.groupedItems.find(g => g.type === this.activeTypeTab)?.items || [])
+      : this.workItems;
+
+    if (items.length === 0) {
       container.innerHTML = `
         <div class="workitems-empty">
           ${getIcon(LayoutGrid, 48)}
@@ -286,13 +340,12 @@ export class WorkItemsListView {
       return;
     }
 
-    container.innerHTML = this.workItems.map(item => this.renderWorkItemCard(item)).join('');
+    container.innerHTML = items.map(item => this.renderWorkItemCard(item)).join('');
 
-    // Attach click handlers
     container.querySelectorAll('.workitem-card').forEach(card => {
       card.addEventListener('click', () => {
         const itemId = parseInt((card as HTMLElement).dataset.itemId || '0');
-        const item = this.workItems.find(i => i.id === itemId);
+        const item = items.find(i => i.id === itemId);
         if (item) {
           this.onSelectCallback?.(item);
         }

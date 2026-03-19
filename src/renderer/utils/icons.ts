@@ -134,6 +134,9 @@ import Download from 'lucide-static/icons/download.svg?raw';
 import Upload from 'lucide-static/icons/upload.svg?raw';
 import Share from 'lucide-static/icons/share.svg?raw';
 import Zap from 'lucide-static/icons/zap.svg?raw';
+import ClipboardList from 'lucide-static/icons/clipboard-list.svg?raw';
+import CalendarClock from 'lucide-static/icons/calendar-clock.svg?raw';
+import CalendarX from 'lucide-static/icons/calendar-x-2.svg?raw';
 import Lightbulb from 'lucide-static/icons/lightbulb.svg?raw';
 import Target from 'lucide-static/icons/target.svg?raw';
 import Crosshair from 'lucide-static/icons/crosshair.svg?raw';
@@ -247,6 +250,9 @@ export {
   Upload,
   Share,
   Zap,
+  ClipboardList,
+  CalendarClock,
+  CalendarX,
   Lightbulb,
   Target,
   Crosshair,
