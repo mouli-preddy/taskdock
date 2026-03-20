@@ -315,6 +315,8 @@ function parseTaskFallback(raw: string): { schedule: string; action: string } {
 
   // Try to extract a schedule phrase
   const schedulePatterns = [
+    /every\s+\d+\s+(?:minutes?|mins?)/i,
+    /every\s+\d+\s+(?:hours?|hrs?)/i,
     /every\s+(?:day|morning|evening|night|hour|minute|week|month|year)/i,
     /every\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i,
     /(?:daily|weekly|monthly|hourly|yearly|annually)/i,
@@ -355,6 +357,12 @@ function cronFromSchedule(schedule: string): string {
     if (hourMatch[3] === 'pm' && hour < 12) hour += 12;
     if (hourMatch[3] === 'am' && hour === 12) hour = 0;
   }
+  const nMinMatch = s.match(/every\s+(\d+)\s+(?:minutes?|mins?)/);
+  if (nMinMatch) return `*/${nMinMatch[1]} * * * *`;
+
+  const nHourMatch = s.match(/every\s+(\d+)\s+(?:hours?|hrs?)/);
+  if (nHourMatch) return `0 */${nHourMatch[1]} * * *`;
+
   if (s.includes('every minute') || s.includes('every 1 minute')) return '* * * * *';
   if (s.includes('every hour') || s.includes('hourly')) return `0 * * * *`;
   if (s.includes('monday')) return `${minute} ${hour} * * 1`;
@@ -427,6 +435,10 @@ async function runScheduledTask(task: any): Promise<string> {
     const contextPath = path.join(taskRunDir, task.id);
     if (!fs.existsSync(contextPath)) fs.mkdirSync(contextPath, { recursive: true });
 
+    // Compute a log file path for this run (written by ChatTerminalService on exit)
+    const runTimestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const logFile = path.join(contextPath, `run-${runTimestamp}.md`);
+
     // Use the existing ChatTerminalService to spawn a claude terminal
     // autoExit: true so the shell exits after claude finishes, triggering auto-close
     const sessionId = chatTerminalService.createSession({
@@ -435,10 +447,11 @@ async function runScheduledTask(task: any): Promise<string> {
       contextPath,
       initialPrompt: prompt,
       autoExit: true,
+      logFile,
     });
 
     broadcast('task:terminal-started', { id: task.id, sessionId, action: task.action });
-    return `Terminal session started (${sessionId})`;
+    return logFile;
   } catch (err: any) {
     const errMsg = `Task execution failed: ${err.message}`;
     broadcast('task:error', { id: task.id, error: err.message });
@@ -470,16 +483,18 @@ setInterval(async () => {
       if (task.runHistory.length > 10) task.runHistory = task.runHistory.slice(-10);
       changed = true;
       broadcast('task:ran', { id: task.id, lastRun: task.lastRun, nextRun: task.nextRun });
-      runScheduledTask(task).then(result => {
+      runScheduledTask(task).then(logFile => {
         const sd = loadStoreData();
         const t = (sd.tasks || []).find((t: any) => t.id === task.id);
         if (t) {
-          t.lastResult = result;
-          // Update the most recent history entry with the result
-          if (t.runHistory?.length) t.runHistory[t.runHistory.length - 1].result = result;
+          t.lastResult = 'AI session running';
+          if (t.runHistory?.length) {
+            t.runHistory[t.runHistory.length - 1].result = 'AI session running';
+            t.runHistory[t.runHistory.length - 1].logFile = logFile;
+          }
           saveStoreData(sd);
         }
-        broadcast('task:result', { id: task.id, result, runCount: t?.runCount, runHistory: t?.runHistory });
+        broadcast('task:result', { id: task.id, result: 'AI session running', logFile, runCount: t?.runCount, runHistory: t?.runHistory });
       }).catch(() => {});
     }
     if (changed) {
@@ -597,8 +612,23 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       const storeData = loadStoreData();
       const task = (storeData.tasks || []).find((t: any) => t.id === id);
       if (!task) throw new Error(`Task not found: ${id}`);
-      // Fire and forget — terminal will open via broadcast
-      runScheduledTask(task).catch(console.error);
+      // Add a runHistory entry for this manual run
+      const now = new Date();
+      task.runCount = (task.runCount || 0) + 1;
+      task.runHistory = task.runHistory || [];
+      task.runHistory.push({ timestamp: now.toISOString() });
+      if (task.runHistory.length > 10) task.runHistory = task.runHistory.slice(-10);
+      saveStoreData(storeData);
+      runScheduledTask(task).then(logFile => {
+        const sd = loadStoreData();
+        const t = (sd.tasks || []).find((t: any) => t.id === id);
+        if (t && t.runHistory?.length) {
+          t.runHistory[t.runHistory.length - 1].result = 'Manual run';
+          t.runHistory[t.runHistory.length - 1].logFile = logFile;
+          saveStoreData(sd);
+        }
+        broadcast('task:result', { id, result: 'Manual run', logFile, runCount: t?.runCount, runHistory: t?.runHistory });
+      }).catch(console.error);
       return;
     }
     case 'tasks:toggle-ai': {
@@ -685,6 +715,15 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       }
       // Regex-based fallback — no SDK required
       return parseTaskFallback(raw);
+    }
+
+    case 'tasks:read-log': {
+      const logPath = params[0] as string;
+      const taskRunDir = path.join(CONFIG_DIR, 'task-runs');
+      const normalised = path.resolve(logPath);
+      if (!normalised.startsWith(path.resolve(taskRunDir))) throw new Error('Access denied');
+      if (!fs.existsSync(normalised)) throw new Error('Log file not found');
+      return fs.readFileSync(normalised, 'utf-8');
     }
 
     case 'wi:get-saved-queries':

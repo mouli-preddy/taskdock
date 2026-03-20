@@ -211,6 +211,8 @@ export const tauriAPI = {
     invoke('tasks:run-now', id),
   tasksToggleAi: (id: string, enabled: boolean) =>
     invoke('tasks:toggle-ai', id, enabled),
+  tasksReadLog: (logFile: string) =>
+    invoke('tasks:read-log', logFile),
 
   wiGetMyItems: (org: string, project: string) =>
     invoke('wi:get-my-items', org, project),

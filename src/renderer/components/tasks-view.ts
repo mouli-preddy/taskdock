@@ -1,9 +1,10 @@
 import { escapeHtml, formatTimeAgo } from '../utils/html-utils.js';
-import { getIcon, Plus, Trash2, Clock, Zap, Loader, Bot, CalendarClock, CalendarX, ChevronDown, ChevronRight, Play } from '../utils/icons.js';
+import { getIcon, Plus, Trash2, Clock, Zap, Loader, Bot, CalendarClock, CalendarX, ChevronDown, ChevronRight, Play, FileText } from '../utils/icons.js';
 
 export interface TaskRun {
   timestamp: string;
   result?: string;
+  logFile?: string;
 }
 
 export interface ScheduledTask {
@@ -58,6 +59,14 @@ export class TasksView {
   markTaskRan(id: string, lastRun: string, nextRun: string) {
     const task = this.tasks.find(t => t.id === id);
     if (task) { task.lastRun = lastRun; task.nextRun = nextRun; this.renderList(); }
+  }
+
+  highlightTask(id: string) {
+    const el = this.container.querySelector(`[data-id="${id}"]`) as HTMLElement;
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('task-highlight');
+    setTimeout(() => el.classList.remove('task-highlight'), 2500);
   }
 
   updateTaskResult(id: string, result: string, runCount: number, runHistory: TaskRun[]) {
@@ -211,21 +220,45 @@ export class TasksView {
             data-id="${escapeHtml(task.id)}" value="" />
         </button>`;
 
-      const historyHtml = history.length > 0 ? `
-        <div class="task-history">
+      const historyHtml = history.length > 0 ? (() => {
+        const sorted = [...history].reverse(); // newest first
+        const latest = sorted[0];
+        const hasMore = sorted.length > 1;
+
+        const renderLogBtn = (run: typeof latest) => run.logFile
+          ? `<button class="task-log-btn" data-log="${escapeHtml(run.logFile)}" title="Open session log">${getIcon(FileText, 12)} View log</button>`
+          : '';
+
+        const latestItemHtml = `
+          <div class="task-history-item task-history-item-latest">
+            <span class="task-history-time">${formatTimeAgo(new Date(latest.timestamp))}</span>
+            ${renderLogBtn(latest)}
+            ${latest.result ? `<p class="task-history-result">${escapeHtml(latest.result)}</p>` : ''}
+          </div>`;
+
+        const olderItemsHtml = historyExpanded ? sorted.slice(1).map(run => `
+          <div class="task-history-item">
+            <span class="task-history-time">${formatTimeAgo(new Date(run.timestamp))}</span>
+            ${renderLogBtn(run)}
+            ${run.result ? `<p class="task-history-result">${escapeHtml(run.result)}</p>` : ''}
+          </div>`).join('') : '';
+
+        const toggleHtml = hasMore ? `
           <button class="task-history-toggle" data-id="${escapeHtml(task.id)}">
             ${historyExpanded ? getIcon(ChevronDown, 13) : getIcon(ChevronRight, 13)}
-            Previous runs (${history.length})
-          </button>
-          ${historyExpanded ? `
+            ${historyExpanded ? 'Hide history' : `Show all ${history.length} runs`}
+          </button>` : '';
+
+        return `
+          <div class="task-history">
+            <div class="task-history-latest-label">${getIcon(Bot, 13)} Latest run</div>
             <div class="task-history-list">
-              ${[...history].reverse().map(run => `
-                <div class="task-history-item">
-                  <span class="task-history-time">${formatTimeAgo(new Date(run.timestamp))}</span>
-                  ${run.result ? `<p class="task-history-result">${escapeHtml(run.result)}</p>` : ''}
-                </div>`).join('')}
-            </div>` : ''}
-        </div>` : '';
+              ${latestItemHtml}
+              ${olderItemsHtml}
+            </div>
+            ${toggleHtml}
+          </div>`;
+      })() : '';
 
       return `
         <div class="task-card ${aiOn ? 'task-card-ai' : ''} ${!enabled ? 'task-card-disabled' : ''}"
@@ -289,11 +322,6 @@ export class TasksView {
             </button>
           </div>
 
-          ${task.lastResult ? `
-            <div class="task-last-result">
-              <span class="task-last-result-label">${getIcon(Bot, 13)} Last result</span>
-              <p class="task-last-result-text">${escapeHtml(task.lastResult)}</p>
-            </div>` : ''}
 
           ${historyHtml}
 
@@ -427,6 +455,20 @@ export class TasksView {
       });
     });
 
+    // View session log
+    container.querySelectorAll('.task-log-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const logFile = (btn as HTMLElement).dataset.log!;
+        try {
+          const content = await window.electronAPI.tasksReadLog(logFile);
+          this.showLogModal(content);
+        } catch (err: any) {
+          this.showLogModal(`Could not read log file:\n${err.message}`);
+        }
+      });
+    });
+
     // EndTime: icon button opens picker
     container.querySelectorAll('.task-endtime-add').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -479,5 +521,36 @@ export class TasksView {
       const n = this.tasks.length;
       el.textContent = `${n} scheduled task${n === 1 ? '' : 's'}`;
     }
+  }
+
+  private showLogModal(rawContent: string) {
+    // Strip residual ANSI sequences (private DEC, OSC) and collapse blank lines
+    // eslint-disable-next-line no-control-regex
+    const content = rawContent
+      .replace(/\x1b\[[0-9;?<>]*[A-Za-z]/g, '')
+      .replace(/\x1b\][^\x07]*\x07/g, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+
+    const backdrop = document.createElement('div');
+    backdrop.className = 'task-log-modal-backdrop';
+    backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;';
+
+    const modal = document.createElement('div');
+    modal.style.cssText = 'background:var(--bg-secondary,#1e1e1e);border:1px solid var(--border-color,#333);border-radius:8px;width:700px;max-width:90vw;height:80vh;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;';
+    modal.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border-color,#333);">
+        <span style="font-weight:600;">Task Run Log</span>
+        <button class="btn btn-icon" style="padding:4px;">✕</button>
+      </div>
+      <pre style="flex:1;overflow:auto;padding:16px;margin:0;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;">${content.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</pre>
+    `;
+
+    const close = () => backdrop.remove();
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
+    modal.querySelector('button')!.addEventListener('click', close);
+
+    backdrop.appendChild(modal);
+    document.body.appendChild(backdrop);
   }
 }

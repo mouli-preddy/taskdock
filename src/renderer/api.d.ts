@@ -27,6 +27,7 @@ export interface ElectronAPI {
   tasksParseRaw: (raw: string) => Promise<{ title: string; schedule: string; action: string }>;
   tasksRunNow: (id: string) => Promise<void>;
   tasksToggleAi: (id: string, enabled: boolean) => Promise<{ cronExpression: string; nextRun: string }>;
+  tasksReadLog: (logFile: string) => Promise<string>;
 
   getMyPRs: (org: string, project: string) => Promise<any[]>;
   getCreatedPRs: (org: string, project: string) => Promise<any[]>;
