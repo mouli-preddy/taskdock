@@ -10,7 +10,8 @@ export type NotificationEvent =
   | 'aiReviewComplete'
   | 'aiAnalysisComplete'
   | 'newComments'
-  | 'newIterations';
+  | 'newIterations'
+  | 'taskComplete';
 
 class NotificationService {
   private settings: NotificationSettings = { ...DEFAULT_NOTIFICATION_SETTINGS };

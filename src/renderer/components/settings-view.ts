@@ -11,6 +11,7 @@ export interface ReviewSettings {
   organization: string;
   project: string;
   pat: string;
+  anthropicApiKey?: string;
 }
 
 export interface ServiceEntry {
@@ -23,7 +24,7 @@ export interface ServiceEntry {
 
 export class SettingsView {
   private container: HTMLElement;
-  private settings: ReviewSettings = { organization: '', project: '', pat: '' };
+  private settings: ReviewSettings = { organization: '', project: '', pat: '', anthropicApiKey: '' };
   private consoleReviewSettings: ConsoleReviewSettings = { ...DEFAULT_CONSOLE_REVIEW_SETTINGS };
   private pollingSettings: PollingSettings = { ...DEFAULT_POLLING_SETTINGS };
   private notificationSettings: NotificationSettings = { ...DEFAULT_NOTIFICATION_SETTINGS };
@@ -418,6 +419,22 @@ export class SettingsView {
           <!-- AI Tab -->
           <div class="settings-tab-content" data-tab-content="ai">
             <div class="settings-section">
+              <h2 class="settings-section-title">Anthropic API Key</h2>
+              <p class="settings-section-description">Used for AI-Automated task execution in the Tasks section.</p>
+              <div class="form-group">
+                <label class="form-label" for="settingsAnthropicApiKey">API Key</label>
+                <div class="pat-input-wrapper">
+                  <input type="password" id="settingsAnthropicApiKey" class="form-input"
+                    placeholder="sk-ant-..." autocomplete="off" />
+                  <button type="button" class="btn btn-icon" id="toggleAnthropicKeyVisibility" title="Show/hide">
+                    ${getIcon(Eye, 16)}
+                  </button>
+                </div>
+                <span class="form-hint">Get your API key from <a href="https://console.anthropic.com/" target="_blank">console.anthropic.com</a></span>
+              </div>
+            </div>
+
+            <div class="settings-section">
               <h2 class="settings-section-title">AI Providers</h2>
               <p class="settings-section-description">Configure AI providers for comment analysis and applying fixes.</p>
 
@@ -552,6 +569,12 @@ export class SettingsView {
                   <label>
                     <input type="checkbox" id="notifyNewIterations" checked>
                     <span>New iterations (commits) detected</span>
+                  </label>
+                </div>
+                <div class="checkbox-group">
+                  <label>
+                    <input type="checkbox" id="notifyTaskComplete" checked>
+                    <span>Task completed</span>
                   </label>
                 </div>
               </div>
@@ -719,6 +742,15 @@ export class SettingsView {
       patInput.type = patInput.type === 'password' ? 'text' : 'password';
     });
 
+    const anthropicKeyInput = this.container.querySelector('#settingsAnthropicApiKey') as HTMLInputElement;
+    const toggleAnthropicBtn = this.container.querySelector('#toggleAnthropicKeyVisibility') as HTMLButtonElement;
+    toggleAnthropicBtn?.addEventListener('click', () => {
+      anthropicKeyInput.type = anthropicKeyInput.type === 'password' ? 'text' : 'password';
+    });
+    anthropicKeyInput?.addEventListener('input', () => {
+      this.settings = { ...this.settings, anthropicApiKey: anthropicKeyInput.value.trim() };
+    });
+
     ['settingsOrganization', 'settingsProject', 'settingsPat'].forEach(id => {
       const input = this.container.querySelector(`#${id}`) as HTMLInputElement;
       input.addEventListener('input', () => {
@@ -833,6 +865,7 @@ export class SettingsView {
     (this.container.querySelector('#settingsOrganization') as HTMLInputElement).value = this.settings.organization;
     (this.container.querySelector('#settingsProject') as HTMLInputElement).value = this.settings.project;
     (this.container.querySelector('#settingsPat') as HTMLInputElement).value = this.settings.pat;
+    (this.container.querySelector('#settingsAnthropicApiKey') as HTMLInputElement).value = this.settings.anthropicApiKey || '';
   }
 
   private async handleSaveAll() {
@@ -921,6 +954,7 @@ export class SettingsView {
         aiAnalysisComplete: (this.container.querySelector('#notifyAiAnalysisComplete') as HTMLInputElement).checked,
         newComments: (this.container.querySelector('#notifyNewComments') as HTMLInputElement).checked,
         newIterations: (this.container.querySelector('#notifyNewIterations') as HTMLInputElement).checked,
+        taskComplete: (this.container.querySelector('#notifyTaskComplete') as HTMLInputElement).checked,
       };
       await window.electronAPI.setNotificationSettings(this.notificationSettings);
       this.notificationSettingsSavedCallback?.(this.notificationSettings);
@@ -1291,12 +1325,14 @@ export class SettingsView {
     const aiAnalysis = this.container.querySelector('#notifyAiAnalysisComplete') as HTMLInputElement;
     const newComments = this.container.querySelector('#notifyNewComments') as HTMLInputElement;
     const newIterations = this.container.querySelector('#notifyNewIterations') as HTMLInputElement;
+    const taskComplete = this.container.querySelector('#notifyTaskComplete') as HTMLInputElement;
 
     if (enabled) enabled.checked = this.notificationSettings.enabled;
     if (aiReview) aiReview.checked = this.notificationSettings.aiReviewComplete;
     if (aiAnalysis) aiAnalysis.checked = this.notificationSettings.aiAnalysisComplete;
     if (newComments) newComments.checked = this.notificationSettings.newComments;
     if (newIterations) newIterations.checked = this.notificationSettings.newIterations;
+    if (taskComplete) taskComplete.checked = this.notificationSettings.taskComplete ?? true;
 
     // Set initial disabled state
     const toggles = this.container.querySelector('#notificationEventToggles') as HTMLElement;

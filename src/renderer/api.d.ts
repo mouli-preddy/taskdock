@@ -20,8 +20,18 @@ export interface ElectronAPI {
   replyToThread: (org: string, project: string, repoId: string, prId: number, threadId: number, content: string) => Promise<any>;
   updateThreadStatus: (org: string, project: string, repoId: string, prId: number, threadId: number, status: string) => Promise<void>;
   submitVote: (org: string, project: string, repoId: string, prId: number, vote: number) => Promise<void>;
+  // Tasks
+  tasksGetAll: () => Promise<any[]>;
+  tasksSave: (task: any) => Promise<void>;
+  tasksDelete: (id: string) => Promise<void>;
+  tasksParseRaw: (raw: string) => Promise<{ title: string; schedule: string; action: string }>;
+  tasksRunNow: (id: string) => Promise<void>;
+  tasksToggleAi: (id: string, enabled: boolean) => Promise<{ cronExpression: string; nextRun: string }>;
+  tasksReadLog: (logFile: string) => Promise<string>;
+
   getMyPRs: (org: string, project: string) => Promise<any[]>;
   getCreatedPRs: (org: string, project: string) => Promise<any[]>;
+  getCreatedPRsForRepo: (org: string, project: string, repositoryName: string) => Promise<any[]>;
   getRepoPRs: (org: string, project: string, repositoryName: string) => Promise<any[]>;
 
   // Work Item methods
@@ -31,6 +41,7 @@ export interface ElectronAPI {
   wiGetItem: (org: string, project: string, id: number) => Promise<any>;
   wiGetMyItems: (org: string, project: string) => Promise<any[]>;
   wiGetCreatedByMe: (org: string, project: string) => Promise<any[]>;
+  wiGetGroupedByType: (org: string, project: string, wiql: string) => Promise<Array<{ type: string; items: any[]; totalCount: number }>>;
   wiGetUpdates: (org: string, project: string, id: number) => Promise<any[]>;
   wiGetTypes: (org: string, project: string) => Promise<any[]>;
   wiGetAreaPaths: (org: string, project: string) => Promise<any>;
@@ -581,6 +592,11 @@ export interface ElectronAPI {
   onDgrepAIClientQueryUpdate: (callback: (event: { chatSessionId: string; dgrepSessionId: string; kql: string }) => void) => () => void;
   onDgrepAIImproveDisplayProgress: (callback: (event: { sessionId: string; text: string }) => void) => () => void;
   onDgrepAIImproveDisplayComplete: (callback: (event: { sessionId: string; result?: import('../shared/dgrep-ai-types.js').ImproveDisplayResult; error?: string }) => void) => () => void;
+  onTaskRan: (callback: (event: { id: string; lastRun: string; nextRun: string }) => void) => () => void;
+  onTaskCompleted: (callback: (event: { id: string; action: string; result: string }) => void) => () => void;
+  onTaskError: (callback: (event: { id: string; error: string }) => void) => () => void;
+  onTaskResult: (callback: (event: { id: string; result: string }) => void) => () => void;
+  onTaskTerminalStarted: (callback: (event: { id: string; sessionId: string; action: string }) => void) => () => void;
 }
 
 declare global {

@@ -1,17 +1,34 @@
 import type { WorkItem, SavedQuery } from '../../shared/workitem-types.js';
 import { WORK_ITEM_TYPE_COLORS, WORK_ITEM_STATE_COLORS } from '../../shared/workitem-types.js';
 import { escapeHtml, formatTimeAgo } from '../utils/html-utils.js';
-import { getIcon, RefreshCw, User, Plus, Download, Search, Edit, Trash2, LayoutGrid, Cloud } from '../utils/icons.js';
+import { getIcon, RefreshCw, User, Plus, Download, Search, Edit, Trash2, LayoutGrid, Cloud, ExternalLink } from '../utils/icons.js';
 
 export type WorkItemViewType = 'assigned' | 'created' | 'custom';
+
+interface WorkItemGroup {
+  type: string;
+  items: WorkItem[];
+  totalCount: number;
+}
+
+const ALL_EXCLUDABLE_STATES = ['Closed', 'Resolved', 'Done', 'Removed', 'Abandoned'];
+const ALL_SELECTABLE_TYPES = ['Bug', 'Task', 'User Story', 'Feature', 'Requirement', 'Epic', 'Issue', 'Impediment', 'Test Case', 'Test Plan', 'Test Suite'];
+const DEFAULT_INCLUDED_TYPES = ['Bug', 'Task', 'Feature', 'Requirement'];
 
 export class WorkItemsListView {
   private container: HTMLElement;
   private workItems: WorkItem[] = [];
+  private groupedItems: WorkItemGroup[] = [];
+  private activeTypeTab = '';
+  private isGroupedMode = false;
   private savedQueries: SavedQuery[] = [];
   private activeView: WorkItemViewType = 'assigned';
   private activeQueryId: string | null = null;
   private loading = false;
+  private showAllItems = false;
+  private excludedStates: string[] = ['Closed', 'Resolved', 'Done', 'Removed', 'Abandoned'];
+  private showAllTypes = false;
+  private includedTypes: string[] = [...DEFAULT_INCLUDED_TYPES];
 
   private onSelectCallback: ((item: WorkItem) => void) | null = null;
   private onRefreshCallback: (() => void) | null = null;
@@ -20,6 +37,8 @@ export class WorkItemsListView {
   private onEditQueryCallback: ((query: SavedQuery) => void) | null = null;
   private onDeleteQueryCallback: ((queryId: string) => void) | null = null;
   private onRunQueryCallback: ((query: SavedQuery) => void) | null = null;
+  private onFilterChangeCallback: (() => void) | null = null;
+  private onOpenInAdoCallback: ((item: WorkItem) => void) | null = null;
 
   constructor(containerId: string) {
     this.container = document.getElementById(containerId)!;
@@ -54,9 +73,40 @@ export class WorkItemsListView {
     this.onRunQueryCallback = callback;
   }
 
+  onFilterChange(callback: () => void) {
+    this.onFilterChangeCallback = callback;
+  }
+
+  onOpenInAdo(callback: (item: WorkItem) => void) {
+    this.onOpenInAdoCallback = callback;
+  }
+
+  getFilterState(): { showAll: boolean; excludedStates: string[]; showAllTypes: boolean; includedTypes: string[] } {
+    return {
+      showAll: this.showAllItems,
+      excludedStates: [...this.excludedStates],
+      showAllTypes: this.showAllTypes,
+      includedTypes: [...this.includedTypes],
+    };
+  }
+
   setWorkItems(items: WorkItem[]) {
     this.workItems = items;
+    this.isGroupedMode = false;
     this.loading = false;
+    this.renderTypeTabs();
+    this.renderWorkItemsList();
+  }
+
+  setWorkItemsGrouped(groups: WorkItemGroup[]) {
+    this.groupedItems = groups;
+    this.isGroupedMode = true;
+    this.loading = false;
+    // Select first tab if current tab doesn't exist in new groups
+    if (groups.length > 0 && !groups.find(g => g.type === this.activeTypeTab)) {
+      this.activeTypeTab = groups[0].type;
+    }
+    this.renderTypeTabs();
     this.renderWorkItemsList();
   }
 
@@ -113,6 +163,37 @@ export class WorkItemsListView {
               </button>
             </div>
 
+            <div class="workitems-filters">
+              <h3>Filters</h3>
+              <label class="workitems-filter-checkbox workitems-filter-showall">
+                <input type="checkbox" id="showAllItemsCheckbox" ${this.showAllItems ? 'checked' : ''}>
+                <span>Show All Items</span>
+              </label>
+              <div class="workitems-state-filters ${this.showAllItems ? 'disabled' : ''}" id="stateFilters">
+                <p class="workitems-filter-label">Hide states:</p>
+                ${ALL_EXCLUDABLE_STATES.map(state => `
+                  <label class="workitems-filter-checkbox">
+                    <input type="checkbox" data-state="${state}" ${this.excludedStates.includes(state) ? 'checked' : ''}>
+                    <span>${state}</span>
+                  </label>
+                `).join('')}
+              </div>
+
+              <label class="workitems-filter-checkbox workitems-filter-showall" style="margin-top: var(--space-3)">
+                <input type="checkbox" id="showAllTypesCheckbox" ${this.showAllTypes ? 'checked' : ''}>
+                <span>Show All Types</span>
+              </label>
+              <div class="workitems-state-filters ${this.showAllTypes ? 'disabled' : ''}" id="typeFilters">
+                <p class="workitems-filter-label">Show types:</p>
+                ${ALL_SELECTABLE_TYPES.map(type => `
+                  <label class="workitems-filter-checkbox">
+                    <input type="checkbox" data-type="${type}" ${this.includedTypes.includes(type) ? 'checked' : ''}>
+                    <span>${type}</span>
+                  </label>
+                `).join('')}
+              </div>
+            </div>
+
             <div class="workitems-queries">
               <div class="workitems-queries-header">
                 <h3>Custom Queries</h3>
@@ -131,6 +212,7 @@ export class WorkItemsListView {
 
           <!-- Main content area with work items -->
           <main class="workitems-main">
+            <div id="workItemsTypeTabs"></div>
             <div class="workitems-list" id="workItemsList"></div>
           </main>
         </div>
@@ -139,16 +221,15 @@ export class WorkItemsListView {
 
     this.attachEventListeners();
     this.renderQueriesList();
+    this.renderTypeTabs();
     this.renderWorkItemsList();
   }
 
   private attachEventListeners() {
-    // Refresh button
     this.container.querySelector('#refreshWorkItemsBtn')?.addEventListener('click', () => {
       this.onRefreshCallback?.();
     });
 
-    // View buttons
     this.container.querySelectorAll('.workitems-view-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const view = (btn as HTMLElement).dataset.view as WorkItemViewType;
@@ -159,25 +240,65 @@ export class WorkItemsListView {
       });
     });
 
-    // New query button
+    this.container.querySelector('#showAllItemsCheckbox')?.addEventListener('change', (e) => {
+      this.showAllItems = (e.target as HTMLInputElement).checked;
+      const stateFilters = this.container.querySelector('#stateFilters');
+      if (stateFilters) {
+        stateFilters.classList.toggle('disabled', this.showAllItems);
+      }
+      this.onFilterChangeCallback?.();
+    });
+
+    this.container.querySelectorAll('[data-state]').forEach(checkbox => {
+      checkbox.addEventListener('change', (e) => {
+        const state = (checkbox as HTMLElement).dataset.state!;
+        const checked = (e.target as HTMLInputElement).checked;
+        if (checked) {
+          if (!this.excludedStates.includes(state)) this.excludedStates.push(state);
+        } else {
+          this.excludedStates = this.excludedStates.filter(s => s !== state);
+        }
+        this.onFilterChangeCallback?.();
+      });
+    });
+
+    this.container.querySelector('#showAllTypesCheckbox')?.addEventListener('change', (e) => {
+      this.showAllTypes = (e.target as HTMLInputElement).checked;
+      const typeFilters = this.container.querySelector('#typeFilters');
+      if (typeFilters) {
+        typeFilters.classList.toggle('disabled', this.showAllTypes);
+      }
+      this.onFilterChangeCallback?.();
+    });
+
+    this.container.querySelectorAll('[data-type]').forEach(checkbox => {
+      checkbox.addEventListener('change', (e) => {
+        const type = (checkbox as HTMLElement).dataset.type!;
+        const checked = (e.target as HTMLInputElement).checked;
+        if (checked) {
+          if (!this.includedTypes.includes(type)) this.includedTypes.push(type);
+        } else {
+          this.includedTypes = this.includedTypes.filter(t => t !== type);
+        }
+        this.onFilterChangeCallback?.();
+      });
+    });
+
     this.container.querySelector('#newQueryBtn')?.addEventListener('click', () => {
       this.onNewQueryCallback?.();
     });
 
-    // Import from ADO button
     this.container.querySelector('#importAdoQueryBtn')?.addEventListener('click', () => {
       this.onImportAdoQueryCallback?.();
     });
   }
 
   private updateActiveState() {
-    // Update view buttons
     this.container.querySelectorAll('.workitems-view-btn').forEach(btn => {
       const view = (btn as HTMLElement).dataset.view;
       btn.classList.toggle('active', view === this.activeView && !this.activeQueryId);
     });
 
-    // Update query buttons
     this.container.querySelectorAll('.workitems-query-btn').forEach(btn => {
       const queryId = (btn as HTMLElement).dataset.queryId;
       btn.classList.toggle('active', queryId === this.activeQueryId);
@@ -187,6 +308,40 @@ export class WorkItemsListView {
   setSubtitle(text: string) {
     const el = this.container.querySelector('.workitems-subtitle');
     if (el) el.textContent = text;
+  }
+
+  private renderTypeTabs() {
+    const container = this.container.querySelector('#workItemsTypeTabs')!;
+
+    if (!this.isGroupedMode || this.groupedItems.length === 0) {
+      container.innerHTML = '';
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="workitems-type-tab-bar">
+        ${this.groupedItems.map(group => {
+          const color = WORK_ITEM_TYPE_COLORS[group.type] || '#666';
+          const isActive = group.type === this.activeTypeTab;
+          const showing = Math.min(50, group.totalCount);
+          return `
+            <button class="workitems-type-tab ${isActive ? 'active' : ''}" data-type="${escapeHtml(group.type)}">
+              <span class="workitems-type-dot" style="background-color: ${color}"></span>
+              <span>${escapeHtml(group.type)}</span>
+              <span class="workitems-type-tab-count">${showing}/${group.totalCount}</span>
+            </button>
+          `;
+        }).join('')}
+      </div>
+    `;
+
+    container.querySelectorAll('.workitems-type-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        this.activeTypeTab = (tab as HTMLElement).dataset.type!;
+        this.renderTypeTabs();
+        this.renderWorkItemsList();
+      });
+    });
   }
 
   private renderQueriesList() {
@@ -203,9 +358,7 @@ export class WorkItemsListView {
 
     container.innerHTML = this.savedQueries.map(query => {
       const isAdoQuery = !!query.adoQueryId;
-      const iconSvg = isAdoQuery
-        ? getIcon(Cloud, 14)
-        : getIcon(Search, 14);
+      const iconSvg = isAdoQuery ? getIcon(Cloud, 14) : getIcon(Search, 14);
 
       return `
       <div class="workitems-query-item ${query.id === this.activeQueryId ? 'active' : ''} ${isAdoQuery ? 'ado-query' : ''}" data-query-id="${query.id}">
@@ -227,7 +380,6 @@ export class WorkItemsListView {
     `;
     }).join('');
 
-    // Attach event listeners for query items
     container.querySelectorAll('.workitems-query-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const queryId = (btn as HTMLElement).dataset.queryId!;
@@ -276,7 +428,11 @@ export class WorkItemsListView {
       return;
     }
 
-    if (this.workItems.length === 0) {
+    const items = this.isGroupedMode
+      ? (this.groupedItems.find(g => g.type === this.activeTypeTab)?.items || [])
+      : this.workItems;
+
+    if (items.length === 0) {
       container.innerHTML = `
         <div class="workitems-empty">
           ${getIcon(LayoutGrid, 48)}
@@ -286,15 +442,27 @@ export class WorkItemsListView {
       return;
     }
 
-    container.innerHTML = this.workItems.map(item => this.renderWorkItemCard(item)).join('');
+    container.innerHTML = items.map(item => this.renderWorkItemCard(item)).join('');
 
-    // Attach click handlers
     container.querySelectorAll('.workitem-card').forEach(card => {
-      card.addEventListener('click', () => {
+      card.addEventListener('click', (e) => {
+        if ((e.target as HTMLElement).closest('[data-action="open-ado"]')) return;
         const itemId = parseInt((card as HTMLElement).dataset.itemId || '0');
-        const item = this.workItems.find(i => i.id === itemId);
+        const item = items.find(i => i.id === itemId);
         if (item) {
           this.onSelectCallback?.(item);
+        }
+      });
+    });
+
+    container.querySelectorAll('[data-action="open-ado"]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const card = (btn as HTMLElement).closest('.workitem-card') as HTMLElement;
+        const itemId = parseInt(card?.dataset.itemId || '0');
+        const item = items.find(i => i.id === itemId);
+        if (item) {
+          this.onOpenInAdoCallback?.(item);
         }
       });
     });
@@ -334,6 +502,9 @@ export class WorkItemsListView {
     return `
       <div class="workitem-card" data-item-id="${item.id}">
         <div class="workitem-card-header">
+          <button class="workitem-open-ado-btn" data-action="open-ado" title="Open in ADO">
+            ${getIcon(ExternalLink, 13)}
+          </button>
           <span class="workitem-type-badge" style="background-color: ${typeColor}">${escapeHtml(type)}</span>
           <span class="workitem-id">${item.id}</span>
           ${priorityHtml}

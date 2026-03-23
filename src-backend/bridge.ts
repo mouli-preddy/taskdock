@@ -53,6 +53,9 @@ interface AppConfig {
     project: string;
     pat: string;
   };
+  anthropic?: {
+    apiKey?: string;
+  };
 }
 
 const adoClient = new AdoApiClient();
@@ -305,6 +308,204 @@ async function icmCall<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
+// ==================== Task Helpers ====================
+
+function parseTaskFallback(raw: string): { schedule: string; action: string } {
+  const lower = raw.toLowerCase();
+
+  // Try to extract a schedule phrase
+  const schedulePatterns = [
+    /every\s+\d+\s+(?:minutes?|mins?)/i,
+    /every\s+\d+\s+(?:hours?|hrs?)/i,
+    /every\s+(?:day|morning|evening|night|hour|minute|week|month|year)/i,
+    /every\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i,
+    /(?:daily|weekly|monthly|hourly|yearly|annually)/i,
+    /(?:at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i,
+    /(?:on\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday))/i,
+    /(?:once\s+a\s+(?:day|week|month))/i,
+  ];
+
+  let schedule = 'As needed';
+  let action = raw;
+
+  for (const pattern of schedulePatterns) {
+    const m = raw.match(pattern);
+    if (m) {
+      schedule = m[0].trim();
+      // Capitalize first letter
+      schedule = schedule.charAt(0).toUpperCase() + schedule.slice(1);
+      // Action = raw minus the matched schedule phrase
+      action = raw.replace(pattern, '').replace(/\s{2,}/g, ' ').trim();
+      if (!action) action = raw;
+      break;
+    }
+  }
+
+  // Title: first 4 words of the action (< 5 words)
+  const title = action.split(/\s+/).slice(0, 4).join(' ');
+
+  return { title, schedule, action };
+}
+
+function cronFromSchedule(schedule: string): string {
+  const s = schedule.toLowerCase();
+  const hourMatch = s.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
+  let hour = 9, minute = 0;
+  if (hourMatch) {
+    hour = parseInt(hourMatch[1]);
+    minute = hourMatch[2] ? parseInt(hourMatch[2]) : 0;
+    if (hourMatch[3] === 'pm' && hour < 12) hour += 12;
+    if (hourMatch[3] === 'am' && hour === 12) hour = 0;
+  }
+  const nMinMatch = s.match(/every\s+(\d+)\s+(?:minutes?|mins?)/);
+  if (nMinMatch) return `*/${nMinMatch[1]} * * * *`;
+
+  const nHourMatch = s.match(/every\s+(\d+)\s+(?:hours?|hrs?)/);
+  if (nHourMatch) return `0 */${nHourMatch[1]} * * *`;
+
+  if (s.includes('every minute') || s.includes('every 1 minute')) return '* * * * *';
+  if (s.includes('every hour') || s.includes('hourly')) return `0 * * * *`;
+  if (s.includes('monday')) return `${minute} ${hour} * * 1`;
+  if (s.includes('tuesday')) return `${minute} ${hour} * * 2`;
+  if (s.includes('wednesday')) return `${minute} ${hour} * * 3`;
+  if (s.includes('thursday')) return `${minute} ${hour} * * 4`;
+  if (s.includes('friday')) return `${minute} ${hour} * * 5`;
+  if (s.includes('saturday')) return `${minute} ${hour} * * 6`;
+  if (s.includes('sunday')) return `${minute} ${hour} * * 0`;
+  if (s.includes('weekly') || s.includes('every week')) return `${minute} ${hour} * * 1`;
+  if (s.includes('monthly') || s.includes('every month')) return `${minute} ${hour} 1 * *`;
+  // Default: daily at extracted time (or 9am)
+  return `${minute} ${hour} * * *`;
+}
+
+// ==================== Task Scheduler ====================
+
+function cronMatchField(value: number, expr: string): boolean {
+  if (expr === '*') return true;
+  if (expr.startsWith('*/')) return (value % parseInt(expr.slice(2))) === 0;
+  if (expr.includes(',')) return expr.split(',').some(e => parseInt(e) === value);
+  if (expr.includes('-')) {
+    const [lo, hi] = expr.split('-').map(Number);
+    return value >= lo && value <= hi;
+  }
+  return parseInt(expr) === value;
+}
+
+function nextCronDate(expr: string, after: Date = new Date()): Date {
+  const parts = expr.trim().split(/\s+/);
+  if (parts.length !== 5) return new Date(after.getTime() + 86_400_000);
+  const [minE, hourE, domE, monE, dowE] = parts;
+  const start = new Date(after.getTime() + 60_000);
+  start.setSeconds(0, 0);
+  // Search up to 1 year ahead, minute by minute (early-exit on match)
+  for (let i = 0; i < 525_600; i++) {
+    const d = new Date(start.getTime() + i * 60_000);
+    if (
+      cronMatchField(d.getMinutes(), minE) &&
+      cronMatchField(d.getHours(), hourE) &&
+      cronMatchField(d.getDate(), domE) &&
+      cronMatchField(d.getMonth() + 1, monE) &&
+      cronMatchField(d.getDay(), dowE)
+    ) return d;
+  }
+  return new Date(after.getTime() + 86_400_000);
+}
+
+async function runScheduledTask(task: any): Promise<string> {
+  broadcast('task:running', { id: task.id, action: task.action });
+  try {
+    const config = loadConfig();
+    const org = config?.ado?.organization || '';
+    const project = config?.ado?.project || '';
+    const now = new Date().toLocaleString();
+
+    // Build a one-shot prompt — explicitly forbid any scheduling or cron setup
+    const prompt = [
+      `IMPORTANT: This is a single one-time execution. Do NOT create cron jobs, scheduled tasks, recurring timers, or any form of automation setup. The scheduling is handled externally. Just perform the action below once and exit.`,
+      ``,
+      `Current time: ${now}`,
+      org ? `ADO context: ${org} / ${project}` : '',
+      ``,
+      `Task: ${task.action}`,
+    ].filter(Boolean).join('\n');
+
+    // Write prompt to a temp file (ChatTerminalService pattern)
+    const taskRunDir = path.join(CONFIG_DIR, 'task-runs');
+    if (!fs.existsSync(taskRunDir)) fs.mkdirSync(taskRunDir, { recursive: true });
+    const contextPath = path.join(taskRunDir, task.id);
+    if (!fs.existsSync(contextPath)) fs.mkdirSync(contextPath, { recursive: true });
+
+    // Compute a log file path for this run (written by ChatTerminalService on exit)
+    const runTimestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const logFile = path.join(contextPath, `run-${runTimestamp}.md`);
+
+    // Use the existing ChatTerminalService to spawn a claude terminal
+    // autoExit: true so the shell exits after claude finishes, triggering auto-close
+    const sessionId = chatTerminalService.createSession({
+      ai: 'claude',
+      workingDir: CONFIG_DIR,
+      contextPath,
+      initialPrompt: prompt,
+      autoExit: true,
+      logFile,
+    });
+
+    broadcast('task:terminal-started', { id: task.id, sessionId, action: task.action });
+    return logFile;
+  } catch (err: any) {
+    const errMsg = `Task execution failed: ${err.message}`;
+    broadcast('task:error', { id: task.id, error: err.message });
+    return errMsg;
+  }
+}
+
+// Check every 60s for due automated tasks
+setInterval(async () => {
+  try {
+    const storeData = loadStoreData();
+    const tasks: any[] = storeData.tasks || [];
+    const now = new Date();
+    let changed = false;
+    for (const task of tasks) {
+      if (!task.aiAutomated || !task.nextRun) continue;
+      if (task.enabled === false) continue; // paused
+      if (new Date(task.nextRun) > now) continue;
+      if (task.endTime && new Date(task.endTime) < now) continue;
+      const prevNextRun = task.nextRun;
+      task.lastRun = now.toISOString();
+      task.nextRun = task.cronExpression
+        ? nextCronDate(task.cronExpression, now).toISOString()
+        : new Date(now.getTime() + 86_400_000).toISOString();
+      // Increment run count and push to history
+      task.runCount = (task.runCount || 0) + 1;
+      task.runHistory = task.runHistory || [];
+      task.runHistory.push({ timestamp: now.toISOString() });
+      if (task.runHistory.length > 10) task.runHistory = task.runHistory.slice(-10);
+      changed = true;
+      broadcast('task:ran', { id: task.id, lastRun: task.lastRun, nextRun: task.nextRun });
+      runScheduledTask(task).then(logFile => {
+        const sd = loadStoreData();
+        const t = (sd.tasks || []).find((t: any) => t.id === task.id);
+        if (t) {
+          t.lastResult = 'AI session running';
+          if (t.runHistory?.length) {
+            t.runHistory[t.runHistory.length - 1].result = 'AI session running';
+            t.runHistory[t.runHistory.length - 1].logFile = logFile;
+          }
+          saveStoreData(sd);
+        }
+        broadcast('task:result', { id: task.id, result: 'AI session running', logFile, runCount: t?.runCount, runHistory: t?.runHistory });
+      }).catch(() => {});
+    }
+    if (changed) {
+      storeData.tasks = tasks;
+      saveStoreData(storeData);
+    }
+  } catch (err) {
+    console.error('[TaskScheduler]', err);
+  }
+}, 60_000);
+
 // Handle incoming RPC calls
 async function handleRpc(method: string, params: any[]): Promise<any> {
   switch (method) {
@@ -353,6 +554,8 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       return adoClient.getPullRequestsForReviewer(params[0], params[1]);
     case 'ado:get-created-prs':
       return adoClient.getPullRequestsCreatedByMe(params[0], params[1]);
+    case 'ado:get-created-prs-for-repo':
+      return adoClient.getPullRequestsCreatedByMeInRepo(params[0], params[1], params[2]);
     case 'ado:get-repo-prs':
       return adoClient.getPullRequestsForRepository(params[0], params[1], params[2]);
 
@@ -372,6 +575,8 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       return adoClient.getMyWorkItems(params[0], params[1]);
     case 'wi:get-created-by-me':
       return adoClient.getCreatedByMeWorkItems(params[0], params[1]);
+    case 'wi:get-grouped-by-type':
+      return adoClient.getWorkItemsGroupedByType(params[0], params[1], params[2]);
     case 'wi:get-updates':
       return adoClient.getWorkItemUpdates(params[0], params[1], params[2]);
     case 'wi:get-types':
@@ -380,6 +585,147 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       return adoClient.getAreaPaths(params[0], params[1]);
     case 'wi:get-iteration-paths':
       return adoClient.getIterationPaths(params[0], params[1]);
+    // Tasks
+    case 'tasks:get-all':
+      return loadStoreData().tasks || [];
+    case 'tasks:save': {
+      const storeData = loadStoreData();
+      const tasks = storeData.tasks || [];
+      const existing = tasks.findIndex((t: any) => t.id === params[0].id);
+      if (existing >= 0) {
+        tasks[existing] = params[0];
+      } else {
+        tasks.push(params[0]);
+      }
+      storeData.tasks = tasks;
+      saveStoreData(storeData);
+      return;
+    }
+    case 'tasks:delete': {
+      const storeData = loadStoreData();
+      storeData.tasks = (storeData.tasks || []).filter((t: any) => t.id !== params[0]);
+      saveStoreData(storeData);
+      return;
+    }
+    case 'tasks:run-now': {
+      const id = params[0] as string;
+      const storeData = loadStoreData();
+      const task = (storeData.tasks || []).find((t: any) => t.id === id);
+      if (!task) throw new Error(`Task not found: ${id}`);
+      // Add a runHistory entry for this manual run
+      const now = new Date();
+      task.runCount = (task.runCount || 0) + 1;
+      task.runHistory = task.runHistory || [];
+      task.runHistory.push({ timestamp: now.toISOString() });
+      if (task.runHistory.length > 10) task.runHistory = task.runHistory.slice(-10);
+      saveStoreData(storeData);
+      runScheduledTask(task).then(logFile => {
+        const sd = loadStoreData();
+        const t = (sd.tasks || []).find((t: any) => t.id === id);
+        if (t && t.runHistory?.length) {
+          t.runHistory[t.runHistory.length - 1].result = 'Manual run';
+          t.runHistory[t.runHistory.length - 1].logFile = logFile;
+          saveStoreData(sd);
+        }
+        broadcast('task:result', { id, result: 'Manual run', logFile, runCount: t?.runCount, runHistory: t?.runHistory });
+      }).catch(console.error);
+      return;
+    }
+    case 'tasks:toggle-ai': {
+      const id = params[0] as string;
+      const enabled = params[1] as boolean;
+      const storeData = loadStoreData();
+      const tasks: any[] = storeData.tasks || [];
+      const task = tasks.find((t: any) => t.id === id);
+      if (!task) throw new Error(`Task not found: ${id}`);
+      task.aiAutomated = enabled;
+      if (enabled) {
+        // Ask AI to convert schedule to cron expression
+        if (!task.cronExpression) {
+          try {
+            const { query } = await import('@anthropic-ai/claude-agent-sdk');
+            let text = '';
+            const sdkCall = (async () => {
+              for await (const event of query({
+                prompt: `Convert this schedule description to a standard 5-field cron expression (minute hour day-of-month month day-of-week). Reply with ONLY the cron expression, nothing else.\n\nSchedule: "${task.schedule}"`,
+                options: { model: 'haiku', maxTurns: 1 },
+              })) {
+                if (event.type === 'assistant') {
+                  for (const block of (event.message?.content ?? [])) {
+                    if ((block as any).type === 'text') text += (block as any).text;
+                  }
+                }
+              }
+              return text;
+            })();
+            const timeout = new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('SDK timeout')), 10_000)
+            );
+            text = await Promise.race([sdkCall, timeout]);
+            const cronMatch = text.trim().match(/[\d*][\/\d*,\-]* [\d*][\/\d*,\-]* [\d*][\/\d*,\-]* [\d*][\/\d*,\-]* [\d*][\/\d*,\-]*/);
+            task.cronExpression = cronMatch ? cronMatch[0].trim() : null;
+          } catch (err: any) {
+            console.warn('[tasks:toggle-ai] AI cron parse skipped:', err.message);
+          }
+          // Fallback: derive cron from common patterns
+          if (!task.cronExpression) {
+            task.cronExpression = cronFromSchedule(task.schedule);
+          }
+        }
+        task.nextRun = nextCronDate(task.cronExpression, new Date()).toISOString();
+      } else {
+        task.nextRun = undefined;
+      }
+      storeData.tasks = tasks;
+      saveStoreData(storeData);
+      return { cronExpression: task.cronExpression ?? '', nextRun: task.nextRun ?? '' };
+    }
+    case 'tasks:parse-raw': {
+      const raw = params[0] as string;
+      try {
+        const { query } = await import('@anthropic-ai/claude-agent-sdk');
+        let text = '';
+
+        const sdkCall = (async () => {
+          for await (const event of query({
+            prompt: `Parse this task description into a JSON object with exactly three fields: "title" (2-4 words MAX, e.g. "Daily PR Check"), "schedule" (when/how often to run, e.g. "Every day at 9am"), and "action" (clear description of what to do). Respond with ONLY valid JSON, no explanation.\n\nInput: "${raw.replace(/"/g, '\\"')}"`,
+            options: { model: 'haiku', maxTurns: 1 },
+          })) {
+            if (event.type === 'assistant') {
+              for (const block of (event.message?.content ?? [])) {
+                if ((block as any).type === 'text') text += (block as any).text;
+              }
+            }
+          }
+          return text;
+        })();
+
+        const timeout = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('SDK timeout')), 10_000)
+        );
+
+        text = await Promise.race([sdkCall, timeout]);
+
+        const match = text.match(/\{[\s\S]*?\}/);
+        if (match) {
+          try { return JSON.parse(match[0]); } catch { /* fall through to regex */ }
+        }
+      } catch (err: any) {
+        console.warn('[tasks:parse-raw] AI parse skipped, using regex fallback:', err.message);
+      }
+      // Regex-based fallback — no SDK required
+      return parseTaskFallback(raw);
+    }
+
+    case 'tasks:read-log': {
+      const logPath = params[0] as string;
+      const taskRunDir = path.join(CONFIG_DIR, 'task-runs');
+      const normalised = path.resolve(logPath);
+      if (!normalised.startsWith(path.resolve(taskRunDir))) throw new Error('Access denied');
+      if (!fs.existsSync(normalised)) return '(Log not available yet — task may still be running. Try again once it completes.)';
+      return fs.readFileSync(normalised, 'utf-8');
+    }
+
     case 'wi:get-saved-queries':
       return loadStoreData().workItems?.savedQueries || [];
     case 'wi:save-query': {

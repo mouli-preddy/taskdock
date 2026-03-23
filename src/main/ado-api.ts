@@ -314,6 +314,13 @@ export class AdoApiClient {
     return response.value || [];
   }
 
+  async getPullRequestsCreatedByMeInRepo(org: string, project: string, repositoryName: string): Promise<any[]> {
+    const userId = await this.getCurrentUserId(org);
+    const url = `https://dev.azure.com/${org}/${project}/_apis/git/repositories/${encodeURIComponent(repositoryName)}/pullrequests?searchCriteria.creatorId=${userId}&searchCriteria.status=active&$top=50&api-version=${API_VERSION}`;
+    const response = await this.request<{ value: any[] }>(url);
+    return response.value || [];
+  }
+
   async getPullRequestsForRepository(org: string, project: string, repositoryName: string): Promise<any[]> {
     const url = `https://dev.azure.com/${org}/${project}/_apis/git/repositories/${encodeURIComponent(repositoryName)}/pullrequests?searchCriteria.status=active&$top=50&api-version=${API_VERSION}`;
     const response = await this.request<{ value: any[] }>(url);
@@ -394,6 +401,45 @@ export class AdoApiClient {
     `;
     const ids = await this.queryWorkItems(org, project, wiql);
     return this.getWorkItems(org, project, ids.slice(0, 50));
+  }
+
+  async getWorkItemsList(org: string, project: string, ids: number[]): Promise<any[]> {
+    if (ids.length === 0) return [];
+    const batchSize = 200;
+    const batches: number[][] = [];
+    for (let i = 0; i < ids.length; i += batchSize) {
+      batches.push(ids.slice(i, i + batchSize));
+    }
+    const results = await Promise.all(batches.map(batch => {
+      const idsParam = batch.join(',');
+      const url = `https://dev.azure.com/${org}/${project}/_apis/wit/workitems?ids=${idsParam}&api-version=${API_VERSION}`;
+      return this.request<{ value: any[] }>(url).then(r => r.value || []);
+    }));
+    return results.flat();
+  }
+
+  async getWorkItemsGroupedByType(org: string, project: string, wiql: string): Promise<Array<{ type: string; items: any[]; totalCount: number }>> {
+    const allIds = await this.queryWorkItems(org, project, wiql);
+    const allItems = await this.getWorkItemsList(org, project, allIds.slice(0, 500));
+
+    const groups = new Map<string, any[]>();
+    for (const item of allItems) {
+      const type = item.fields['System.WorkItemType'] || 'Unknown';
+      if (!groups.has(type)) groups.set(type, []);
+      groups.get(type)!.push(item);
+    }
+
+    const TYPE_ORDER = ['Bug', 'Task', 'User Story', 'Feature', 'Epic', 'Issue', 'Impediment', 'Test Case', 'Test Plan', 'Test Suite'];
+    return Array.from(groups.entries())
+      .map(([type, items]) => ({ type, items: items.slice(0, 50), totalCount: items.length }))
+      .sort((a, b) => {
+        const ai = TYPE_ORDER.indexOf(a.type);
+        const bi = TYPE_ORDER.indexOf(b.type);
+        if (ai === -1 && bi === -1) return a.type.localeCompare(b.type);
+        if (ai === -1) return 1;
+        if (bi === -1) return -1;
+        return ai - bi;
+      });
   }
 
   async getWorkItemTypes(org: string, project: string): Promise<any[]> {

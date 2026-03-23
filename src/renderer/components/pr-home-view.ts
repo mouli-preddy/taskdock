@@ -386,7 +386,7 @@ export class PRHomeView {
         </div>
         <div class="pr-card-meta">
           <span class="pr-card-meta-item">
-            <span class="pr-card-repo">${pr.repository.name}</span>
+            <span class="pr-card-monitored-source">${escapeHtml(pr.repository.name)}</span>
             ${linkedBadgeHtml}
           </span>
           <span class="pr-card-meta-item">

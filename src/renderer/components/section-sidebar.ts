@@ -1,4 +1,4 @@
-import { getIcon, GitPullRequest, LayoutGrid, Search, Terminal, Settings, Info, Activity, AlertTriangle, FolderOpen } from '../utils/icons.js';
+import { getIcon, GitPullRequest, LayoutGrid, Search, Terminal, Settings, Info, Activity, AlertTriangle, FolderOpen, ClipboardList } from '../utils/icons.js';
 
 export type SectionId = 'review' | 'workItems' | 'icm' | 'terminals' | 'settings' | 'about' | 'workspaces' | string;
 
@@ -18,6 +18,11 @@ const SECTIONS: SectionDef[] = [
     id: 'workItems',
     icon: getIcon(LayoutGrid, 20),
     label: 'Work Items',
+  },
+  {
+    id: 'tasks',
+    icon: getIcon(ClipboardList, 20),
+    label: 'Tasks',
   },
   {
     id: 'dgrep',
@@ -58,7 +63,7 @@ const SECTIONS: SectionDef[] = [
 
 export class SectionSidebar {
   private container: HTMLElement;
-  private activeSection: SectionId = 'review';
+  private activeSection: SectionId = 'workItems';
   private expanded = false;
   private selectCallback: ((section: SectionId) => void) | null = null;
   private dynamicSections: SectionDef[] = [];

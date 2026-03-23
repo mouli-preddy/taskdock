@@ -24,6 +24,7 @@
   <link rel="stylesheet" href="./styles/plugins.css">
   <link rel="stylesheet" href="./styles/cfv.css">
   <link rel="stylesheet" href="./styles/workspace.css">
+  <link rel="stylesheet" href="./styles/tasks.css">
   <link rel="stylesheet" href="./lib/xterm/xterm.css">
 </head>
 <body>
@@ -48,8 +49,13 @@
 
         <!-- Tab Content Panels -->
         <div class="tab-content" id="tabContent">
+          <!-- Tasks Section Content (default landing page) -->
+          <div class="section-content" id="tasksSectionContent">
+            <div class="tab-panel active" id="tasksPanel"></div>
+          </div>
+
           <!-- Review Section Content -->
-          <div class="section-content" id="reviewSectionContent">
+          <div class="section-content hidden" id="reviewSectionContent">
             <!-- Home Tab Content (PR List) -->
             <div class="tab-panel" id="homeTabPanel"></div>
 

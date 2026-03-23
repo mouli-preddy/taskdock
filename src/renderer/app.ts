@@ -66,6 +66,7 @@ import { initDeepLinkHandler } from './deep-link-handler.js';
 import { notificationService } from './services/notification-service.js';
 import { DGrepSearchView } from './components/dgrep-search-view.js';
 import { WorkspaceSection } from './components/workspace-section.js';
+import { TasksView, type ScheduledTask } from './components/tasks-view.js';
 import type { DGrepProgressEvent, DGrepCompleteEvent, DGrepErrorEvent } from '../shared/dgrep-types.js';
 
 // Tab type definitions
@@ -170,8 +171,11 @@ class PRReviewApp {
   private workItemDetailViews: Map<string, WorkItemDetailView> = new Map();
   private dgrepSearchView!: DGrepSearchView;
   private workspaceSection!: WorkspaceSection;
+  private tasksView!: TasksView;
+  private taskTerminalSessionIds = new Set<string>();
 
-  private activeSection: SectionId = 'review';
+  private activeSection: SectionId = 'workItems';
+  private pendingTaskHighlight: string | null = null;
   private reviewTabs: ReviewTab[] = [];
   private activeReviewTabId: string = 'home';
   private settingsTabs: SettingsTab[] = [];
@@ -273,9 +277,21 @@ class PRReviewApp {
     this.initDgrepListeners();
     this.initTheme();
     this.initPlugins();
+    this.switchSection(this.activeSection);
 
     // Load notification settings
     notificationService.loadSettings();
+
+    // Navigate to tasks and highlight when app is focused after a task-complete notification
+    window.addEventListener('focus', () => {
+      if (this.pendingTaskHighlight) {
+        const taskId = this.pendingTaskHighlight;
+        this.pendingTaskHighlight = null;
+        this.switchSection('tasks');
+        // Wait for section render before scrolling
+        setTimeout(() => this.tasksView.highlightTask(taskId), 100);
+      }
+    });
 
     // Check if first launch
     this.checkFirstLaunch();
@@ -331,9 +347,66 @@ class PRReviewApp {
     this.workItemsListView.onEditQuery((query) => this.showQueryBuilder(query));
     this.workItemsListView.onDeleteQuery((queryId) => this.deleteQuery(queryId));
     this.workItemsListView.onRunQuery((query) => this.runCustomQuery(query));
+    this.workItemsListView.onFilterChange(() => this.refreshWorkItems());
+    this.workItemsListView.onOpenInAdo((item) => {
+      const url = `https://dev.azure.com/${this.organization}/${encodeURIComponent(this.project)}/_workitems/edit/${item.id}`;
+      window.electronAPI.openExternal(url);
+    });
 
     this.workItemQueryBuilder = new WorkItemQueryBuilder();
     this.workItemQueryBuilder.onSave((query) => this.saveQuery(query));
+
+    // Initialize Tasks view
+    this.tasksView = new TasksView('tasksPanel');
+    this.tasksView.onAdd(async (raw) => {
+      const parsed = await window.electronAPI.tasksParseRaw(raw);
+      const task: ScheduledTask = {
+        id: crypto.randomUUID(),
+        title: parsed.title || parsed.action,
+        schedule: parsed.schedule,
+        action: parsed.action,
+        raw,
+        createdAt: new Date().toISOString(),
+      };
+      await window.electronAPI.tasksSave(task);
+      return task;
+    });
+    this.tasksView.onDelete(async (id) => {
+      await window.electronAPI.tasksDelete(id);
+    });
+    this.tasksView.onToggleAi(async (id, enabled) => {
+      return window.electronAPI.tasksToggleAi(id, enabled);
+    });
+    this.tasksView.onUpdate(async (task) => {
+      await window.electronAPI.tasksSave(task);
+    });
+    this.tasksView.onTest(async (id) => {
+      await window.electronAPI.tasksRunNow(id);
+    });
+    this.loadTasks();
+
+    // Listen for task scheduler events from backend
+    window.electronAPI.onTaskRan((data) => {
+      this.tasksView.markTaskRan(data.id, data.lastRun, data.nextRun);
+    });
+    window.electronAPI.onTaskCompleted((data) => {
+      Toast.success(`Task completed: ${data.action}`);
+      notificationService.notify('taskComplete', 'Task Completed', data.action);
+      this.pendingTaskHighlight = data.id;
+    });
+    window.electronAPI.onTaskError((data) => {
+      Toast.error(`Task failed: ${data.error}`);
+    });
+    window.electronAPI.onTaskResult((data) => {
+      this.tasksView.updateTaskResult(data.id, data.result, data.runCount ?? 0, data.runHistory ?? []);
+    });
+    window.electronAPI.onTaskTerminalStarted((data) => {
+      Toast.success(`Task running: "${data.action}" — opening terminal`);
+      this.taskTerminalSessionIds.add(data.sessionId);
+      this.switchSection('terminals');
+      // The session-created event will add it to terminalsView; set it active once added
+      setTimeout(() => this.terminalsView.setActiveSession(data.sessionId), 300);
+    });
 
     // Initialize DGrep search view
     this.dgrepSearchView = new DGrepSearchView('dgrepSearchPanel');
@@ -1192,6 +1265,17 @@ class PRReviewApp {
 
     window.electronAPI.onChatTerminalExit((event) => {
       this.terminalsView.updateSession(event.sessionId, { status: 'completed' });
+      // Auto-close terminals that were opened by task scheduler
+      if (this.taskTerminalSessionIds.has(event.sessionId)) {
+        this.taskTerminalSessionIds.delete(event.sessionId);
+        setTimeout(async () => {
+          await window.electronAPI.chatTerminalRemove(event.sessionId);
+          this.terminalsView.removeSession(event.sessionId);
+          // Switch back to Tasks section
+          this.switchSection('tasks');
+          Toast.success('Task completed — terminal closed');
+        }, 2000);
+      }
     });
 
     window.electronAPI.onChatTerminalStatusChange((event) => {
@@ -1460,6 +1544,7 @@ class PRReviewApp {
     }
 
     // Show/hide section content
+    document.getElementById('tasksSectionContent')?.classList.toggle('hidden', section !== 'tasks');
     document.getElementById('reviewSectionContent')?.classList.toggle('hidden', section !== 'review');
     document.getElementById('settingsSectionContent')?.classList.toggle('hidden', section !== 'settings');
     document.getElementById('terminalsSectionContent')?.classList.toggle('hidden', section !== 'terminals');
@@ -1523,8 +1608,8 @@ class PRReviewApp {
       }));
       this.reviewTabBar.setTabs(tabs);
       this.reviewTabBar.setActive(this.activeReviewTabId);
-    } else if (this.activeSection === 'about' || this.activeSection === 'dgrep') {
-      // About and DGrep sections have no tabs - hide the tab bar
+    } else if (this.activeSection === 'about' || this.activeSection === 'dgrep' || this.activeSection === 'tasks') {
+      // These sections have no tabs - hide the tab bar
       this.reviewTabBar.setTabs([]);
     } else if (this.activeSection === 'settings') {
       const tabs: Tab[] = this.settingsTabs.map(t => ({
@@ -2265,7 +2350,10 @@ class PRReviewApp {
         if (config) {
           this.organization = config.ado.organization;
           this.project = config.ado.project;
-          this.settingsView.setSettings(config.ado);
+          this.settingsView.setSettings({
+            ...config.ado,
+            anthropicApiKey: config.anthropic?.apiKey || '',
+          });
         }
       } catch {
         // Tauri native invoke may not be available, fall back to bridge settings
@@ -2341,6 +2429,9 @@ class PRReviewApp {
         project: settings.project,
         pat: settings.pat,
       },
+      anthropic: {
+        apiKey: settings.anthropicApiKey || '',
+      },
     });
 
     this.organization = settings.organization;
@@ -2397,8 +2488,27 @@ class PRReviewApp {
         window.electronAPI.getCreatedPRs(this.organization, this.project),
       ]);
 
+      // Also fetch PRs created by me in each monitored repo and merge
+      const monitoredCreatedResults = await Promise.all(
+        monitoredRepos.map(repo =>
+          window.electronAPI.getCreatedPRsForRepo(repo.organization, repo.project, repo.repository)
+            .catch(() => [] as any[])
+        )
+      );
+      const seen = new Set(createdPRs.map((pr: any) => `${pr.repository.id}-${pr.pullRequestId}`));
+      const allCreatedPRs = [...createdPRs];
+      for (const prs of monitoredCreatedResults) {
+        for (const pr of prs) {
+          const key = `${pr.repository.id}-${pr.pullRequestId}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            allCreatedPRs.push(pr);
+          }
+        }
+      }
+
       this.myPRs = reviewPRs;
-      this.createdPRs = createdPRs;
+      this.createdPRs = allCreatedPRs;
 
       await this.prHomeView.setPRs(this.myPRs, this.createdPRs);
       this.prHomeView.setSubtitle(`${this.organization} / ${this.project}`);
@@ -2449,10 +2559,15 @@ class PRReviewApp {
       };
       this.reviewTabs.push(tab);
 
+      // Extract org/project from PR URL to support PRs from monitored repos in different orgs/projects
+      const urlMatch = pr.url.match(/https:\/\/dev\.azure\.com\/([^/]+)\/([^/]+)\/_apis/);
+      const prOrg = urlMatch ? urlMatch[1] : this.organization;
+      const prProject = urlMatch ? urlMatch[2] : this.project;
+
       // Create initial state
       const state: PRTabState = {
-        org: this.organization,
-        project: this.project,
+        org: prOrg,
+        project: prProject,
         repoId: pr.repository.id,
         repoName: pr.repository.name,
         prId: pr.pullRequestId,
@@ -4887,12 +5002,11 @@ After this, respond with a simple text response to greet the user and ask them w
     try {
       const view = this.workItemsListView.getActiveView();
       const queryId = this.workItemsListView.getActiveQueryId();
-      let items: WorkItem[];
 
       if (view === 'custom' && queryId) {
         const query = this.savedQueries.find(q => q.id === queryId);
+        let items: WorkItem[];
         if (query) {
-          // Use ADO query ID if available, otherwise fall back to WIQL
           const ids = query.adoQueryId
             ? await window.electronAPI.wiRunQueryById(this.organization, this.project, query.adoQueryId)
             : await window.electronAPI.wiQuery(this.organization, this.project, query.wiql);
@@ -4900,14 +5014,23 @@ After this, respond with a simple text response to greet the user and ask them w
         } else {
           items = [];
         }
-      } else if (view === 'created') {
-        items = await window.electronAPI.wiGetCreatedByMe(this.organization, this.project);
+        this.workItemsListView.setWorkItems(items);
+        this.workItemsListView.setSubtitle(`${items.length} work items`);
       } else {
-        items = await window.electronAPI.wiGetMyItems(this.organization, this.project);
+        const { showAll, excludedStates, showAllTypes, includedTypes } = this.workItemsListView.getFilterState();
+        const stateFilter = (!showAll && excludedStates.length > 0)
+          ? ` AND [System.State] NOT IN (${excludedStates.map(s => `'${s}'`).join(', ')})`
+          : '';
+        const typeFilter = (!showAllTypes && includedTypes.length > 0)
+          ? ` AND [System.WorkItemType] IN (${includedTypes.map(t => `'${t}'`).join(', ')})`
+          : '';
+        const assignedCondition = view === 'created' ? '[System.CreatedBy] = @me' : '[System.AssignedTo] = @me';
+        const wiql = `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND ${assignedCondition}${stateFilter}${typeFilter} ORDER BY [System.ChangedDate] DESC`;
+        const groups = await window.electronAPI.wiGetGroupedByType(this.organization, this.project, wiql);
+        this.workItemsListView.setWorkItemsGrouped(groups);
+        const totalCount = groups.reduce((sum: number, g: any) => sum + g.totalCount, 0);
+        this.workItemsListView.setSubtitle(`${totalCount} work items`);
       }
-
-      this.workItemsListView.setWorkItems(items);
-      this.workItemsListView.setSubtitle(`${items.length} work items`);
 
       // Load query builder options (types, areas, iterations)
       this.loadQueryBuilderOptions();
@@ -4966,6 +5089,32 @@ After this, respond with a simple text response to greet the user and ask them w
       }
     }
     return paths;
+  }
+
+  private async loadTasks() {
+    try {
+      const tasks = await window.electronAPI.tasksGetAll();
+      this.tasksView.setTasks(tasks);
+    } catch (error) {
+      console.error('Failed to load tasks:', error);
+    }
+  }
+
+  private async addTask(raw: string) {
+    try {
+      const parsed = await window.electronAPI.tasksParseRaw(raw);
+      const task: ScheduledTask = {
+        id: crypto.randomUUID(),
+        schedule: parsed.schedule,
+        action: parsed.action,
+        raw,
+        createdAt: new Date().toISOString(),
+      };
+      await window.electronAPI.tasksSave(task);
+    } catch (error) {
+      console.error('Failed to add task:', error);
+      throw error;
+    }
   }
 
   private async loadSavedQueries() {
