@@ -63,7 +63,7 @@ const SECTIONS: SectionDef[] = [
 
 export class SectionSidebar {
   private container: HTMLElement;
-  private activeSection: SectionId = 'tasks';
+  private activeSection: SectionId = 'workItems';
   private expanded = false;
   private selectCallback: ((section: SectionId) => void) | null = null;
   private dynamicSections: SectionDef[] = [];

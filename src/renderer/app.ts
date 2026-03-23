@@ -174,7 +174,8 @@ class PRReviewApp {
   private tasksView!: TasksView;
   private taskTerminalSessionIds = new Set<string>();
 
-  private activeSection: SectionId = 'tasks';
+  private activeSection: SectionId = 'workItems';
+  private pendingTaskHighlight: string | null = null;
   private reviewTabs: ReviewTab[] = [];
   private activeReviewTabId: string = 'home';
   private settingsTabs: SettingsTab[] = [];
@@ -276,9 +277,21 @@ class PRReviewApp {
     this.initDgrepListeners();
     this.initTheme();
     this.initPlugins();
+    this.switchSection(this.activeSection);
 
     // Load notification settings
     notificationService.loadSettings();
+
+    // Navigate to tasks and highlight when app is focused after a task-complete notification
+    window.addEventListener('focus', () => {
+      if (this.pendingTaskHighlight) {
+        const taskId = this.pendingTaskHighlight;
+        this.pendingTaskHighlight = null;
+        this.switchSection('tasks');
+        // Wait for section render before scrolling
+        setTimeout(() => this.tasksView.highlightTask(taskId), 100);
+      }
+    });
 
     // Check if first launch
     this.checkFirstLaunch();
@@ -334,6 +347,11 @@ class PRReviewApp {
     this.workItemsListView.onEditQuery((query) => this.showQueryBuilder(query));
     this.workItemsListView.onDeleteQuery((queryId) => this.deleteQuery(queryId));
     this.workItemsListView.onRunQuery((query) => this.runCustomQuery(query));
+    this.workItemsListView.onFilterChange(() => this.refreshWorkItems());
+    this.workItemsListView.onOpenInAdo((item) => {
+      const url = `https://dev.azure.com/${this.organization}/${encodeURIComponent(this.project)}/_workitems/edit/${item.id}`;
+      window.electronAPI.openExternal(url);
+    });
 
     this.workItemQueryBuilder = new WorkItemQueryBuilder();
     this.workItemQueryBuilder.onSave((query) => this.saveQuery(query));
@@ -373,6 +391,8 @@ class PRReviewApp {
     });
     window.electronAPI.onTaskCompleted((data) => {
       Toast.success(`Task completed: ${data.action}`);
+      notificationService.notify('taskComplete', 'Task Completed', data.action);
+      this.pendingTaskHighlight = data.id;
     });
     window.electronAPI.onTaskError((data) => {
       Toast.error(`Task failed: ${data.error}`);
@@ -4997,9 +5017,15 @@ After this, respond with a simple text response to greet the user and ask them w
         this.workItemsListView.setWorkItems(items);
         this.workItemsListView.setSubtitle(`${items.length} work items`);
       } else {
-        const wiql = view === 'created'
-          ? `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.CreatedBy] = @me AND [System.State] NOT IN ('Closed', 'Removed', 'Done') ORDER BY [System.ChangedDate] DESC`
-          : `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.AssignedTo] = @me AND [System.State] NOT IN ('Closed', 'Removed', 'Done') ORDER BY [System.ChangedDate] DESC`;
+        const { showAll, excludedStates, showAllTypes, includedTypes } = this.workItemsListView.getFilterState();
+        const stateFilter = (!showAll && excludedStates.length > 0)
+          ? ` AND [System.State] NOT IN (${excludedStates.map(s => `'${s}'`).join(', ')})`
+          : '';
+        const typeFilter = (!showAllTypes && includedTypes.length > 0)
+          ? ` AND [System.WorkItemType] IN (${includedTypes.map(t => `'${t}'`).join(', ')})`
+          : '';
+        const assignedCondition = view === 'created' ? '[System.CreatedBy] = @me' : '[System.AssignedTo] = @me';
+        const wiql = `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND ${assignedCondition}${stateFilter}${typeFilter} ORDER BY [System.ChangedDate] DESC`;
         const groups = await window.electronAPI.wiGetGroupedByType(this.organization, this.project, wiql);
         this.workItemsListView.setWorkItemsGrouped(groups);
         const totalCount = groups.reduce((sum: number, g: any) => sum + g.totalCount, 0);

@@ -213,6 +213,7 @@ export interface NotificationSettings {
   aiAnalysisComplete: boolean;
   newComments: boolean;
   newIterations: boolean;
+  taskComplete: boolean;
 }
 
 export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
@@ -221,6 +222,7 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   aiAnalysisComplete: true,
   newComments: true,
   newIterations: true,
+  taskComplete: true,
 };
 
 // Apply Changes types

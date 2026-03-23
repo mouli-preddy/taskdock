@@ -429,9 +429,17 @@ export class AdoApiClient {
       groups.get(type)!.push(item);
     }
 
+    const TYPE_ORDER = ['Bug', 'Task', 'User Story', 'Feature', 'Epic', 'Issue', 'Impediment', 'Test Case', 'Test Plan', 'Test Suite'];
     return Array.from(groups.entries())
       .map(([type, items]) => ({ type, items: items.slice(0, 50), totalCount: items.length }))
-      .sort((a, b) => b.totalCount - a.totalCount);
+      .sort((a, b) => {
+        const ai = TYPE_ORDER.indexOf(a.type);
+        const bi = TYPE_ORDER.indexOf(b.type);
+        if (ai === -1 && bi === -1) return a.type.localeCompare(b.type);
+        if (ai === -1) return 1;
+        if (bi === -1) return -1;
+        return ai - bi;
+      });
   }
 
   async getWorkItemTypes(org: string, project: string): Promise<any[]> {

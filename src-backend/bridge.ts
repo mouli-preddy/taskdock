@@ -722,7 +722,7 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       const taskRunDir = path.join(CONFIG_DIR, 'task-runs');
       const normalised = path.resolve(logPath);
       if (!normalised.startsWith(path.resolve(taskRunDir))) throw new Error('Access denied');
-      if (!fs.existsSync(normalised)) throw new Error('Log file not found');
+      if (!fs.existsSync(normalised)) return '(Log not available yet — task may still be running. Try again once it completes.)';
       return fs.readFileSync(normalised, 'utf-8');
     }
 

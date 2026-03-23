@@ -571,6 +571,12 @@ export class SettingsView {
                     <span>New iterations (commits) detected</span>
                   </label>
                 </div>
+                <div class="checkbox-group">
+                  <label>
+                    <input type="checkbox" id="notifyTaskComplete" checked>
+                    <span>Task completed</span>
+                  </label>
+                </div>
               </div>
 
               <div class="form-group" style="margin-top: 12px;">
@@ -948,6 +954,7 @@ export class SettingsView {
         aiAnalysisComplete: (this.container.querySelector('#notifyAiAnalysisComplete') as HTMLInputElement).checked,
         newComments: (this.container.querySelector('#notifyNewComments') as HTMLInputElement).checked,
         newIterations: (this.container.querySelector('#notifyNewIterations') as HTMLInputElement).checked,
+        taskComplete: (this.container.querySelector('#notifyTaskComplete') as HTMLInputElement).checked,
       };
       await window.electronAPI.setNotificationSettings(this.notificationSettings);
       this.notificationSettingsSavedCallback?.(this.notificationSettings);
@@ -1318,12 +1325,14 @@ export class SettingsView {
     const aiAnalysis = this.container.querySelector('#notifyAiAnalysisComplete') as HTMLInputElement;
     const newComments = this.container.querySelector('#notifyNewComments') as HTMLInputElement;
     const newIterations = this.container.querySelector('#notifyNewIterations') as HTMLInputElement;
+    const taskComplete = this.container.querySelector('#notifyTaskComplete') as HTMLInputElement;
 
     if (enabled) enabled.checked = this.notificationSettings.enabled;
     if (aiReview) aiReview.checked = this.notificationSettings.aiReviewComplete;
     if (aiAnalysis) aiAnalysis.checked = this.notificationSettings.aiAnalysisComplete;
     if (newComments) newComments.checked = this.notificationSettings.newComments;
     if (newIterations) newIterations.checked = this.notificationSettings.newIterations;
+    if (taskComplete) taskComplete.checked = this.notificationSettings.taskComplete ?? true;
 
     // Set initial disabled state
     const toggles = this.container.querySelector('#notificationEventToggles') as HTMLElement;

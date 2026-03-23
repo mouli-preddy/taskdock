@@ -261,8 +261,10 @@ export class WorkItemDetailView {
 
     // Open in browser
     this.container.querySelector('#openInBrowserBtn')?.addEventListener('click', () => {
-      if (this.workItem?._links?.html?.href) {
-        this.onOpenInBrowserCallback?.(this.workItem._links.html.href);
+      if (this.workItem) {
+        const url = this.workItem._links?.html?.href
+          || `https://dev.azure.com/${this.config.organization}/${encodeURIComponent(this.config.project)}/_workitems/edit/${this.workItem.id}`;
+        this.onOpenInBrowserCallback?.(url);
       }
     });
 
