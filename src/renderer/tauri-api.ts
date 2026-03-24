@@ -213,6 +213,10 @@ export const tauriAPI = {
     invoke('tasks:toggle-ai', id, enabled),
   tasksReadLog: (logFile: string) =>
     invoke('tasks:read-log', logFile),
+  tasksExport: (ids: string[]) =>
+    invoke('tasks:export', ids),
+  tasksImport: (jsonContent: string) =>
+    invoke('tasks:import', jsonContent),
 
   wiGetMyItems: (org: string, project: string) =>
     invoke('wi:get-my-items', org, project),
@@ -520,6 +524,16 @@ export const tauriAPI = {
     return invoke('set_notification_settings', { settings });
   },
 
+  // Autostart
+  getAutostartEnabled: async () => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke<boolean>('get_autostart_enabled');
+  },
+  setAutostartEnabled: async (enabled: boolean) => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke('set_autostart_enabled', { enabled });
+  },
+
   // Services
   getServices: async () => {
     const { invoke } = await import('@tauri-apps/api/core');
@@ -788,6 +802,11 @@ export const tauriAPI = {
   onTaskError: (callback: (event: any) => void) => subscribe('task:error', callback),
   onTaskResult: (callback: (event: any) => void) => subscribe('task:result', callback),
   onTaskTerminalStarted: (callback: (event: any) => void) => subscribe('task:terminal-started', callback),
+  tasksGetPendingApprovals: () => invoke('tasks:get-pending-approvals'),
+  onTaskApprovalRequest: (callback: (event: any) => void) => subscribe('task:approval-request', callback),
+  onTaskApprovalResolved: (callback: (event: any) => void) => subscribe('task:approval-resolved', callback),
+  tasksRespondApproval: (approvalId: string, choice: string, instructions: string) =>
+    invoke('tasks:respond-approval', { approvalId, choice, instructions }),
 };
 
 // Initialize connection when module loads

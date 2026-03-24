@@ -1,9 +1,11 @@
 import type { WorkItem, SavedQuery } from '../../shared/workitem-types.js';
 import { WORK_ITEM_TYPE_COLORS, WORK_ITEM_STATE_COLORS } from '../../shared/workitem-types.js';
 import { escapeHtml, formatTimeAgo } from '../utils/html-utils.js';
-import { getIcon, RefreshCw, User, Plus, Download, Search, Edit, Trash2, LayoutGrid, Cloud, ExternalLink } from '../utils/icons.js';
+import { getIcon, RefreshCw, User, Plus, Download, Search, Edit, Trash2, LayoutGrid, Cloud, ExternalLink, Activity, AlertTriangle, GripVertical } from '../utils/icons.js';
 
-export type WorkItemViewType = 'assigned' | 'created' | 'custom';
+const ACTIVE_ORDER_KEY = 'taskdock:active-item-order';
+
+export type WorkItemViewType = 'assigned' | 'created' | 'custom' | 'active';
 
 interface WorkItemGroup {
   type: string;
@@ -22,9 +24,12 @@ export class WorkItemsListView {
   private activeTypeTab = '';
   private isGroupedMode = false;
   private savedQueries: SavedQuery[] = [];
-  private activeView: WorkItemViewType = 'assigned';
+  private activeView: WorkItemViewType = 'active';
   private activeQueryId: string | null = null;
   private loading = false;
+  private activeIncidents: any[] = [];
+  private activeItemOrder: string[] = [];
+  private draggedKey: string | null = null;
   private showAllItems = false;
   private excludedStates: string[] = ['Closed', 'Resolved', 'Done', 'Removed', 'Abandoned'];
   private showAllTypes = false;
@@ -110,6 +115,16 @@ export class WorkItemsListView {
     this.renderWorkItemsList();
   }
 
+  setActiveItems(groups: WorkItemGroup[], incidents: any[]) {
+    this.groupedItems = groups;
+    this.activeIncidents = incidents;
+    this.isGroupedMode = true;
+    this.loading = false;
+    this.activeItemOrder = this.loadActiveOrder(); // refresh from storage on each load
+    this.renderTypeTabs();
+    this.renderWorkItemsList();
+  }
+
   setSavedQueries(queries: SavedQuery[]) {
     this.savedQueries = queries;
     this.renderQueriesList();
@@ -153,7 +168,11 @@ export class WorkItemsListView {
           <aside class="workitems-sidebar">
             <div class="workitems-views">
               <h3>Views</h3>
-              <button class="workitems-view-btn active" data-view="assigned">
+              <button class="workitems-view-btn active" data-view="active">
+                ${getIcon(Activity, 16)}
+                Active
+              </button>
+              <button class="workitems-view-btn" data-view="assigned">
                 ${getIcon(User, 16)}
                 Assigned to Me
               </button>
@@ -213,7 +232,9 @@ export class WorkItemsListView {
           <!-- Main content area with work items -->
           <main class="workitems-main">
             <div id="workItemsTypeTabs"></div>
-            <div class="workitems-list" id="workItemsList"></div>
+            <div class="workitems-list-container">
+              <div class="workitems-list" id="workItemsList"></div>
+            </div>
           </main>
         </div>
       </div>
@@ -313,7 +334,7 @@ export class WorkItemsListView {
   private renderTypeTabs() {
     const container = this.container.querySelector('#workItemsTypeTabs')!;
 
-    if (!this.isGroupedMode || this.groupedItems.length === 0) {
+    if (!this.isGroupedMode || this.groupedItems.length === 0 || this.activeView === 'active') {
       container.innerHTML = '';
       return;
     }
@@ -428,6 +449,11 @@ export class WorkItemsListView {
       return;
     }
 
+    if (this.activeView === 'active') {
+      this.renderActiveViewContent(container);
+      return;
+    }
+
     const items = this.isGroupedMode
       ? (this.groupedItems.find(g => g.type === this.activeTypeTab)?.items || [])
       : this.workItems;
@@ -468,7 +494,220 @@ export class WorkItemsListView {
     });
   }
 
-  private renderWorkItemCard(item: WorkItem): string {
+  private loadActiveOrder(): string[] {
+    try {
+      const raw = localStorage.getItem(ACTIVE_ORDER_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  }
+
+  private saveActiveOrder(order: string[]) {
+    try { localStorage.setItem(ACTIVE_ORDER_KEY, JSON.stringify(order)); } catch {}
+  }
+
+  private buildMergedActiveItems(): Array<{ kind: 'wi' | 'icm'; key: string; sortDate: number; wi?: WorkItem; icm?: any }> {
+    const allWi = this.groupedItems.flatMap(g => g.items);
+    const items: Array<{ kind: 'wi' | 'icm'; key: string; sortDate: number; wi?: WorkItem; icm?: any }> = [
+      ...allWi.map(wi => ({
+        kind: 'wi' as const,
+        key: `wi-${wi.id}`,
+        sortDate: new Date(wi.fields['System.ChangedDate'] || 0).getTime(),
+        wi,
+      })),
+      ...this.activeIncidents.map(icm => ({
+        kind: 'icm' as const,
+        key: `icm-${icm.Id}`,
+        sortDate: new Date(icm.LastModifiedDate || icm.CreatedDate || 0).getTime(),
+        icm,
+      })),
+    ];
+
+    // Apply saved order: items in saved order come first in that sequence,
+    // new items (not in saved order) are appended sorted by date desc.
+    const savedOrder = this.activeItemOrder;
+    const savedSet = new Set(savedOrder);
+    const inOrder = savedOrder
+      .map(key => items.find(i => i.key === key))
+      .filter(Boolean) as typeof items;
+    const notInOrder = items
+      .filter(i => !savedSet.has(i.key))
+      .sort((a, b) => b.sortDate - a.sortDate);
+
+    return [...inOrder, ...notInOrder];
+  }
+
+  private renderActiveViewContent(container: Element) {
+    const merged = this.buildMergedActiveItems();
+
+    if (merged.length === 0) {
+      container.innerHTML = `
+        <div class="workitems-empty">
+          ${getIcon(Activity, 48)}
+          <p>No active items</p>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="active-unified-list" id="activeUnifiedList">
+        ${merged.map(item => item.kind === 'wi'
+          ? this.renderWorkItemCard(item.wi!, true)
+          : this.renderIcmIncidentCard(item.icm!, true)
+        ).join('')}
+      </div>
+    `;
+
+    const list = container.querySelector('#activeUnifiedList')!;
+
+    // Click handlers
+    list.querySelectorAll('.workitem-card[data-item-id]').forEach(card => {
+      card.addEventListener('click', (e) => {
+        if ((e.target as HTMLElement).closest('[data-action="open-ado"]')) return;
+        const itemId = parseInt((card as HTMLElement).dataset.itemId || '0');
+        const wi = merged.find(i => i.kind === 'wi' && i.wi!.id === itemId)?.wi;
+        if (wi) this.onSelectCallback?.(wi);
+      });
+    });
+
+    list.querySelectorAll('[data-action="open-ado"]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const card = (btn as HTMLElement).closest('.workitem-card') as HTMLElement;
+        const itemId = parseInt(card?.dataset.itemId || '0');
+        const wi = merged.find(i => i.kind === 'wi' && i.wi!.id === itemId)?.wi;
+        if (wi) this.onOpenInAdoCallback?.(wi);
+      });
+    });
+
+    // Drag-and-drop
+    this.attachDragAndDrop(list as HTMLElement, merged);
+  }
+
+  private attachDragAndDrop(list: HTMLElement, merged: Array<{ key: string }>) {
+    list.querySelectorAll<HTMLElement>('.active-item-wrapper').forEach(wrapper => {
+      wrapper.addEventListener('mousedown', (e) => {
+        // Don't drag from buttons or interactive elements
+        if ((e.target as HTMLElement).closest('button, a, input')) return;
+
+        const dragKey = wrapper.dataset.activeKey!;
+        const wrapperRect = wrapper.getBoundingClientRect();
+        const startY = e.clientY;
+
+        let ghost: HTMLElement | null = null;
+        let dragStarted = false;
+        let currentDropKey: string | null = null;
+        let insertBefore = true;
+        const placeholder = document.createElement('div');
+        placeholder.className = 'active-drag-placeholder';
+
+        const onMouseMove = (mv: MouseEvent) => {
+          if (!dragStarted && Math.abs(mv.clientY - startY) > 5) {
+            dragStarted = true;
+            ghost = wrapper.cloneNode(true) as HTMLElement;
+            ghost.style.cssText = [
+              'position:fixed',
+              'pointer-events:none',
+              'z-index:9999',
+              `width:${wrapperRect.width}px`,
+              'opacity:0.85',
+              'transform:rotate(1.5deg) scale(1.02)',
+              'box-shadow:0 8px 24px rgba(0,0,0,0.25)',
+              `left:${wrapperRect.left}px`,
+              `top:${wrapperRect.top}px`,
+              'transition:none',
+            ].join(';');
+            document.body.appendChild(ghost);
+            wrapper.classList.add('dragging');
+          }
+
+          if (!dragStarted) return;
+
+          const offsetY = mv.clientY - wrapperRect.top - wrapperRect.height / 2;
+          ghost!.style.top = `${wrapperRect.top + offsetY}px`;
+
+          const siblings = Array.from(
+            list.querySelectorAll<HTMLElement>('.active-item-wrapper:not(.dragging)')
+          );
+          placeholder.remove();
+          currentDropKey = null;
+
+          for (const sib of siblings) {
+            const r = sib.getBoundingClientRect();
+            if (mv.clientY <= r.bottom) {
+              insertBefore = mv.clientY < r.top + r.height / 2;
+              currentDropKey = sib.dataset.activeKey!;
+              insertBefore ? sib.before(placeholder) : sib.after(placeholder);
+              break;
+            }
+          }
+
+          if (!currentDropKey && siblings.length) {
+            const last = siblings[siblings.length - 1];
+            currentDropKey = last.dataset.activeKey!;
+            insertBefore = false;
+            last.after(placeholder);
+          }
+        };
+
+        const onMouseUp = () => {
+          document.removeEventListener('mousemove', onMouseMove);
+          document.removeEventListener('mouseup', onMouseUp);
+          ghost?.remove();
+          placeholder.remove();
+          wrapper.classList.remove('dragging');
+
+          if (!dragStarted || !currentDropKey || currentDropKey === dragKey) return;
+
+          const order = merged.map(i => i.key);
+          const fromIdx = order.indexOf(dragKey);
+          order.splice(fromIdx, 1);
+          const toIdx = order.indexOf(currentDropKey);
+          order.splice(insertBefore ? toIdx : toIdx + 1, 0, dragKey);
+
+          this.activeItemOrder = order;
+          this.saveActiveOrder(order);
+          this.renderWorkItemsList();
+        };
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+      });
+    });
+  }
+
+  private renderIcmIncidentCard(inc: any, draggable = false): string {
+    const severityColors: Record<number, string> = { 1: '#d13438', 2: '#ff8c00', 3: '#ffaa44', 4: '#498205', 25: '#ff8c00' };
+    const stateColors: Record<string, string> = { Active: '#d13438', Mitigated: '#ff8c00', Resolved: '#498205' };
+    const sevColor = severityColors[inc.Severity] || '#666';
+    const stateColor = stateColors[inc.State] || '#666';
+    const timeAgo = inc.LastModifiedDate ? formatTimeAgo(new Date(inc.LastModifiedDate))
+      : inc.CreatedDate ? formatTimeAgo(new Date(inc.CreatedDate)) : '';
+
+    const card = `
+      <div class="workitem-card icm-incident-card">
+        ${draggable ? `<span class="active-drag-handle" title="Drag to reorder">${getIcon(GripVertical, 14)}</span>` : ''}
+        <div class="workitem-card-header">
+          <span class="workitem-type-badge" style="background-color:${sevColor}">Sev ${inc.Severity}</span>
+          <span class="workitem-id">${inc.Id}</span>
+          <span class="workitem-state-badge" style="background-color:${stateColor}">${escapeHtml(inc.State || '')}</span>
+        </div>
+        <div class="workitem-card-title">${escapeHtml(inc.Title || 'Untitled')}</div>
+        <div class="workitem-card-meta">
+          <span class="workitem-assigned">
+            <span class="workitem-assigned-name">${escapeHtml(inc.OwningTeamName || inc.OwningTenantName || '')}</span>
+          </span>
+          ${timeAgo ? `<span class="workitem-time">${timeAgo}</span>` : ''}
+        </div>
+      </div>
+    `;
+
+    return draggable
+      ? `<div class="active-item-wrapper" data-active-key="icm-${inc.Id}">${card}</div>`
+      : card;
+  }
+
+  private renderWorkItemCard(item: WorkItem, draggable = false): string {
     const fields = item.fields;
     const type = fields['System.WorkItemType'] || 'Task';
     const state = fields['System.State'] || 'New';
@@ -499,8 +738,9 @@ export class WorkItemsListView {
 
     const priorityHtml = priority ? `<span class="workitem-priority priority-${priority}" title="Priority ${priority}">${priority}</span>` : '';
 
-    return `
+    const card = `
       <div class="workitem-card" data-item-id="${item.id}">
+        ${draggable ? `<span class="active-drag-handle" title="Drag to reorder">${getIcon(GripVertical, 14)}</span>` : ''}
         <div class="workitem-card-header">
           <button class="workitem-open-ado-btn" data-action="open-ado" title="Open in ADO">
             ${getIcon(ExternalLink, 13)}
@@ -518,6 +758,10 @@ export class WorkItemsListView {
         ${tagsHtml}
       </div>
     `;
+
+    return draggable
+      ? `<div class="active-item-wrapper" data-active-key="wi-${item.id}">${card}</div>`
+      : card;
   }
 
   private getInitials(name: string): string {

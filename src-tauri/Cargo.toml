@@ -30,6 +30,9 @@ tauri-plugin-deep-link = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 
+[target.'cfg(windows)'.dependencies]
+winreg = "0.52"
+
 [profile.release]
 strip = true
 lto = true

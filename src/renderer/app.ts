@@ -1,5 +1,6 @@
 // Import tauri-api to ensure window.electronAPI is set up before use
 import './tauri-api';
+import { getCurrentWindow, type Theme } from '@tauri-apps/api/window';
 
 import type {
   PullRequest,
@@ -175,6 +176,7 @@ class PRReviewApp {
   private taskTerminalSessionIds = new Set<string>();
 
   private activeSection: SectionId = 'workItems';
+  private systemTheme: 'dark' | 'light' = 'dark';
   private pendingTaskHighlight: string | null = null;
   private reviewTabs: ReviewTab[] = [];
   private activeReviewTabId: string = 'home';
@@ -369,6 +371,17 @@ class PRReviewApp {
         createdAt: new Date().toISOString(),
       };
       await window.electronAPI.tasksSave(task);
+
+      // Enable AI automation by default for all new tasks
+      try {
+        const { cronExpression, nextRun } = await window.electronAPI.tasksToggleAi(task.id, true);
+        task.aiAutomated = true;
+        task.cronExpression = cronExpression;
+        task.nextRun = nextRun;
+      } catch (err) {
+        console.warn('[TasksView] Failed to enable AI automation by default:', err);
+      }
+
       return task;
     });
     this.tasksView.onDelete(async (id) => {
@@ -382,6 +395,18 @@ class PRReviewApp {
     });
     this.tasksView.onTest(async (id) => {
       await window.electronAPI.tasksRunNow(id);
+    });
+    this.tasksView.onExport(async (ids) => {
+      const result = await window.electronAPI.tasksExport(ids);
+      Toast.success(`Exported ${result.count} task${result.count !== 1 ? 's' : ''} to ${result.filePath}`);
+      return result;
+    });
+    this.tasksView.onImport(async (jsonContent) => {
+      const result = await window.electronAPI.tasksImport(jsonContent);
+      const msg = `Imported ${result.imported} task${result.imported !== 1 ? 's' : ''}` +
+        (result.skipped > 0 ? ` (${result.skipped} already existed, skipped)` : '');
+      Toast.success(msg);
+      return result;
     });
     this.loadTasks();
 
@@ -406,6 +431,13 @@ class PRReviewApp {
       this.switchSection('terminals');
       // The session-created event will add it to terminalsView; set it active once added
       setTimeout(() => this.terminalsView.setActiveSession(data.sessionId), 300);
+    });
+    window.electronAPI.onTaskApprovalRequest((data) => {
+      this.tasksView.addApprovalRequest(data);
+      this.switchSection('tasks');
+    });
+    window.electronAPI.onTaskApprovalResolved((data) => {
+      this.tasksView.removeApprovalRequest(data.approvalId);
     });
 
     // Initialize DGrep search view
@@ -1525,12 +1557,37 @@ class PRReviewApp {
   }
 
   private initTheme() {
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    this.setTheme(prefersDark ? 'dark' : 'light');
+    const saved = (localStorage.getItem('taskdock-theme-preference') ?? 'auto') as 'dark' | 'light' | 'auto';
+
+    // Use Tauri's native theme API for accurate system theme detection on Windows
+    getCurrentWindow().theme().then((systemTheme) => {
+      this.systemTheme = systemTheme === 'Light' ? 'light' : 'dark';
+      this.applyThemePreference(saved);
+    }).catch(() => {
+      this.applyThemePreference(saved);
+    });
+
+    // Listen for OS theme changes
+    getCurrentWindow().onThemeChanged(({ payload }) => {
+      this.systemTheme = payload === 'Light' ? 'light' : 'dark';
+      if ((localStorage.getItem('taskdock-theme-preference') ?? 'auto') === 'auto') {
+        this.setTheme(this.systemTheme);
+      }
+    }).catch(console.error);
+
+    window.addEventListener('taskdock-theme-change', (e: Event) => {
+      this.applyThemePreference((e as CustomEvent<string>).detail as 'dark' | 'light' | 'auto');
+    });
+  }
+
+  private applyThemePreference(pref: 'dark' | 'light' | 'auto') {
+    const theme = pref === 'auto' ? this.systemTheme : pref;
+    this.setTheme(theme);
   }
 
   private setTheme(theme: 'light' | 'dark') {
     document.documentElement.setAttribute('data-theme', theme);
+    getCurrentWindow().setTheme(theme === 'dark' ? 'Dark' : 'Light').catch(console.error);
   }
 
   // Section switching
@@ -5003,7 +5060,26 @@ After this, respond with a simple text response to greet the user and ask them w
       const view = this.workItemsListView.getActiveView();
       const queryId = this.workItemsListView.getActiveQueryId();
 
-      if (view === 'custom' && queryId) {
+      if (view === 'active') {
+        const wiql = `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.AssignedTo] = @me AND [System.WorkItemType] IN ('Bug', 'Task') AND [System.State] IN ('Active', 'In Progress') ORDER BY [System.ChangedDate] DESC`;
+        const groups = await window.electronAPI.wiGetGroupedByType(this.organization, this.project, wiql);
+
+        let incidents: any[] = [];
+        if (this.icmCurrentUser?.Alias) {
+          try {
+            incidents = await window.electronAPI.icmQueryIncidents(
+              `ContactAlias eq '${this.icmCurrentUser.Alias}' and State ne 'Resolved'`,
+              100, undefined, undefined, 'CreatedDate desc'
+            );
+          } catch {
+            // ICM may not be configured; proceed with just ADO items
+          }
+        }
+
+        this.workItemsListView.setActiveItems(groups, incidents);
+        const wiTotal = groups.reduce((sum: number, g: any) => sum + g.totalCount, 0);
+        this.workItemsListView.setSubtitle(`${wiTotal} work item${wiTotal !== 1 ? 's' : ''}, ${incidents.length} ICM incident${incidents.length !== 1 ? 's' : ''}`);
+      } else if (view === 'custom' && queryId) {
         const query = this.savedQueries.find(q => q.id === queryId);
         let items: WorkItem[];
         if (query) {

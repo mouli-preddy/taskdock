@@ -28,6 +28,7 @@ export class SettingsView {
   private consoleReviewSettings: ConsoleReviewSettings = { ...DEFAULT_CONSOLE_REVIEW_SETTINGS };
   private pollingSettings: PollingSettings = { ...DEFAULT_POLLING_SETTINGS };
   private notificationSettings: NotificationSettings = { ...DEFAULT_NOTIFICATION_SETTINGS };
+  private autostartEnabled: boolean = false;
   private saveCallback: ((settings: ReviewSettings) => Promise<void>) | null = null;
   private testCallback: ((settings: ReviewSettings) => Promise<boolean>) | null = null;
   private consoleSettingsSavedCallback: ((settings: ConsoleReviewSettings) => void) | null = null;
@@ -43,6 +44,7 @@ export class SettingsView {
     this.loadConsoleReviewSettings();
     this.loadPollingSettings();
     this.loadNotificationSettings();
+    this.loadAutostartSetting();
     this.loadPlugins();
     this.loadServices();
     this.loadScrubPatterns();
@@ -245,11 +247,35 @@ export class SettingsView {
           <button class="settings-tab-btn" data-settings-tab="ai">AI</button>
           <button class="settings-tab-btn" data-settings-tab="services">Services</button>
           <button class="settings-tab-btn" data-settings-tab="privacy">Privacy</button>
+          <button class="settings-tab-btn" data-settings-tab="ui">UI</button>
         </div>
         <div class="settings-content">
 
+          <!-- UI Tab -->
+          <div class="settings-tab-content" data-tab-content="ui">
+            <div class="settings-section">
+              <h2 class="settings-section-title">Appearance</h2>
+              <p class="settings-section-description">Choose how TaskDock looks on your device.</p>
+              <div class="theme-selector" id="themeSelector">
+                <button type="button" class="theme-option" data-theme-value="dark" title="Dark">
+                  <span class="theme-option-icon">🌙</span>
+                  <span class="theme-option-label">Dark</span>
+                </button>
+                <button type="button" class="theme-option" data-theme-value="light" title="Light">
+                  <span class="theme-option-icon">☀️</span>
+                  <span class="theme-option-label">Light</span>
+                </button>
+                <button type="button" class="theme-option" data-theme-value="auto" title="Use device setting">
+                  <span class="theme-option-icon">💻</span>
+                  <span class="theme-option-label">Auto</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
           <!-- Connection Tab -->
           <div class="settings-tab-content active" data-tab-content="connection">
+
             <div class="settings-section">
               <h2 class="settings-section-title">Azure DevOps Connection</h2>
               <p class="settings-section-description">Configure your Azure DevOps connection to browse and review pull requests.</p>
@@ -536,6 +562,18 @@ export class SettingsView {
             </div>
 
             <div class="settings-section">
+              <h2 class="settings-section-title">Startup</h2>
+              <p class="settings-section-description">Control whether TaskDock launches automatically when Windows starts.</p>
+
+              <div class="form-group checkbox-group">
+                <label>
+                  <input type="checkbox" id="autostartEnabled">
+                  <span>Launch TaskDock automatically at Windows startup</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="settings-section">
               <h2 class="settings-section-title">Notifications</h2>
               <p class="settings-section-description">Configure native Windows toast notifications for background events.</p>
 
@@ -698,6 +736,27 @@ export class SettingsView {
     this.attachEventListeners();
     this.attachSettingsTabListeners();
     this.attachScrubPatternListeners();
+    this.attachThemeHandlers();
+  }
+
+  private attachThemeHandlers(): void {
+    const saved = (localStorage.getItem('taskdock-theme-preference') ?? 'auto') as string;
+    this.updateThemeButtons(saved);
+
+    this.container.querySelector('#themeSelector')?.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest('[data-theme-value]') as HTMLElement | null;
+      if (!btn) return;
+      const pref = btn.dataset.themeValue!;
+      localStorage.setItem('taskdock-theme-preference', pref);
+      this.updateThemeButtons(pref);
+      window.dispatchEvent(new CustomEvent('taskdock-theme-change', { detail: pref }));
+    });
+  }
+
+  private updateThemeButtons(active: string): void {
+    this.container.querySelectorAll('[data-theme-value]').forEach(btn => {
+      btn.classList.toggle('active', (btn as HTMLElement).dataset.themeValue === active);
+    });
   }
 
   private attachSettingsTabListeners(): void {
@@ -958,6 +1017,10 @@ export class SettingsView {
       };
       await window.electronAPI.setNotificationSettings(this.notificationSettings);
       this.notificationSettingsSavedCallback?.(this.notificationSettings);
+
+      // Save autostart setting
+      this.autostartEnabled = (this.container.querySelector('#autostartEnabled') as HTMLInputElement).checked;
+      await window.electronAPI.setAutostartEnabled(this.autostartEnabled);
 
       Toast.success('All settings saved');
       this.showStatus('connected', 'Settings saved successfully');
@@ -1342,6 +1405,22 @@ export class SettingsView {
         (cb as HTMLInputElement).disabled = true;
       });
     }
+  }
+
+  // Autostart Setting Methods
+
+  private async loadAutostartSetting(): Promise<void> {
+    try {
+      this.autostartEnabled = await window.electronAPI.getAutostartEnabled();
+      this.updateAutostartFormValue();
+    } catch (error) {
+      console.error('Failed to load autostart setting:', error);
+    }
+  }
+
+  private updateAutostartFormValue(): void {
+    const checkbox = this.container.querySelector('#autostartEnabled') as HTMLInputElement;
+    if (checkbox) checkbox.checked = this.autostartEnabled;
   }
 
   private async loadServices(): Promise<void> {

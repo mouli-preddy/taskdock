@@ -100,6 +100,7 @@
 .workitems-layout {
   display: flex;
   flex: 1;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -344,6 +345,7 @@
 /* Work Items Main */
 .workitems-main {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -402,9 +404,15 @@
   color: var(--text-secondary);
 }
 
-/* Scrollable list area */
+/* List area */
 #workItemsList {
+  padding: var(--space-4);
+}
+
+/* Work Items List Container (scroll wrapper) */
+.workitems-list-container {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: var(--space-4);
 }
@@ -414,6 +422,54 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+}
+
+/* Active View — unified list */
+.active-unified-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-left: 24px; /* room for drag handle */
+}
+
+.active-item-wrapper.dragging {
+  opacity: 0.3;
+}
+
+.active-drag-placeholder {
+  height: 3px;
+  background: var(--accent-primary);
+  border-radius: 999px;
+  margin: 2px 0;
+}
+
+/* Drag handle (visual indicator only) */
+.active-drag-handle {
+  position: absolute;
+  top: 50%;
+  left: -20px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  color: var(--text-tertiary);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+  pointer-events: none;
+}
+
+.active-item-wrapper {
+  position: relative;
+  cursor: grab;
+  user-select: none;
+}
+
+.active-item-wrapper:hover .active-drag-handle {
+  opacity: 1;
+}
+
+.icm-incident-card {
+  cursor: pointer;
+  position: relative;
 }
 
 .workitems-loading,

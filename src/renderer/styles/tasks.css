@@ -48,9 +48,250 @@
   color: var(--text-primary);
 }
 
-.tasks-subtitle {
+.tasks-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.tasks-select-btn.active {
+  background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
+  color: var(--accent-primary);
+  border-color: color-mix(in srgb, var(--accent-primary) 40%, transparent);
+}
+
+.tasks-import-btn,
+.tasks-export-btn,
+.tasks-select-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* Selection bar */
+.tasks-selection-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-6);
+  background: color-mix(in srgb, var(--accent-primary) 6%, var(--bg-secondary));
+  border-bottom: 1px solid color-mix(in srgb, var(--accent-primary) 20%, transparent);
   font-size: var(--text-sm);
   color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.tasks-select-all {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  user-select: none;
+}
+
+.tasks-selection-count {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+/* Task selection checkbox */
+.task-select-checkbox-label {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  display: flex;
+  align-items: center;
+  z-index: 1;
+}
+
+.task-select-checkbox-label input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent-primary);
+  cursor: pointer;
+}
+
+/* When in selection mode, offset card content to make room for checkbox */
+.tasks-selection-active .task-card {
+  padding-left: calc(var(--space-4) + 24px);
+}
+
+/* Selected card highlight */
+.task-card-selected {
+  border-color: var(--accent-primary) !important;
+  background: color-mix(in srgb, var(--accent-primary) 6%, var(--bg-secondary)) !important;
+}
+
+
+/* Tabs */
+.tasks-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 var(--space-6);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.tasks-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+  margin-bottom: -1px;
+}
+
+.tasks-tab-btn:hover {
+  color: var(--text-primary);
+}
+
+.tasks-tab-btn.active {
+  color: var(--accent-primary);
+  border-bottom-color: var(--accent-primary);
+}
+
+.tasks-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  padding: 0 5px;
+  height: 18px;
+  background: var(--bg-tertiary);
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+
+.tasks-tab-btn.active .tasks-tab-count {
+  background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
+  color: var(--accent-primary);
+}
+
+/* Approval Request Cards */
+.tasks-approvals {
+  flex-shrink: 0;
+}
+
+.task-approval-card {
+  margin: var(--space-3) var(--space-6) 0;
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--accent-primary) 6%, var(--bg-secondary));
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 35%, transparent);
+  border-left: 3px solid var(--accent-primary);
+  border-radius: var(--radius-md);
+  animation: approval-slide-in 0.2s ease;
+}
+
+@keyframes approval-slide-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.task-approval-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.task-approval-task-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.task-approval-badge {
+  margin-left: auto;
+  padding: 2px 8px;
+  background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
+  color: var(--accent-primary);
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.task-approval-summary {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  line-height: 1.5;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  border-left: 2px solid var(--border-color-emphasis);
+}
+
+.task-approval-question {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.task-approval-context {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  line-height: 1.5;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+}
+
+.task-approval-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.task-approval-btn {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.task-approval-btn:hover {
+  background: var(--bg-elevated);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.task-approval-input-row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.task-approval-instructions {
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.task-approval-instructions:focus {
+  border-color: var(--accent-primary);
 }
 
 /* Input Section */

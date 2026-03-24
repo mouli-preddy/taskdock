@@ -1,5 +1,14 @@
 import { escapeHtml, formatTimeAgo } from '../utils/html-utils.js';
-import { getIcon, Plus, Trash2, Clock, Zap, Loader, Bot, CalendarClock, CalendarX, ChevronDown, ChevronRight, Play, FileText } from '../utils/icons.js';
+import { getIcon, Plus, Trash2, Clock, Zap, Loader, Bot, CalendarClock, CalendarX, ChevronDown, ChevronRight, Play, FileText, Download, Upload } from '../utils/icons.js';
+
+export interface TaskApprovalRequest {
+  taskId: string;
+  approvalId: string;
+  question: string;
+  context: string;
+  options: string[];
+  summary?: string;
+}
 
 export interface TaskRun {
   timestamp: string;
@@ -25,12 +34,16 @@ export interface ScheduledTask {
   runHistory?: TaskRun[];
 }
 
+type TaskTab = 'all' | 'inactive' | 'needs-approval';
+
 export class TasksView {
   private container: HTMLElement;
   private tasks: ScheduledTask[] = [];
+  private activeTab: TaskTab = 'all';
   private parsing = false;
   private togglingAi = new Set<string>();
   private expandedHistory = new Set<string>();
+  private approvalRequests: TaskApprovalRequest[] = [];
 
   private onAddCallback: ((raw: string) => Promise<ScheduledTask>) | null = null;
   private onDeleteCallback: ((id: string) => void) | null = null;
@@ -38,6 +51,10 @@ export class TasksView {
   private onUpdateCallback: ((task: ScheduledTask) => void) | null = null;
   private onTestCallback: ((id: string) => void) | null = null;
   private testingIds = new Set<string>();
+  private selectionMode = false;
+  private selectedIds = new Set<string>();
+  private onExportCallback: ((ids: string[]) => Promise<{ filePath: string; count: number }>) | null = null;
+  private onImportCallback: ((json: string) => Promise<{ imported: number; skipped: number; tasks: any[] }>) | null = null;
 
   constructor(containerId: string) {
     this.container = document.getElementById(containerId)!;
@@ -49,11 +66,12 @@ export class TasksView {
   onToggleAi(callback: (id: string, enabled: boolean) => Promise<{ cronExpression: string; nextRun: string }>) { this.onToggleAiCallback = callback; }
   onUpdate(callback: (task: ScheduledTask) => void) { this.onUpdateCallback = callback; }
   onTest(callback: (id: string) => void) { this.onTestCallback = callback; }
+  onExport(callback: (ids: string[]) => Promise<{ filePath: string; count: number }>) { this.onExportCallback = callback; }
+  onImport(callback: (json: string) => Promise<{ imported: number; skipped: number; tasks: any[] }>) { this.onImportCallback = callback; }
 
   setTasks(tasks: ScheduledTask[]) {
     this.tasks = tasks;
     this.renderList();
-    this.updateSubtitle();
   }
 
   markTaskRan(id: string, lastRun: string, nextRun: string) {
@@ -67,6 +85,18 @@ export class TasksView {
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     el.classList.add('task-highlight');
     setTimeout(() => el.classList.remove('task-highlight'), 2500);
+  }
+
+  addApprovalRequest(request: TaskApprovalRequest) {
+    if (!this.approvalRequests.find(r => r.approvalId === request.approvalId)) {
+      this.approvalRequests.push(request);
+      this.renderApprovalRequests();
+    }
+  }
+
+  removeApprovalRequest(approvalId: string) {
+    this.approvalRequests = this.approvalRequests.filter(r => r.approvalId !== approvalId);
+    this.renderApprovalRequests();
   }
 
   updateTaskResult(id: string, result: string, runCount: number, runHistory: TaskRun[]) {
@@ -85,9 +115,35 @@ export class TasksView {
         <header class="tasks-header">
           <div class="tasks-title">
             <h1>Tasks</h1>
-            <span class="tasks-subtitle">0 scheduled tasks</span>
+          </div>
+          <div class="tasks-header-actions">
+            <button class="btn btn-secondary tasks-select-btn${this.selectionMode ? ' active' : ''}" id="tasksSelectBtn">
+              ${this.selectionMode ? 'Cancel' : 'Select'}
+            </button>
+            <input type="file" id="tasksImportFile" accept=".json" style="display:none" />
+            <button class="btn btn-secondary tasks-import-btn" id="tasksImportBtn">
+              ${getIcon(Upload, 14)} Import
+            </button>
+            ${this.selectionMode && this.selectedIds.size > 0 ? `
+            <button class="btn btn-primary tasks-export-btn" id="tasksExportBtn">
+              ${getIcon(Download, 14)} Export (${this.selectedIds.size})
+            </button>` : ''}
           </div>
         </header>
+        <div class="tasks-selection-bar" id="tasksSelectionBar" style="${this.selectionMode ? '' : 'display:none'}">
+          <label class="tasks-select-all">
+            <input type="checkbox" id="tasksSelectAll"
+              ${this.selectedIds.size > 0 && this.selectedIds.size === this.getFilteredTasks().length ? 'checked' : ''} />
+            Select all
+          </label>
+          <span class="tasks-selection-count">${this.selectedIds.size} selected</span>
+        </div>
+        <div class="tasks-tabs">
+          <button class="tasks-tab-btn ${this.activeTab === 'all' ? 'active' : ''}" data-tab="all">All <span class="tasks-tab-count" data-tab-count="all">0</span></button>
+          <button class="tasks-tab-btn ${this.activeTab === 'inactive' ? 'active' : ''}" data-tab="inactive">Inactive <span class="tasks-tab-count" data-tab-count="inactive">0</span></button>
+          <button class="tasks-tab-btn ${this.activeTab === 'needs-approval' ? 'active' : ''}" data-tab="needs-approval">Need Approvals <span class="tasks-tab-count" data-tab-count="needs-approval">0</span></button>
+        </div>
+        <div class="tasks-approvals" id="tasksApprovals"></div>
         <div class="tasks-input-section">
           <div class="tasks-input-bar">
             <input type="text" id="tasksInput" class="tasks-input"
@@ -126,7 +182,6 @@ export class TasksView {
         const task = await this.onAddCallback(raw);
         this.tasks.unshift(task);
         this.renderList();
-        this.updateSubtitle();
       } catch (err: any) {
         console.error('[TasksView] onAdd error:', err);
         input.value = raw;
@@ -139,6 +194,58 @@ export class TasksView {
 
     addBtn.addEventListener('click', submit);
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+
+    this.container.querySelectorAll('.tasks-tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.activeTab = (btn as HTMLElement).dataset.tab as TaskTab;
+        this.container.querySelectorAll('.tasks-tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.renderList();
+      });
+    });
+
+    // Select mode toggle
+    const selectBtn = this.container.querySelector('#tasksSelectBtn') as HTMLButtonElement;
+    selectBtn?.addEventListener('click', () => {
+      this.selectionMode = !this.selectionMode;
+      if (!this.selectionMode) this.selectedIds.clear();
+      this.render();
+    });
+
+    // Select all
+    const selectAllCb = this.container.querySelector('#tasksSelectAll') as HTMLInputElement;
+    selectAllCb?.addEventListener('change', () => {
+      const filtered = this.getFilteredTasks();
+      if (selectAllCb.checked) filtered.forEach(t => this.selectedIds.add(t.id));
+      else this.selectedIds.clear();
+      this.renderList();
+    });
+
+    // Import file picker
+    const importBtn = this.container.querySelector('#tasksImportBtn') as HTMLButtonElement;
+    const importFile = this.container.querySelector('#tasksImportFile') as HTMLInputElement;
+    importBtn?.addEventListener('click', () => importFile?.click());
+    importFile?.addEventListener('change', async () => {
+      const file = importFile.files?.[0];
+      if (!file || !this.onImportCallback) return;
+      importBtn.disabled = true;
+      try {
+        const text = await file.text();
+        importFile.value = '';
+        const result = await this.onImportCallback(text);
+        this.tasks = result.tasks;
+        this.renderList();
+      } catch (err: any) {
+        this.showError(err?.message || 'Import failed');
+        importFile.value = '';
+      } finally {
+        importBtn.disabled = false;
+      }
+    });
+
+    // Export button (conditionally rendered — wired via updateSelectionUI)
+    const exportBtn = this.container.querySelector('#tasksExportBtn') as HTMLButtonElement | null;
+    exportBtn?.addEventListener('click', () => this.handleExport());
   }
 
   private setParsing(parsing: boolean) {
@@ -176,21 +283,92 @@ export class TasksView {
     return d.toLocaleDateString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
   }
 
+  private getFilteredTasks(): ScheduledTask[] {
+    switch (this.activeTab) {
+      case 'inactive': return this.tasks.filter(t => t.enabled === false);
+      case 'needs-approval': return this.tasks.filter(t => !t.aiAutomated);
+      default: return this.tasks;
+    }
+  }
+
+  private updateTabCounts() {
+    const counts: Record<TaskTab, number> = {
+      all: this.tasks.length,
+      inactive: this.tasks.filter(t => t.enabled === false).length,
+      'needs-approval': this.tasks.filter(t => !t.aiAutomated).length,
+    };
+    for (const [tab, count] of Object.entries(counts)) {
+      const el = this.container.querySelector(`[data-tab-count="${tab}"]`);
+      if (el) el.textContent = String(count);
+    }
+  }
+
+  private updateSelectionUI() {
+    const bar = this.container.querySelector('#tasksSelectionBar') as HTMLElement;
+    const countEl = this.container.querySelector('.tasks-selection-count') as HTMLElement;
+    const selectAllEl = this.container.querySelector('#tasksSelectAll') as HTMLInputElement;
+    const headerActions = this.container.querySelector('.tasks-header-actions') as HTMLElement;
+
+    if (bar) bar.style.display = this.selectionMode ? '' : 'none';
+    if (countEl) countEl.textContent = `${this.selectedIds.size} selected`;
+    if (selectAllEl) {
+      const filtered = this.getFilteredTasks();
+      selectAllEl.checked = filtered.length > 0 && this.selectedIds.size === filtered.length;
+    }
+
+    // Update export button in header
+    const existing = headerActions?.querySelector('.tasks-export-btn') as HTMLElement | null;
+    if (this.selectionMode && this.selectedIds.size > 0) {
+      if (existing) {
+        existing.innerHTML = `${getIcon(Download, 14)} Export (${this.selectedIds.size})`;
+      } else if (headerActions) {
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-primary tasks-export-btn';
+        btn.id = 'tasksExportBtn';
+        btn.innerHTML = `${getIcon(Download, 14)} Export (${this.selectedIds.size})`;
+        btn.addEventListener('click', () => this.handleExport());
+        headerActions.appendChild(btn);
+      }
+    } else if (existing) {
+      existing.remove();
+    }
+  }
+
+  private async handleExport() {
+    if (!this.onExportCallback || this.selectedIds.size === 0) return;
+    const ids = Array.from(this.selectedIds);
+    await this.onExportCallback(ids);
+    this.selectionMode = false;
+    this.selectedIds.clear();
+    this.render();
+  }
+
   private renderList() {
     const container = this.container.querySelector('#tasksList')!;
     if (!container) return;
 
-    if (this.tasks.length === 0) {
+    this.updateTabCounts();
+
+    const filtered = this.getFilteredTasks();
+
+    const emptyMessages: Record<TaskTab, [string, string]> = {
+      all: ['No scheduled tasks yet.', 'Use the input above to add one.'],
+      inactive: ['No inactive tasks.', 'Paused tasks will appear here.'],
+      'needs-approval': ['All tasks are AI-automated.', 'Tasks without AI automation will appear here.'],
+    };
+
+    if (filtered.length === 0) {
+      const [msg, hint] = emptyMessages[this.activeTab];
       container.innerHTML = `
         <div class="tasks-empty">
           ${getIcon(Zap, 48)}
-          <p>No scheduled tasks yet.</p>
-          <p class="tasks-empty-hint">Use the input above to add one.</p>
+          <p>${msg}</p>
+          <p class="tasks-empty-hint">${hint}</p>
         </div>`;
       return;
     }
 
-    container.innerHTML = this.tasks.map(task => {
+    container.innerHTML = filtered.map(task => {
       const aiOn = !!task.aiAutomated;
       const enabled = task.enabled !== false;
       const toggling = this.togglingAi.has(task.id);
@@ -260,9 +438,16 @@ export class TasksView {
           </div>`;
       })() : '';
 
+      const selected = this.selectedIds.has(task.id);
       return `
-        <div class="task-card ${aiOn ? 'task-card-ai' : ''} ${!enabled ? 'task-card-disabled' : ''}"
+        <div class="task-card ${aiOn ? 'task-card-ai' : ''} ${!enabled ? 'task-card-disabled' : ''} ${selected ? 'task-card-selected' : ''}"
              data-id="${escapeHtml(task.id)}">
+
+          ${this.selectionMode ? `
+          <label class="task-select-checkbox-label" title="Select task">
+            <input type="checkbox" class="task-select-checkbox" data-id="${escapeHtml(task.id)}"
+              ${selected ? 'checked' : ''} />
+          </label>` : ''}
 
           <!-- Enabled toggle in top-right -->
           <div class="task-enabled-toggle" title="${enabled ? 'Enabled — click to pause' : 'Paused — click to enable'}">
@@ -288,7 +473,7 @@ export class TasksView {
               ${runCountHtml}
             </div>
             <div class="task-field">
-              <span class="task-field-label">${getIcon(Zap, 13)} What to do</span>
+              <span class="task-field-label">${getIcon(Zap, 13)} AI Prompt</span>
               <span class="task-field-value task-action-display" data-id="${escapeHtml(task.id)}"
                 title="Click to edit">${escapeHtml(task.action)}</span>
               <textarea class="task-action-input" data-id="${escapeHtml(task.id)}"
@@ -330,6 +515,27 @@ export class TasksView {
           </button>
         </div>`;
     }).join('');
+
+    if (this.selectionMode) {
+      container.classList.add('tasks-selection-active');
+    } else {
+      container.classList.remove('tasks-selection-active');
+    }
+
+    // Task selection checkboxes
+    container.querySelectorAll('.task-select-checkbox').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const id = (cb as HTMLElement).dataset.id!;
+        if ((cb as HTMLInputElement).checked) this.selectedIds.add(id);
+        else this.selectedIds.delete(id);
+        const card = container.querySelector(`.task-card[data-id="${id}"]`) as HTMLElement;
+        if (card) {
+          if ((cb as HTMLInputElement).checked) card.classList.add('task-card-selected');
+          else card.classList.remove('task-card-selected');
+        }
+        this.updateSelectionUI();
+      });
+    });
 
     // Enabled toggle
     container.querySelectorAll('.task-enabled-checkbox').forEach(cb => {
@@ -509,18 +715,57 @@ export class TasksView {
         this.tasks = this.tasks.filter(t => t.id !== id);
         this.expandedHistory.delete(id);
         this.renderList();
-        this.updateSubtitle();
         this.onDeleteCallback?.(id);
       });
     });
   }
 
-  private updateSubtitle() {
-    const el = this.container.querySelector('.tasks-subtitle');
-    if (el) {
-      const n = this.tasks.length;
-      el.textContent = `${n} scheduled task${n === 1 ? '' : 's'}`;
+  private renderApprovalRequests() {
+    const container = this.container.querySelector('#tasksApprovals') as HTMLElement;
+    if (!container) return;
+
+    if (this.approvalRequests.length === 0) {
+      container.innerHTML = '';
+      return;
     }
+
+    container.innerHTML = this.approvalRequests.map(req => {
+      const task = this.tasks.find(t => t.id === req.taskId);
+      const taskTitle = task?.title || 'Task';
+      return `
+        <div class="task-approval-card" data-approval-id="${escapeHtml(req.approvalId)}">
+          <div class="task-approval-header">
+            ${getIcon(Bot, 15)}
+            <span class="task-approval-task-name">${escapeHtml(taskTitle)}</span>
+            <span class="task-approval-badge">Needs Approval</span>
+          </div>
+          ${req.summary ? `<p class="task-approval-summary">${escapeHtml(req.summary)}</p>` : ''}
+          <p class="task-approval-question">${escapeHtml(req.question)}</p>
+          ${req.context ? `<p class="task-approval-context">${escapeHtml(req.context)}</p>` : ''}
+          <div class="task-approval-options">
+            ${req.options.map(opt => `
+              <button class="btn task-approval-btn" data-choice="${escapeHtml(opt)}">${escapeHtml(opt)}</button>
+            `).join('')}
+          </div>
+          <div class="task-approval-input-row">
+            <input type="text" class="task-approval-instructions" placeholder="Add instructions (optional)…" />
+          </div>
+        </div>`;
+    }).join('');
+
+    container.querySelectorAll('.task-approval-card').forEach(card => {
+      const approvalId = (card as HTMLElement).dataset.approvalId!;
+      const instructionsInput = card.querySelector('.task-approval-instructions') as HTMLInputElement;
+
+      card.querySelectorAll('.task-approval-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const choice = (btn as HTMLElement).dataset.choice!;
+          const instructions = instructionsInput?.value.trim() || '';
+          window.electronAPI.tasksRespondApproval(approvalId, choice, instructions);
+          this.removeApprovalRequest(approvalId);
+        });
+      });
+    });
   }
 
   private showLogModal(rawContent: string) {

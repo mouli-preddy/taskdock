@@ -12,6 +12,8 @@
     "core:window:allow-close",
     "core:window:allow-destroy",
     "core:window:allow-set-title",
+    "core:window:allow-set-theme",
+    "core:window:allow-theme",
     "core:webview:allow-create-webview-window",
     "shell:allow-open",
     "dialog:allow-open",

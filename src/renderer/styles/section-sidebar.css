@@ -44,11 +44,12 @@
 
 .section-sidebar-item.active {
   color: var(--text-primary);
-  background: var(--bg-tertiary);
+  background: rgba(101, 76, 245, 0.12);
+  box-shadow: inset 3px 0 0 var(--accent-primary);
 }
 
 .section-sidebar-item.active:hover {
-  background: var(--bg-active);
+  background: rgba(101, 76, 245, 0.18);
 }
 
 .section-icon {
