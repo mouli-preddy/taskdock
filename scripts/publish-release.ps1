@@ -2,7 +2,8 @@
 # Usage: .\scripts\publish-release.ps1
 
 $ErrorActionPreference = 'Stop'
-$repo = "poreddy_microsoft/taskdock"
+$privateRepo = "poreddy_microsoft/taskdock"   # private enterprise repo (code)
+$publicRepo  = "mouli-preddy/taskdock"        # public repo (releases only)
 
 # Read version from tauri.conf.json
 $tauriConf = Get-Content "src-tauri/tauri.conf.json" | ConvertFrom-Json
@@ -83,7 +84,7 @@ $jsonObj = [ordered]@{
     platforms = [ordered]@{
         "windows-x86_64" = [ordered]@{
             signature = $sig
-            url       = "https://github.com/$repo/releases/download/$tag/$nsisName"
+            url       = "https://github.com/$publicRepo/releases/download/$tag/$nsisName"
         }
     }
 }
@@ -91,22 +92,22 @@ $json = "$bundle\latest.json"
 $jsonObj | ConvertTo-Json -Depth 5 | Set-Content $json -Encoding UTF8
 Write-Host "Generated latest.json" -ForegroundColor Gray
 
-# Publish to GitHub
-Write-Host "Publishing $tag to GitHub..." -ForegroundColor Cyan
-
-gh release delete $tag -R $repo --yes 2>$null
+# Tag private repo (code history)
+Write-Host "Tagging private repo..." -ForegroundColor Cyan
 git tag -d $tag 2>$null
 git push origin ":refs/tags/$tag" 2>$null
-
 git tag $tag
 git push origin $tag
 
+# Publish release to public repo (installers only — no code)
+Write-Host "Publishing $tag to public releases repo..." -ForegroundColor Cyan
+gh release delete $tag -R $publicRepo --yes 2>$null
 gh release create $tag `
-    --repo $repo `
+    --repo $publicRepo `
     --title "TaskDock $tag" `
     --generate-notes `
     "$nsis" "$msi" "$json"
 
 Write-Host ""
 Write-Host "TaskDock $tag released!" -ForegroundColor Green
-Write-Host "https://github.com/$repo/releases/tag/$tag"
+Write-Host "https://github.com/$publicRepo/releases/tag/$tag"
