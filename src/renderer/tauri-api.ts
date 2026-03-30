@@ -796,6 +796,22 @@ export const tauriAPI = {
   onDgrepAIImproveDisplayProgress: (callback: (event: any) => void) => subscribe('dgrep:ai:improve-display-progress', callback),
   onDgrepAIImproveDisplayComplete: (callback: (event: any) => void) => subscribe('dgrep:ai:improve-display-complete', callback),
 
+  // Auto-updater (Tauri native)
+  checkForUpdate: async (): Promise<string | null> => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke<string | null>('check_for_update');
+  },
+  installUpdate: async (): Promise<void> => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke('install_update');
+  },
+  onUpdateAvailable: (callback: (version: string) => void): (() => void) => {
+    import('@tauri-apps/api/event').then(({ listen }) => {
+      listen<string>('update-available', (event) => callback(event.payload));
+    });
+    return () => {};
+  },
+
   // Task scheduler events
   onTaskRan: (callback: (event: any) => void) => subscribe('task:ran', callback),
   onTaskCompleted: (callback: (event: any) => void) => subscribe('task:completed', callback),

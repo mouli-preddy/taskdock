@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build renderer
+        run: npm run build:renderer
+
+      - name: Build Node.js sidecar
+        run: npm run build:sidecar
+
+      - name: Build Tauri app (sign + bundle)
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        # Override beforeBuildCommand to avoid rebuilding renderer+sidecar again
+        run: npx tauri build --bundles nsis,msi --config "{\"build\":{\"beforeBuildCommand\":\"\"}}"
+
+      - name: Locate build artifacts
+        id: artifacts
+        shell: pwsh
+        run: |
+          $bundle = "src-tauri/target/release/bundle"
+          $nsis = (Get-ChildItem "$bundle/nsis/*.exe" | Select-Object -First 1).FullName
+          $msi  = (Get-ChildItem "$bundle/msi/*.msi"  | Select-Object -First 1).FullName
+          $json = (Get-ChildItem "$bundle" -Recurse -Filter "latest.json" | Select-Object -First 1).FullName
+          echo "NSIS=$nsis" >> $env:GITHUB_OUTPUT
+          echo "MSI=$msi"   >> $env:GITHUB_OUTPUT
+          echo "JSON=$json"  >> $env:GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: TaskDock ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            ${{ steps.artifacts.outputs.NSIS }}
+            ${{ steps.artifacts.outputs.MSI }}
+            ${{ steps.artifacts.outputs.JSON }}

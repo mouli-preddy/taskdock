@@ -298,6 +298,31 @@ class PRReviewApp {
     // Check if first launch
     this.checkFirstLaunch();
 
+    // Listen for auto-update notifications from Tauri
+    window.electronAPI.onUpdateAvailable((version: string) => {
+      const toastContainer = document.getElementById('toastContainer');
+      if (!toastContainer) return;
+      const toast = document.createElement('div');
+      toast.className = 'toast info';
+      toast.style.cssText = 'min-width:340px;display:flex;align-items:center;gap:8px;';
+      toast.innerHTML = `
+        <span class="toast-message" style="flex:1;">Update v${version} is available</span>
+        <button id="updateInstallBtn" style="white-space:nowrap;padding:4px 10px;border-radius:4px;border:none;background:var(--accent-primary,#0078d4);color:#fff;cursor:pointer;font-size:12px;">Install &amp; Restart</button>
+      `;
+      toastContainer.appendChild(toast);
+      toast.querySelector('#updateInstallBtn')?.addEventListener('click', async () => {
+        const btn = toast.querySelector('#updateInstallBtn') as HTMLButtonElement;
+        btn.textContent = 'Downloading...';
+        btn.disabled = true;
+        try {
+          await window.electronAPI.installUpdate();
+        } catch (err) {
+          toast.remove();
+          Toast.show('Update failed: ' + (err as Error).message, 'error');
+        }
+      });
+    });
+
     initDeepLinkHandler(this).catch(e => {
       console.error('[deep-link] Failed to initialize:', e);
     });
@@ -893,12 +918,6 @@ class PRReviewApp {
     // Theme change from system
     window.electronAPI.onThemeChange((isDark) => {
       this.setTheme(isDark ? 'dark' : 'light');
-    });
-
-    // Setup modal "Go to Settings" button
-    document.getElementById('goToSettingsBtn')?.addEventListener('click', () => {
-      document.getElementById('setupModalBackdrop')?.classList.add('hidden');
-      this.switchSection('settings');
     });
 
     // Apply Changes Panel callbacks
@@ -2370,6 +2389,29 @@ class PRReviewApp {
     this.applyChangesPanel.setState({ queueState, canApply });
   }
 
+  // Parse an ADO URL to extract organization and project (for setup modal)
+  private parseAdoUrlForSetup(url: string): { organization: string; project: string } | null {
+    // https://dev.azure.com/{org}/{project}/...
+    const devAzureMatch = url.match(/https?:\/\/dev\.azure\.com\/([^/?#]+)\/([^/?#_][^/?#]*?)(?:\/|$)/);
+    if (devAzureMatch) {
+      return { organization: devAzureMatch[1], project: devAzureMatch[2] };
+    }
+
+    // https://{org}.visualstudio.com/DefaultCollection/{project}/...
+    const vsDefaultCollectionMatch = url.match(/https?:\/\/([^./?#]+)\.visualstudio\.com\/DefaultCollection\/([^/?#_][^/?#]*?)(?:\/|$)/i);
+    if (vsDefaultCollectionMatch) {
+      return { organization: vsDefaultCollectionMatch[1], project: vsDefaultCollectionMatch[2] };
+    }
+
+    // https://{org}.visualstudio.com/{project}/...
+    const vsMatch = url.match(/https?:\/\/([^./?#]+)\.visualstudio\.com\/([^/?#_][^/?#]*?)(?:\/|$)/i);
+    if (vsMatch) {
+      return { organization: vsMatch[1], project: vsMatch[2] };
+    }
+
+    return null;
+  }
+
   // First launch flow
   private async checkFirstLaunch() {
     let isConfigured = false;
@@ -2397,31 +2439,28 @@ class PRReviewApp {
     // Load generated file patterns from console review settings
     await this.loadGeneratedFilePatterns();
 
-    if (!isConfigured) {
-      // Show setup modal
-      document.getElementById('setupModalBackdrop')?.classList.remove('hidden');
-    } else {
-      // Load config and initialize
-      try {
-        const config = await window.electronAPI.loadConfig();
-        if (config) {
-          this.organization = config.ado.organization;
-          this.project = config.ado.project;
-          this.settingsView.setSettings({
-            ...config.ado,
-            anthropicApiKey: config.anthropic?.apiKey || '',
-          });
-        }
-      } catch {
-        // Tauri native invoke may not be available, fall back to bridge settings
-        try {
-          const settings = await window.electronAPI.getSettings() as Record<string, unknown> | null;
-          if (settings?.organization && settings?.project) {
-            this.organization = settings.organization as string;
-            this.project = settings.project as string;
-          }
-        } catch { /* unable to load settings */ }
+    // Load config and initialize (always, regardless of configured state)
+    try {
+      const config = await window.electronAPI.loadConfig();
+      if (config) {
+        this.organization = config.ado.organization;
+        this.project = config.ado.project;
+        this.settingsView.setSettings({
+          ...config.ado,
+          anthropicApiKey: config.anthropic?.apiKey || '',
+        });
       }
+    } catch {
+      // Tauri native invoke may not be available, fall back to bridge settings
+      try {
+        const settings = await window.electronAPI.getSettings() as Record<string, unknown> | null;
+        if (settings?.organization && settings?.project) {
+          this.organization = settings.organization as string;
+          this.project = settings.project as string;
+        }
+      } catch { /* unable to load settings */ }
+    }
+    if (isConfigured) {
       await this.loadPRLists();
     }
   }

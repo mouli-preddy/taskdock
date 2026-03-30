@@ -282,6 +282,12 @@ export class SettingsView {
 
               <form class="settings-form" id="settingsForm">
                 <div class="form-group">
+                  <label for="settingsAdoUrl">Quick Setup from URL</label>
+                  <input type="text" id="settingsAdoUrl" placeholder="https://org.visualstudio.com/Project/_workitems/edit/123" autocomplete="off" spellcheck="false">
+                  <span class="form-hint" id="settingsAdoUrlHint">Paste any work item or repo URL to auto-fill organization and project.</span>
+                </div>
+
+                <div class="form-group">
                   <label for="settingsOrganization">Organization</label>
                   <input type="text" id="settingsOrganization" placeholder="e.g., mycompany" required>
                   <span class="form-hint">Your Azure DevOps organization name</span>
@@ -574,6 +580,15 @@ export class SettingsView {
             </div>
 
             <div class="settings-section">
+              <h2 class="settings-section-title">Updates</h2>
+              <p class="settings-section-description">TaskDock checks for updates automatically on startup and every 24 hours.</p>
+              <div class="form-group" style="display:flex;align-items:center;gap:12px;">
+                <button class="btn btn-secondary" id="checkForUpdatesBtn">Check for Updates</button>
+                <span id="updateStatusMsg" style="font-size:13px;color:var(--text-secondary);"></span>
+              </div>
+            </div>
+
+            <div class="settings-section">
               <h2 class="settings-section-title">Notifications</h2>
               <p class="settings-section-description">Configure native Windows toast notifications for background events.</p>
 
@@ -810,6 +825,29 @@ export class SettingsView {
       this.settings = { ...this.settings, anthropicApiKey: anthropicKeyInput.value.trim() };
     });
 
+    // Quick Setup from URL
+    const adoUrlInput = this.container.querySelector('#settingsAdoUrl') as HTMLInputElement;
+    const adoUrlHint = this.container.querySelector('#settingsAdoUrlHint') as HTMLElement;
+    adoUrlInput?.addEventListener('input', () => {
+      const url = adoUrlInput.value.trim();
+      if (!url) {
+        adoUrlHint.textContent = 'Paste any work item or repo URL to auto-fill organization and project.';
+        adoUrlHint.style.color = '';
+        return;
+      }
+      const parsed = this.parseAdoUrl(url);
+      if (parsed) {
+        (this.container.querySelector('#settingsOrganization') as HTMLInputElement).value = parsed.organization;
+        (this.container.querySelector('#settingsProject') as HTMLInputElement).value = parsed.project;
+        this.settings = { ...this.settings, organization: parsed.organization, project: parsed.project };
+        adoUrlHint.textContent = `Detected: ${parsed.organization} / ${parsed.project}`;
+        adoUrlHint.style.color = 'var(--color-success, #22c55e)';
+      } else {
+        adoUrlHint.textContent = 'Could not parse org and project from that URL.';
+        adoUrlHint.style.color = 'var(--color-error, #ef4444)';
+      }
+    });
+
     ['settingsOrganization', 'settingsProject', 'settingsPat'].forEach(id => {
       const input = this.container.querySelector(`#${id}`) as HTMLInputElement;
       input.addEventListener('input', () => {
@@ -836,6 +874,31 @@ export class SettingsView {
     // Console review settings
     const addRepoBtn = this.container.querySelector('#addRepoBtn');
     addRepoBtn?.addEventListener('click', () => this.handleAddRepo());
+
+    // Check for updates button
+    this.container.querySelector('#checkForUpdatesBtn')?.addEventListener('click', async () => {
+      const btn = this.container.querySelector('#checkForUpdatesBtn') as HTMLButtonElement;
+      const msg = this.container.querySelector('#updateStatusMsg') as HTMLElement;
+      btn.disabled = true;
+      btn.textContent = 'Checking...';
+      msg.textContent = '';
+      try {
+        const version = await window.electronAPI.checkForUpdate();
+        if (version) {
+          msg.textContent = `v${version} is available!`;
+          msg.style.color = 'var(--accent-primary, #0078d4)';
+        } else {
+          msg.textContent = 'You are on the latest version.';
+          msg.style.color = '';
+        }
+      } catch {
+        msg.textContent = 'Could not check for updates.';
+        msg.style.color = 'var(--color-error, #d83b01)';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Check for Updates';
+      }
+    });
 
     // Global save button
     const saveAllBtn = this.container.querySelector('#saveAllSettingsBtn');
@@ -925,6 +988,14 @@ export class SettingsView {
     (this.container.querySelector('#settingsProject') as HTMLInputElement).value = this.settings.project;
     (this.container.querySelector('#settingsPat') as HTMLInputElement).value = this.settings.pat;
     (this.container.querySelector('#settingsAnthropicApiKey') as HTMLInputElement).value = this.settings.anthropicApiKey || '';
+    // Reset the quick-setup URL field so it doesn't show a stale value
+    const adoUrlInput = this.container.querySelector('#settingsAdoUrl') as HTMLInputElement;
+    if (adoUrlInput) adoUrlInput.value = '';
+    const adoUrlHint = this.container.querySelector('#settingsAdoUrlHint') as HTMLElement;
+    if (adoUrlHint) {
+      adoUrlHint.textContent = 'Paste any work item or repo URL to auto-fill organization and project.';
+      adoUrlHint.style.color = '';
+    }
   }
 
   private async handleSaveAll() {
@@ -1257,6 +1328,22 @@ export class SettingsView {
         await this.saveMonitoredReposSettings();
       });
     });
+  }
+
+  private parseAdoUrl(url: string): { organization: string; project: string } | null {
+    // https://dev.azure.com/{org}/{project}/...
+    const devAzureMatch = url.match(/https?:\/\/dev\.azure\.com\/([^/?#]+)\/([^/?#_][^/?#]*?)(?:\/|$)/);
+    if (devAzureMatch) return { organization: devAzureMatch[1], project: devAzureMatch[2] };
+
+    // https://{org}.visualstudio.com/DefaultCollection/{project}/...
+    const vsDefaultMatch = url.match(/https?:\/\/([^./?#]+)\.visualstudio\.com\/DefaultCollection\/([^/?#_][^/?#]*?)(?:\/|$)/i);
+    if (vsDefaultMatch) return { organization: vsDefaultMatch[1], project: vsDefaultMatch[2] };
+
+    // https://{org}.visualstudio.com/{project}/...
+    const vsMatch = url.match(/https?:\/\/([^./?#]+)\.visualstudio\.com\/([^/?#_][^/?#]*?)(?:\/|$)/i);
+    if (vsMatch) return { organization: vsMatch[1], project: vsMatch[2] };
+
+    return null;
   }
 
   private parseAdoRepoUrl(url: string): { organization: string; project: string; repository: string } | null {

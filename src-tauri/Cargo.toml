@@ -1,6 +1,6 @@
 [package]
 name = "taskdock"
-version = "1.0.0"
+version = "0.0.5"
 description = "TaskDock - Desktop productivity app with PR Review and more"
 authors = ["you"]
 license = "MIT"
@@ -29,6 +29,7 @@ tauri-plugin-store = "2"
 tauri-plugin-deep-link = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+tauri-plugin-updater = "2"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"

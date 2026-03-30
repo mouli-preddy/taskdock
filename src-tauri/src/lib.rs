@@ -211,6 +211,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             commands::autostart::get_autostart_enabled,
             commands::autostart::set_autostart_enabled,
@@ -231,6 +232,8 @@ pub fn run() {
             commands::storage::set_scrub_patterns,
             commands::file_io::read_review_output,
             commands::deep_link::get_initial_deep_link,
+            commands::updater::check_for_update,
+            commands::updater::install_update,
         ])
         .setup(|app| {
             // Register deep-link schemes for development
@@ -280,6 +283,28 @@ pub fn run() {
                 .build();
 
             app.handle().plugin(log_plugin)?;
+
+            // Background update check — runs 3s after startup, then every 24 hours
+            let app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                use tauri::Emitter;
+                use tauri_plugin_updater::UpdaterExt;
+                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                loop {
+                    if let Ok(updater) = app_handle.updater() {
+                        match updater.check().await {
+                            Ok(Some(update)) => {
+                                log::info!("Update available: {}", update.version);
+                                let _ = app_handle.emit("update-available", update.version.to_string());
+                            }
+                            Ok(None) => log::debug!("App is up to date"),
+                            Err(e) => log::warn!("Update check failed: {}", e),
+                        }
+                    }
+                    tokio::time::sleep(std::time::Duration::from_secs(86400)).await;
+                }
+            });
+
             Ok(())
         })
         .on_window_event(|_window, event| {

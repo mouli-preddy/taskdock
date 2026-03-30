@@ -603,6 +603,11 @@ export interface ElectronAPI {
   onTaskApprovalRequest: (callback: (event: { taskId: string; approvalId: string; question: string; context: string; options: string[]; summary?: string }) => void) => () => void;
   onTaskApprovalResolved: (callback: (event: { taskId: string; approvalId: string; choice: string }) => void) => () => void;
   tasksRespondApproval: (approvalId: string, choice: string, instructions: string) => Promise<void>;
+
+  // Auto-updater
+  checkForUpdate: () => Promise<string | null>;
+  installUpdate: () => Promise<void>;
+  onUpdateAvailable: (callback: (version: string) => void) => () => void;
 }
 
 declare global {

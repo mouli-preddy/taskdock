@@ -13,7 +13,8 @@
     "build:bundle": "esbuild src-backend/bridge.ts --bundle --platform=node --target=node20 --outfile=dist/sidecar/bridge.cjs --format=cjs --external:@lydell/node-pty --external:@lydell/node-pty-win32-x64 --external:playwright-core",
     "build:sidecar": "node scripts/build-sidecar.js",
     "typecheck": "tsc --noEmit",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "version:bump": "node scripts/bump-version.mjs"
   },
   "pkg": {
     "scripts": [
