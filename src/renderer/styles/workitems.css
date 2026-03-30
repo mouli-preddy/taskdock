@@ -598,6 +598,29 @@
   color: white;
 }
 
+.workitem-open-icm-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.workitem-open-icm-btn:hover {
+  background: var(--color-accent, #007acc);
+  border-color: var(--color-accent, #007acc);
+  color: white;
+}
+
 .workitem-state-badge.small {
   padding: 1px 4px;
   font-size: 10px;

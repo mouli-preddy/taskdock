@@ -5065,15 +5065,16 @@ After this, respond with a simple text response to greet the user and ask them w
         const groups = await window.electronAPI.wiGetGroupedByType(this.organization, this.project, wiql);
 
         let incidents: any[] = [];
-        if (this.icmCurrentUser?.Alias) {
-          try {
+        try {
+          await this.initIcmUser();
+          if (this.icmCurrentUser?.Alias) {
             incidents = await window.electronAPI.icmQueryIncidents(
-              `ContactAlias eq '${this.icmCurrentUser.Alias}' and State ne 'Resolved'`,
+              `ContactAlias eq '${this.icmCurrentUser.Alias}' and State eq 'Active'`,
               100, undefined, undefined, 'CreatedDate desc'
             );
-          } catch {
-            // ICM may not be configured; proceed with just ADO items
           }
+        } catch {
+          // ICM may not be configured; proceed with just ADO items
         }
 
         this.workItemsListView.setActiveItems(groups, incidents);

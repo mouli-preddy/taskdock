@@ -580,6 +580,18 @@ export class WorkItemsListView {
       });
     });
 
+    list.querySelectorAll('[data-action="open-icm"]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const card = (btn as HTMLElement).closest('.workitem-card') as HTMLElement;
+        const icmId = card?.dataset.icmId;
+        if (icmId) {
+          const url = `https://portal.microsofticm.com/imp/v3/incidents/details/${icmId}/home`;
+          window.electronAPI.openExternal(url);
+        }
+      });
+    });
+
     // Drag-and-drop
     this.attachDragAndDrop(list as HTMLElement, merged);
   }
@@ -685,9 +697,13 @@ export class WorkItemsListView {
       : inc.CreatedDate ? formatTimeAgo(new Date(inc.CreatedDate)) : '';
 
     const card = `
-      <div class="workitem-card icm-incident-card">
+      <div class="workitem-card icm-incident-card" data-icm-id="${inc.Id}">
         ${draggable ? `<span class="active-drag-handle" title="Drag to reorder">${getIcon(GripVertical, 14)}</span>` : ''}
         <div class="workitem-card-header">
+          <button class="workitem-open-icm-btn" data-action="open-icm" title="Open in ICM">
+            ${getIcon(ExternalLink, 13)}
+            Open in ICM
+          </button>
           <span class="workitem-type-badge" style="background-color:${sevColor}">Sev ${inc.Severity}</span>
           <span class="workitem-id">${inc.Id}</span>
           <span class="workitem-state-badge" style="background-color:${stateColor}">${escapeHtml(inc.State || '')}</span>
