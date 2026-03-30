@@ -196,6 +196,18 @@ For more details, see the [WorkIQ documentation](https://learn.microsoft.com/en-
 
 ## Installation
 
+### Quick Install (Windows)
+
+Run this in PowerShell to download and install the latest release:
+
+```powershell
+irm https://raw.githubusercontent.com/poreddy_microsoft/taskdock/main/install.ps1 | iex
+```
+
+Or download the installer directly from the [latest release](https://github.com/poreddy_microsoft/taskdock/releases/latest).
+
+### Build from Source
+
 ```bash
 # Install dependencies
 npm install
@@ -205,9 +217,6 @@ npm run dev
 
 # Build for production
 npm run build
-
-# Run production build
-npm run start
 ```
 
 ## Authentication
