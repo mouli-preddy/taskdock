@@ -602,7 +602,7 @@ async function startPhase2(taskId: string, logFile: string, choice: string, inst
 
   const { default: Anthropic } = await import('@anthropic-ai/sdk');
   const config = loadConfig();
-  const client = new Anthropic({ apiKey: config?.anthropic?.apiKey });
+  const client = new Anthropic({ apiKey: config?.anthropic?.apiKey || undefined });
   const systemPrompt = buildSystemPrompt(config?.ado?.organization || '', config?.ado?.project || '');
 
   let phase1Results = '';
@@ -784,7 +784,7 @@ async function runScheduledTask(task: any): Promise<string> {
   try {
     const { default: Anthropic } = await import('@anthropic-ai/sdk');
     const config = loadConfig();
-    const client = new Anthropic({ apiKey: config?.anthropic?.apiKey });
+    const client = new Anthropic({ apiKey: config?.anthropic?.apiKey || undefined });
 
     const systemPrompt = buildSystemPrompt(config?.ado?.organization || '', config?.ado?.project || '');
     const now = new Date().toLocaleString();
