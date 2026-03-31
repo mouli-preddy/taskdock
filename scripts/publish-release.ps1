@@ -94,8 +94,8 @@ Write-Host "Generated latest.json" -ForegroundColor Gray
 
 # Tag private repo (code history)
 Write-Host "Tagging private repo..." -ForegroundColor Cyan
-git tag -d $tag 2>$null
-git push origin ":refs/tags/$tag" 2>$null
+try { git tag -d $tag 2>&1 | Out-Null } catch {}
+try { git push origin ":refs/tags/$tag" 2>&1 | Out-Null } catch {}
 git tag $tag
 git push origin $tag
 
