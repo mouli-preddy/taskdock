@@ -135,6 +135,16 @@ export class WorkItemsListView {
     this.renderWorkItemsList();
   }
 
+  setActiveItems(groups: WorkItemGroup[], incidents: any[]) {
+    this.groupedItems = groups;
+    this.activeIncidents = incidents;
+    this.isGroupedMode = true;
+    this.loading = false;
+    this.activeItemOrder = this.loadActiveOrder(); // refresh from storage on each load
+    this.renderTypeTabs();
+    this.renderWorkItemsList();
+  }
+
   setSavedQueries(queries: SavedQuery[]) {
     this.savedQueries = queries;
     this.renderQueriesList();

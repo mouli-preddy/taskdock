@@ -45,6 +45,10 @@
   color: var(--text-primary);
 }
 
+.tab-bar-tab.active .tab-label {
+  font-weight: 600;
+}
+
 .tab-bar-tab.active::after {
   content: '';
   position: absolute;
@@ -52,7 +56,7 @@
   left: 0;
   right: 0;
   height: 2px;
-  background: var(--accent-blue);
+  background: var(--accent-primary);
 }
 
 .tab-icon {

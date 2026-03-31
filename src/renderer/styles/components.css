@@ -36,8 +36,8 @@
 
 @keyframes thread-highlight {
   0%, 30% {
-    box-shadow: 0 0 0 3px var(--accent-blue);
-    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 3px var(--accent-primary);
+    border-color: var(--accent-primary);
   }
   100% {
     box-shadow: 0 0 0 0 transparent;
@@ -99,7 +99,7 @@
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: var(--accent-blue);
+  background: var(--accent-primary);
   color: white;
   font-size: 10px;
   font-weight: 600;
@@ -166,8 +166,8 @@
 
 .thread-reply-form textarea:focus {
   outline: none;
-  border-color: var(--accent-blue);
-  box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.3);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-primary);
 }
 
 .thread-reply-actions {
@@ -190,7 +190,7 @@
 
 .status-select:focus {
   outline: none;
-  border-color: var(--accent-blue);
+  border-color: var(--accent-primary);
 }
 
 /* Empty State */
@@ -345,7 +345,7 @@
 
 .progress-bar-fill {
   height: 100%;
-  background: var(--accent-blue);
+  background: var(--accent-primary);
   transition: width var(--transition-normal);
 }
 
@@ -362,7 +362,7 @@
 }
 
 .toggle.active {
-  background: var(--accent-blue);
+  background: var(--accent-primary);
 }
 
 .toggle::after {
@@ -386,8 +386,9 @@
 .card {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   overflow: hidden;
+  box-shadow: var(--shadow-md);
 }
 
 .card-header {
@@ -421,7 +422,7 @@
 /* Focus Ring */
 .focus-ring:focus {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.3);
+  box-shadow: 0 0 0 2px var(--accent-primary);
 }
 
 /* Responsive Helpers */

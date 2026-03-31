@@ -12,6 +12,64 @@ use std::os::windows::process::CommandExt;
 
 mod commands;
 
+/// On first run (release build only), enable autostart and record it so we don't
+/// re-enable it on subsequent launches.
+fn initialize_autostart_if_needed() {
+    // Never touch startup settings in dev builds
+    if cfg!(debug_assertions) {
+        return;
+    }
+
+    let store_path = match dirs::home_dir() {
+        Some(h) => h.join(".taskdock").join("store.json"),
+        None => return,
+    };
+
+    // Read existing store data (may not exist on first run)
+    let data: serde_json::Value = if store_path.exists() {
+        match std::fs::read_to_string(&store_path) {
+            Ok(content) => serde_json::from_str(&content).unwrap_or(serde_json::json!({})),
+            Err(_) => return, // Can't read – leave things alone
+        }
+    } else {
+        serde_json::json!({})
+    };
+
+    // If already configured once, respect the user's current registry setting
+    if data
+        .get("autostartConfigured")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+    {
+        return;
+    }
+
+    // First run: enable autostart
+    #[cfg(target_os = "windows")]
+    if let Err(e) = commands::autostart::enable_autostart_internal() {
+        log::warn!("Failed to enable autostart on first run: {}", e);
+        return;
+    }
+    log::info!("Autostart enabled for new installation");
+
+    // Persist the flag so subsequent launches don't re-enable autostart
+    let mut data = data;
+    if let Some(obj) = data.as_object_mut() {
+        obj.insert(
+            "autostartConfigured".to_string(),
+            serde_json::Value::Bool(true),
+        );
+    }
+    if let Some(parent) = store_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(content) = serde_json::to_string_pretty(&data) {
+        if let Err(e) = std::fs::write(&store_path, content) {
+            log::warn!("Failed to persist autostartConfigured flag: {}", e);
+        }
+    }
+}
+
 const BACKEND_PORT: u16 = 5198;
 
 // Store the backend process handle
@@ -155,6 +213,8 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
+            commands::autostart::get_autostart_enabled,
+            commands::autostart::set_autostart_enabled,
             commands::storage::load_config,
             commands::storage::save_config,
             commands::storage::is_configured,
@@ -173,6 +233,7 @@ pub fn run() {
             commands::file_io::read_review_output,
             commands::deep_link::get_initial_deep_link,
             commands::updater::check_for_update,
+            commands::updater::install_update,
         ])
         .setup(|app| {
             // Register deep-link schemes for development
@@ -198,6 +259,9 @@ pub fn run() {
                 }
             }
 
+            // Enable autostart on first run (new installation)
+            initialize_autostart_if_needed();
+
             // Start the backend monitor thread for auto-restart
             start_backend_monitor();
 
@@ -219,6 +283,28 @@ pub fn run() {
                 .build();
 
             app.handle().plugin(log_plugin)?;
+
+            // Background update check — runs 3s after startup, then every 24 hours
+            let app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                use tauri::Emitter;
+                use tauri_plugin_updater::UpdaterExt;
+                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                loop {
+                    if let Ok(updater) = app_handle.updater() {
+                        match updater.check().await {
+                            Ok(Some(update)) => {
+                                log::info!("Update available: {}", update.version);
+                                let _ = app_handle.emit("update-available", update.version.to_string());
+                            }
+                            Ok(None) => log::debug!("App is up to date"),
+                            Err(e) => log::warn!("Update check failed: {}", e),
+                        }
+                    }
+                    tokio::time::sleep(std::time::Duration::from_secs(86400)).await;
+                }
+            });
+
             Ok(())
         })
         .on_window_event(|_window, event| {
