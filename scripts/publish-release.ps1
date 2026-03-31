@@ -1,5 +1,6 @@
 # TaskDock Local Release Publisher
-# Usage: .\scripts\publish-release.ps1
+# Usage: .\scripts\publish-release.ps1 [-Force]
+param([switch]$Force)
 
 $ErrorActionPreference = 'Stop'
 $privateRepo = "poreddy_microsoft/taskdock"   # private enterprise repo (code)
@@ -24,8 +25,8 @@ $bundle  = "src-tauri/target/release/bundle"
 $nsis    = (Get-ChildItem "$bundle/nsis/*_${version}_*.exe" | Select-Object -First 1).FullName
 $msi     = (Get-ChildItem "$bundle/msi/*_${version}_*.msi"  | Select-Object -First 1).FullName
 
-# Build only if installers not already present for this version
-if (-not $nsis) {
+# Build only if installers not already present for this version (or -Force)
+if ($Force -or -not $nsis) {
     Write-Host "Building renderer..." -ForegroundColor Gray
     npm run build:renderer
 
