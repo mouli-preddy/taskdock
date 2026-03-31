@@ -279,7 +279,7 @@ const dgrepAIService = getDGrepAIService();
 // Configure AI service from settings
 {
   const settings = loadStoreData().consoleReview;
-  const dgrepAnalysis = settings?.dgrepAnalysis || { provider: 'copilot-sdk', sourceRepository: '' };
+  const dgrepAnalysis = settings?.dgrepAnalysis || { provider: 'claude-sdk', sourceRepository: '' };
   dgrepAIService.setProvider(dgrepAnalysis.provider);
   dgrepAIService.setSourceRepo(dgrepAnalysis.sourceRepository || null);
 }
@@ -1370,7 +1370,7 @@ Input: "${raw.replace(/"/g, '\\"')}"`,
       const consoleSessionId = `console-${Date.now()}`;
       await storageService.saveReviewSession(
         params[0], params[1], params[2], consoleSessionId,
-        'Console Review', 'copilot-sdk', params[3]
+        'Console Review', 'claude-terminal', params[3]
       );
       return;
     }
@@ -1590,7 +1590,7 @@ Input: "${raw.replace(/"/g, '\\"')}"`,
           );
 
           // 5. Start AI review with default provider
-          const trigProvider = trigSettings?.analyzeComments?.provider || 'copilot-sdk';
+          const trigProvider = trigSettings?.analyzeComments?.provider || 'claude-terminal';
           const trigRequest = {
             prId: trigPrId,
             provider: trigProvider,

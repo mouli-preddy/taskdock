@@ -24,7 +24,7 @@ export interface ServiceEntry {
 
 export class SettingsView {
   private container: HTMLElement;
-  private settings: ReviewSettings = { organization: '', project: '', pat: '', anthropicApiKey: '' };
+  private settings: ReviewSettings = { organization: 'domoreexp', project: 'MSTeams', pat: '', anthropicApiKey: '' };
   private consoleReviewSettings: ConsoleReviewSettings = { ...DEFAULT_CONSOLE_REVIEW_SETTINGS };
   private pollingSettings: PollingSettings = { ...DEFAULT_POLLING_SETTINGS };
   private notificationSettings: NotificationSettings = { ...DEFAULT_NOTIFICATION_SETTINGS };
@@ -295,13 +295,13 @@ export class SettingsView {
 
                 <div class="form-group">
                   <label for="settingsOrganization">Organization</label>
-                  <input type="text" id="settingsOrganization" placeholder="e.g., mycompany" required>
+                  <input type="text" id="settingsOrganization" placeholder="e.g., domoreexp" required>
                   <span class="form-hint">Your Azure DevOps organization name</span>
                 </div>
 
                 <div class="form-group">
                   <label for="settingsProject">Project</label>
-                  <input type="text" id="settingsProject" placeholder="e.g., myproject" required>
+                  <input type="text" id="settingsProject" placeholder="e.g., MSTeams" required>
                   <span class="form-hint">The project containing your repositories</span>
                 </div>
 
