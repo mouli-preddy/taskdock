@@ -64,10 +64,24 @@ export class AdoApiClient {
 
       return tokenResponse.accessToken;
     } catch (error: any) {
-      const errorMessage = error.message || String(error);
-      throw new Error(
-        `Failed to get ADO token. Ensure you are logged in via 'az login' or set AZURE_DEVOPS_PAT environment variable. Error: ${errorMessage}`
-      );
+      const raw = (error.stderr || error.message || String(error)).trim();
+
+      if (error.code === 'ETIMEDOUT' || error.signal === 'SIGTERM') {
+        throw new Error(
+          `Azure CLI timed out. Try running "az account get-access-token" in your terminal to diagnose. Raw error: ${raw}`
+        );
+      }
+      if (/not logged in|please run 'az login'|run 'az login'/i.test(raw)) {
+        throw new Error(
+          `Not logged in to Azure CLI. Run "az login" in your terminal, then restart the app. Raw error: ${raw}`
+        );
+      }
+      if (/command not found|is not recognized|cannot find/i.test(raw) || error.code === 'ENOENT') {
+        throw new Error(
+          `Azure CLI (az) not found. Install it from https://aka.ms/installazurecliwindows or provide a PAT in Settings. Raw error: ${raw}`
+        );
+      }
+      throw new Error(`Azure CLI error: ${raw}`);
     }
   }
 
