@@ -1,6 +1,6 @@
 [package]
 name = "taskdock"
-version = "0.0.6"
+version = "0.0.7"
 description = "TaskDock - Desktop productivity app with PR Review and more"
 authors = ["you"]
 license = "MIT"
