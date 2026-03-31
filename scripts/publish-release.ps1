@@ -1,5 +1,6 @@
 # TaskDock Local Release Publisher
-# Usage: .\scripts\publish-release.ps1
+# Usage: .\scripts\publish-release.ps1 [-Force]
+param([switch]$Force)
 
 $ErrorActionPreference = 'Stop'
 $privateRepo = "poreddy_microsoft/taskdock"   # private enterprise repo (code)
@@ -24,8 +25,8 @@ $bundle  = "src-tauri/target/release/bundle"
 $nsis    = (Get-ChildItem "$bundle/nsis/*_${version}_*.exe" | Select-Object -First 1).FullName
 $msi     = (Get-ChildItem "$bundle/msi/*_${version}_*.msi"  | Select-Object -First 1).FullName
 
-# Build only if installers not already present for this version
-if (-not $nsis) {
+# Build only if installers not already present for this version (or -Force)
+if ($Force -or -not $nsis) {
     Write-Host "Building renderer..." -ForegroundColor Gray
     npm run build:renderer
 
@@ -89,19 +90,19 @@ $jsonObj = [ordered]@{
     }
 }
 $json = "$bundle\latest.json"
-$jsonObj | ConvertTo-Json -Depth 5 | Set-Content $json -Encoding UTF8
+[System.IO.File]::WriteAllText($json, ($jsonObj | ConvertTo-Json -Depth 5), [System.Text.UTF8Encoding]::new($false))
 Write-Host "Generated latest.json" -ForegroundColor Gray
 
 # Tag private repo (code history)
 Write-Host "Tagging private repo..." -ForegroundColor Cyan
-git tag -d $tag 2>$null
-git push origin ":refs/tags/$tag" 2>$null
+try { git tag -d $tag 2>&1 | Out-Null } catch {}
+try { git push origin ":refs/tags/$tag" 2>&1 | Out-Null } catch {}
 git tag $tag
 git push origin $tag
 
 # Publish release to public repo (installers only — no code)
 Write-Host "Publishing $tag to public releases repo..." -ForegroundColor Cyan
-gh release delete $tag -R $publicRepo --yes 2>$null
+try { gh release delete $tag -R $publicRepo --yes 2>&1 | Out-Null } catch {}
 gh release create $tag `
     --repo $publicRepo `
     --title "TaskDock $tag" `

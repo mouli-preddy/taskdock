@@ -297,14 +297,14 @@ gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD -R OWNER/REPO --body ""
 **1. Bump the version** across all manifests (`tauri.conf.json`, `Cargo.toml`, `package.json`):
 
 ```bash
-npm run version:bump 0.0.6
+npm run version:bump 0.0.7
 ```
 
 **2. Commit and push the version bump:**
 
 ```bash
 git add src-tauri/tauri.conf.json src-tauri/Cargo.toml package.json
-git commit -m "chore: bump version to 0.0.6"
+git commit -m "chore: bump version to 0.0.7"
 git push
 ```
 

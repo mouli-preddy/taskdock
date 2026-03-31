@@ -124,12 +124,19 @@ function loadConfig(): AppConfig | null {
   return null;
 }
 
+function syncPatToEnv(config: AppConfig | null): void {
+  if (config?.ado?.pat && !process.env.AZURE_DEVOPS_PAT) {
+    process.env.AZURE_DEVOPS_PAT = config.ado.pat;
+  }
+}
+
 function saveConfig(config: AppConfig): void {
   try {
     if (!fs.existsSync(CONFIG_DIR)) {
       fs.mkdirSync(CONFIG_DIR, { recursive: true });
     }
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
+    syncPatToEnv(config);
   } catch (error) {
     console.error('Failed to save config:', error);
     throw error;
@@ -138,6 +145,7 @@ function saveConfig(config: AppConfig): void {
 
 function isConfigured(): boolean {
   const config = loadConfig();
+  syncPatToEnv(config);
   return !!(config?.ado?.organization && config?.ado?.project);
 }
 
@@ -592,12 +600,6 @@ async function startPhase2(taskId: string, logFile: string, choice: string, inst
 
   broadcast('task:running', { id: taskId, action: `[Phase 2] ${task.action}` });
 
-  const { default: Anthropic } = await import('@anthropic-ai/sdk');
-  const client = new Anthropic();
-
-  const config = loadConfig();
-  const systemPrompt = buildSystemPrompt(config?.ado?.organization || '', config?.ado?.project || '');
-
   let phase1Results = '';
   if (fs.existsSync(logFile)) {
     const raw = fs.readFileSync(logFile, 'utf-8');
@@ -608,19 +610,18 @@ async function startPhase2(taskId: string, logFile: string, choice: string, inst
   fs.mkdirSync(contextPath, { recursive: true });
   const phase2LogFile = path.join(contextPath, `phase2-${new Date().toISOString().replace(/[:.]/g, '-')}.md`);
 
-  const messages: any[] = [{
-    role: 'user',
-    content: buildPhase2Prompt(task, phase1Results, choice, instructions),
-  }];
+  const prompt = buildPhase2Prompt(task, phase1Results, choice, instructions);
 
-  const { resultText, paused } = await runAgentLoop(client, task, messages, systemPrompt, phase2LogFile, contextPath);
+  const sessionId = chatTerminalService.createSession({
+    ai: 'claude',
+    workingDir: task.workingDir || os.homedir(),
+    contextPath,
+    initialPrompt: prompt,
+    autoExit: true,
+    logFile: phase2LogFile,
+  });
 
-  if (!paused) {
-    const result = resultText.trim() || 'Task completed.';
-    fs.writeFileSync(phase2LogFile,
-      `# Task Run — Phase 2 (Execution)\n**Task:** ${task.action}\n**User decision:** ${choice}\n${instructions ? `**Instructions:** ${instructions}\n` : ''}\n**Result:**\n${result}\n`,
-      'utf-8');
-  }
+  broadcast('task:terminal-started', { id: taskId, sessionId, action: `[Phase 2] ${task.action}` });
   return phase2LogFile;
 }
 
@@ -771,29 +772,38 @@ async function runAgentLoop(
   return { resultText, paused: false };
 }
 
-/** SDK-based execution for scheduled (background) runs. */
+/** CLI-based execution for scheduled (background) runs. */
 async function runScheduledTask(task: any): Promise<string> {
   broadcast('task:running', { id: task.id, action: task.action });
   try {
-    const { default: Anthropic } = await import('@anthropic-ai/sdk');
-    const client = new Anthropic();
-
     const config = loadConfig();
-    const systemPrompt = buildSystemPrompt(config?.ado?.organization || '', config?.ado?.project || '');
+    const org = config?.ado?.organization || '';
+    const project = config?.ado?.project || '';
     const now = new Date().toLocaleString();
+
+    const prompt = [
+      `IMPORTANT: This is a single one-time execution. Do NOT create cron jobs, scheduled tasks, recurring timers, or any form of automation setup. The scheduling is handled externally. Just perform the action below once and exit.`,
+      ``,
+      `Current time: ${now}`,
+      org ? `ADO context: ${org} / ${project}` : '',
+      ``,
+      `Task: ${task.action}`,
+    ].filter(Boolean).join('\n');
 
     const contextPath = path.join(CONFIG_DIR, 'task-runs', task.id);
     fs.mkdirSync(contextPath, { recursive: true });
     const logFile = path.join(contextPath, `run-${new Date().toISOString().replace(/[:.]/g, '-')}.md`);
 
-    const messages: any[] = [{ role: 'user', content: `Current time: ${now}\n\nTask: ${task.action}` }];
+    const sessionId = chatTerminalService.createSession({
+      ai: 'claude',
+      workingDir: task.workingDir || os.homedir(),
+      contextPath,
+      initialPrompt: prompt,
+      autoExit: true,
+      logFile,
+    });
 
-    const { resultText, paused } = await runAgentLoop(client, task, messages, systemPrompt, logFile, contextPath);
-
-    if (!paused) {
-      const result = resultText.trim() || 'Task completed.';
-      fs.writeFileSync(logFile, `# Task Run\n**Task:** ${task.action}\n\n**Result:**\n${result}\n`, 'utf-8');
-    }
+    broadcast('task:terminal-started', { id: task.id, sessionId, action: task.action });
     return logFile;
   } catch (err: any) {
     broadcast('task:error', { id: task.id, error: err.message });
@@ -809,7 +819,7 @@ async function continueTaskFromApproval(contextFile: string, choice: string, ins
   broadcast('task:running', { id: task.id, action: `Resuming: ${task.action}` });
 
   const { default: Anthropic } = await import('@anthropic-ai/sdk');
-  const client = new Anthropic();
+  const client = new Anthropic({ apiKey: loadConfig()?.anthropic?.apiKey });
 
   const contextPath = path.join(CONFIG_DIR, 'task-runs', task.id);
   fs.mkdirSync(contextPath, { recursive: true });

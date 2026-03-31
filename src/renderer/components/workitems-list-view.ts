@@ -34,6 +34,7 @@ export class WorkItemsListView {
   private excludedStates: string[] = ['Closed', 'Resolved', 'Done', 'Removed', 'Abandoned'];
   private showAllTypes = false;
   private includedTypes: string[] = [...DEFAULT_INCLUDED_TYPES];
+  private autoRefreshDone = false;
 
   private onSelectCallback: ((item: WorkItem) => void) | null = null;
   private onRefreshCallback: (() => void) | null = null;
@@ -101,6 +102,10 @@ export class WorkItemsListView {
     this.loading = false;
     this.renderTypeTabs();
     this.renderWorkItemsList();
+    if (items.length === 0 && !this.autoRefreshDone) {
+      this.autoRefreshDone = true;
+      setTimeout(() => this.onRefreshCallback?.(), 1500);
+    }
   }
 
   setWorkItemsGrouped(groups: WorkItemGroup[]) {
@@ -111,6 +116,21 @@ export class WorkItemsListView {
     if (groups.length > 0 && !groups.find(g => g.type === this.activeTypeTab)) {
       this.activeTypeTab = groups[0].type;
     }
+    this.renderTypeTabs();
+    this.renderWorkItemsList();
+    const totalItems = groups.reduce((n, g) => n + g.items.length, 0);
+    if (totalItems === 0 && !this.autoRefreshDone) {
+      this.autoRefreshDone = true;
+      setTimeout(() => this.onRefreshCallback?.(), 1500);
+    }
+  }
+
+  setActiveItems(groups: WorkItemGroup[], incidents: any[]) {
+    this.groupedItems = groups;
+    this.activeIncidents = incidents;
+    this.isGroupedMode = true;
+    this.loading = false;
+    this.activeItemOrder = this.loadActiveOrder(); // refresh from storage on each load
     this.renderTypeTabs();
     this.renderWorkItemsList();
   }
@@ -131,6 +151,7 @@ export class WorkItemsListView {
   }
 
   setLoading(loading: boolean) {
+    if (loading) this.autoRefreshDone = false;
     this.loading = loading;
     this.renderWorkItemsList();
   }

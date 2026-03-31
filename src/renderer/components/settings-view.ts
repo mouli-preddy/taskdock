@@ -1058,7 +1058,7 @@ export class SettingsView {
 
       // Save autostart setting
       this.autostartEnabled = (this.container.querySelector('#autostartEnabled') as HTMLInputElement).checked;
-      await window.electronAPI.setAutostartEnabled(this.autostartEnabled);
+      try { await window.electronAPI.setAutostartEnabled(this.autostartEnabled); } catch { /* not yet implemented */ }
 
       Toast.success('All settings saved');
       this.showStatus('connected', 'Settings saved successfully');

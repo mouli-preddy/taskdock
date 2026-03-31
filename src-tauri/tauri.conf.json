@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "TaskDock",
-  "version": "0.0.6",
+  "version": "0.0.8",
   "identifier": "com.taskdock.desktop",
   "build": {
     "frontendDist": "../dist/renderer",
@@ -20,8 +20,7 @@
         "resizable": true,
         "fullscreen": false,
         "decorations": true,
-        "transparent": false,
-        "theme": "Dark"
+        "transparent": false
       }
     ],
     "security": {
@@ -38,9 +37,7 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": [
-      "binaries/backend"
-    ]
+    "externalBin": ["binaries/backend"]
   },
   "plugins": {
     "shell": {
@@ -48,9 +45,7 @@
     },
     "deep-link": {
       "desktop": {
-        "schemes": [
-          "taskdock"
-        ]
+        "schemes": ["taskdock"]
       }
     },
     "updater": {
