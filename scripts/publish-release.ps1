@@ -90,7 +90,7 @@ $jsonObj = [ordered]@{
     }
 }
 $json = "$bundle\latest.json"
-$jsonObj | ConvertTo-Json -Depth 5 | Set-Content $json -Encoding UTF8
+$jsonObj | ConvertTo-Json -Depth 5 | Set-Content $json -Encoding utf8NoBOM
 Write-Host "Generated latest.json" -ForegroundColor Gray
 
 # Tag private repo (code history)
