@@ -99,16 +99,36 @@ export class SectionSidebar {
     this.attachEventListeners();
   }
 
+  private badges: Map<SectionId, number> = new Map();
+
+  setBadge(sectionId: SectionId, count: number) {
+    if (count <= 0) this.badges.delete(sectionId);
+    else this.badges.set(sectionId, count);
+    const btn = this.container.querySelector(`.section-sidebar-item[data-section="${sectionId}"]`);
+    if (!btn) return;
+    let badge = btn.querySelector('.section-badge') as HTMLElement | null;
+    if (count <= 0) { badge?.remove(); return; }
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'section-badge';
+      btn.appendChild(badge);
+    }
+    badge.textContent = String(count);
+  }
+
   private render() {
     const allSections = [...SECTIONS, ...this.dynamicSections];
     this.container.innerHTML = `
       <div class="section-sidebar-items">
-        ${allSections.map(s => `
+        ${allSections.map(s => {
+          const badgeCount = this.badges.get(s.id) ?? 0;
+          return `
           <button class="section-sidebar-item ${s.id === this.activeSection ? 'active' : ''}" data-section="${s.id}" title="${s.label}">
             <span class="section-icon">${s.icon}</span>
             <span class="section-label">${s.label}</span>
-          </button>
-        `).join('')}
+            ${badgeCount > 0 ? `<span class="section-badge">${badgeCount}</span>` : ''}
+          </button>`;
+        }).join('')}
       </div>
     `;
   }

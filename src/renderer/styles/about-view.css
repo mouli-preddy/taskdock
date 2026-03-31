@@ -249,6 +249,28 @@
   margin-bottom: var(--space-4);
 }
 
+.creator-card-secondary {
+  opacity: 0.75;
+  margin-bottom: var(--space-5);
+}
+
+.creator-avatar-secondary {
+  width: 52px;
+  height: 52px;
+  background: linear-gradient(135deg, var(--text-tertiary) 0%, var(--bg-elevated) 100%);
+  cursor: default;
+  flex-shrink: 0;
+}
+
+.creator-avatar-secondary:hover { transform: none; }
+
+.creator-avatar-secondary .avatar-letter { font-size: 22px; }
+
+.creator-name-secondary {
+  font-size: var(--text-base) !important;
+  font-weight: 600 !important;
+}
+
 .creator-avatar {
   width: 80px;
   height: 80px;
@@ -305,6 +327,14 @@
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
+}
+
+.creator-mission {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  font-style: italic;
+  line-height: 1.5;
 }
 
 .creator-alias {

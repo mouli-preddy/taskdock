@@ -213,6 +213,10 @@ export const tauriAPI = {
     invoke('tasks:toggle-ai', id, enabled),
   tasksReadLog: (logFile: string) =>
     invoke('tasks:read-log', logFile),
+  tasksExport: (ids: string[]) =>
+    invoke('tasks:export', ids),
+  tasksImport: (jsonContent: string) =>
+    invoke('tasks:import', jsonContent),
 
   wiGetMyItems: (org: string, project: string) =>
     invoke('wi:get-my-items', org, project),
@@ -520,6 +524,16 @@ export const tauriAPI = {
     return invoke('set_notification_settings', { settings });
   },
 
+  // Autostart
+  getAutostartEnabled: async () => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke<boolean>('get_autostart_enabled');
+  },
+  setAutostartEnabled: async (enabled: boolean) => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke('set_autostart_enabled', { enabled });
+  },
+
   // Services
   getServices: async () => {
     const { invoke } = await import('@tauri-apps/api/core');
@@ -782,12 +796,36 @@ export const tauriAPI = {
   onDgrepAIImproveDisplayProgress: (callback: (event: any) => void) => subscribe('dgrep:ai:improve-display-progress', callback),
   onDgrepAIImproveDisplayComplete: (callback: (event: any) => void) => subscribe('dgrep:ai:improve-display-complete', callback),
 
+  // Auto-updater (Tauri native)
+  checkForUpdate: async (): Promise<string | null> => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke<string | null>('check_for_update');
+  },
+  installUpdate: async (): Promise<void> => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke('install_update');
+  },
+  onUpdateAvailable: (callback: (version: string) => void): (() => void) => {
+    import('@tauri-apps/api/event').then(({ listen }) => {
+      listen<string>('update-available', (event) => callback(event.payload));
+    });
+    return () => {};
+  },
+
   // Task scheduler events
   onTaskRan: (callback: (event: any) => void) => subscribe('task:ran', callback),
   onTaskCompleted: (callback: (event: any) => void) => subscribe('task:completed', callback),
   onTaskError: (callback: (event: any) => void) => subscribe('task:error', callback),
   onTaskResult: (callback: (event: any) => void) => subscribe('task:result', callback),
   onTaskTerminalStarted: (callback: (event: any) => void) => subscribe('task:terminal-started', callback),
+  tasksGetPendingApprovals: () => invoke('tasks:get-pending-approvals'),
+  tasksGetPendingPhaseGates: () => invoke('tasks:get-pending-phase-gates'),
+  onTaskApprovalRequest: (callback: (event: any) => void) => subscribe('task:approval-request', callback),
+  onTaskApprovalResolved: (callback: (event: any) => void) => subscribe('task:approval-resolved', callback),
+  tasksRespondApproval: (approvalId: string, choice: string, instructions: string) =>
+    invoke('tasks:respond-approval', { approvalId, choice, instructions }),
+  onTaskPhase1Started: (callback: (event: any) => void) => subscribe('task:phase1-started', callback),
+  onTaskPhase1Complete: (callback: (event: any) => void) => subscribe('task:phase1-complete', callback),
 };
 
 // Initialize connection when module loads

@@ -161,7 +161,7 @@ export class ChatTerminalService extends EventEmitter {
         const cliArgs = options.ai === 'copilot'
           ? ['--allow-all', '--add-dir', options.contextPath, '-i']
           : options.autoExit
-            ? ['--dangerously-skip-permissions', '--print'] // non-interactive: runs task and exits
+            ? ['--dangerously-skip-permissions', '--print', '--verbose'] // non-interactive: runs task and exits
             : ['--dangerously-skip-permissions'];
 
         const safeInstruction = `Follow the instructions in: ${promptFile}`;

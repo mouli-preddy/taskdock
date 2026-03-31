@@ -208,7 +208,16 @@ terminalManager.on('review-complete', (event) => broadcast('terminal:review-comp
 // Chat Terminal events
 chatTerminalService.on('session-created', (event) => broadcast('chat-terminal:session-created', event));
 chatTerminalService.on('data', (event) => broadcast('chat-terminal:data', event));
-chatTerminalService.on('exit', (event) => broadcast('chat-terminal:exit', event));
+chatTerminalService.on('exit', (event) => {
+  broadcast('chat-terminal:exit', event);
+  const phase1Info = phase1Sessions.get(event.sessionId);
+  if (phase1Info) {
+    phase1Sessions.delete(event.sessionId);
+    handlePhase1Complete(phase1Info.task, phase1Info.logFile).catch(err =>
+      broadcast('task:error', { id: phase1Info.task.id, error: `Phase 1 error: ${err.message}` })
+    );
+  }
+});
 chatTerminalService.on('status-change', (event) => broadcast('chat-terminal:status-change', event));
 
 applyChangesService.onProgress((event) => broadcast('apply-changes:progress', event));
@@ -310,7 +319,7 @@ async function icmCall<T>(fn: () => Promise<T>): Promise<T> {
 
 // ==================== Task Helpers ====================
 
-function parseTaskFallback(raw: string): { schedule: string; action: string } {
+function parseTaskFallback(raw: string): { schedule: string; action: string; twoPhase: boolean; phase1Prompt?: string } {
   const lower = raw.toLowerCase();
 
   // Try to extract a schedule phrase
@@ -344,7 +353,7 @@ function parseTaskFallback(raw: string): { schedule: string; action: string } {
   // Title: first 4 words of the action (< 5 words)
   const title = action.split(/\s+/).slice(0, 4).join(' ');
 
-  return { title, schedule, action };
+  return { title, schedule, action, twoPhase: false };
 }
 
 function cronFromSchedule(schedule: string): string {
@@ -411,7 +420,8 @@ function nextCronDate(expr: string, after: Date = new Date()): Date {
   return new Date(after.getTime() + 86_400_000);
 }
 
-async function runScheduledTask(task: any): Promise<string> {
+/** Terminal-based execution used for manual "Test" runs — shows an interactive terminal */
+async function runTaskInTerminal(task: any): Promise<string> {
   broadcast('task:running', { id: task.id, action: task.action });
   try {
     const config = loadConfig();
@@ -419,7 +429,6 @@ async function runScheduledTask(task: any): Promise<string> {
     const project = config?.ado?.project || '';
     const now = new Date().toLocaleString();
 
-    // Build a one-shot prompt — explicitly forbid any scheduling or cron setup
     const prompt = [
       `IMPORTANT: This is a single one-time execution. Do NOT create cron jobs, scheduled tasks, recurring timers, or any form of automation setup. The scheduling is handled externally. Just perform the action below once and exit.`,
       ``,
@@ -429,21 +438,17 @@ async function runScheduledTask(task: any): Promise<string> {
       `Task: ${task.action}`,
     ].filter(Boolean).join('\n');
 
-    // Write prompt to a temp file (ChatTerminalService pattern)
     const taskRunDir = path.join(CONFIG_DIR, 'task-runs');
     if (!fs.existsSync(taskRunDir)) fs.mkdirSync(taskRunDir, { recursive: true });
     const contextPath = path.join(taskRunDir, task.id);
     if (!fs.existsSync(contextPath)) fs.mkdirSync(contextPath, { recursive: true });
 
-    // Compute a log file path for this run (written by ChatTerminalService on exit)
     const runTimestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const logFile = path.join(contextPath, `run-${runTimestamp}.md`);
 
-    // Use the existing ChatTerminalService to spawn a claude terminal
-    // autoExit: true so the shell exits after claude finishes, triggering auto-close
     const sessionId = chatTerminalService.createSession({
       ai: 'claude',
-      workingDir: CONFIG_DIR,
+      workingDir: task.workingDir || os.homedir(),
       contextPath,
       initialPrompt: prompt,
       autoExit: true,
@@ -453,10 +458,389 @@ async function runScheduledTask(task: any): Promise<string> {
     broadcast('task:terminal-started', { id: task.id, sessionId, action: task.action });
     return logFile;
   } catch (err: any) {
-    const errMsg = `Task execution failed: ${err.message}`;
     broadcast('task:error', { id: task.id, error: err.message });
-    return errMsg;
+    return `Task execution failed: ${err.message}`;
   }
+}
+
+function recordTaskRun(task: any): void {
+  task.runCount = (task.runCount || 0) + 1;
+  task.runHistory = task.runHistory || [];
+  task.runHistory.push({ timestamp: new Date().toISOString() });
+  if (task.runHistory.length > 10) task.runHistory = task.runHistory.slice(-10);
+}
+
+/** Tracks active Phase 1 terminal sessions for two-phase tasks. */
+const phase1Sessions = new Map<string, { task: any; logFile: string }>();
+
+function buildPhase1Prompt(task: any): string {
+  const config = loadConfig();
+  const org = config?.ado?.organization || '';
+  const project = config?.ado?.project || '';
+  const now = new Date().toLocaleString();
+  return [
+    `IMPORTANT: This is the RESEARCH AND GATHER phase only. Do NOT make any changes, commits, or irreversible actions. Gather information and analyze the situation.`,
+    ``,
+    `Current time: ${now}`,
+    org ? `ADO context: ${org} / ${project}` : '',
+    ``,
+    `Research Task: ${task.action}`,
+    ``,
+    `At the end, produce a markdown summary with these sections:`,
+    `## Summary of Findings`,
+    `## Recommended Actions`,
+    `## Risks or Concerns`,
+  ].filter(s => s !== null && s !== undefined).join('\n');
+}
+
+function buildPhase2Prompt(task: any, phase1Results: string, choice: string, instructions: string): string {
+  const now = new Date().toLocaleString();
+  return [
+    `You are now in the EXECUTION phase. Phase 1 research is complete and the user has reviewed the findings.`,
+    ``,
+    `Current time: ${now}`,
+    ``,
+    `## Phase 1 Research Results:`,
+    phase1Results,
+    ``,
+    `## User Decision: ${choice}`,
+    instructions ? `## User Instructions:\n${instructions}` : '',
+    ``,
+    `## Execution Task:`,
+    task.phase2Prompt || task.action,
+    ``,
+    `IMPORTANT: This is a single one-time execution. Do NOT create cron jobs, scheduled tasks, or recurring timers. Execute the task based on the research findings and the user's instructions.`,
+  ].filter(s => s !== null && s !== undefined).join('\n');
+}
+
+async function runTwoPhaseTask(task: any): Promise<void> {
+  broadcast('task:running', { id: task.id, action: task.action });
+  try {
+    const taskRunDir = path.join(CONFIG_DIR, 'task-runs');
+    if (!fs.existsSync(taskRunDir)) fs.mkdirSync(taskRunDir, { recursive: true });
+    const contextPath = path.join(taskRunDir, task.id);
+    if (!fs.existsSync(contextPath)) fs.mkdirSync(contextPath, { recursive: true });
+
+    const runTimestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const logFile = path.join(contextPath, `phase1-${runTimestamp}.md`);
+
+    const sessionId = chatTerminalService.createSession({
+      ai: 'claude',
+      workingDir: task.workingDir || os.homedir(),
+      contextPath,
+      initialPrompt: buildPhase1Prompt(task),
+      autoExit: true,
+      logFile,
+    });
+
+    phase1Sessions.set(sessionId, { task, logFile });
+    broadcast('task:phase1-started', { id: task.id, sessionId, action: task.action });
+    broadcast('task:terminal-started', { id: task.id, sessionId, action: `[Phase 1] ${task.action}` });
+  } catch (err: any) {
+    broadcast('task:error', { id: task.id, error: err.message });
+  }
+}
+
+async function handlePhase1Complete(task: any, logFile: string): Promise<void> {
+  try {
+    let phase1Results = '';
+    if (fs.existsSync(logFile)) {
+      const raw = fs.readFileSync(logFile, 'utf-8');
+      // Strip ANSI escape codes
+      phase1Results = raw.replace(/\x1b\[[0-9;?<>]*[A-Za-z]/g, '').replace(/\x1b\][^\x07]*\x07/g, '').trim();
+    }
+    // Try to extract the structured summary section (## headings at end of output)
+    const summaryMatch = phase1Results.match(/(#{1,3} Summary[\s\S]*)/i);
+    const preview = summaryMatch
+      ? summaryMatch[1].trim()
+      : phase1Results.length > 3000
+        ? '…(see beginning truncated)\n\n' + phase1Results.slice(-3000)
+        : phase1Results;
+
+    const approvalId = crypto.randomUUID();
+    const storeData = loadStoreData();
+    storeData.pendingPhaseGates = storeData.pendingPhaseGates || [];
+    storeData.pendingPhaseGates.push({
+      taskId: task.id,
+      approvalId,
+      logFile,
+      preview,
+      options: ['Proceed', 'Modify & Proceed', 'Cancel'],
+      timestamp: new Date().toISOString(),
+    });
+    saveStoreData(storeData);
+
+    broadcast('task:phase1-complete', {
+      id: task.id,
+      approvalId,
+      isPhaseGate: true,
+      question: 'Phase 1 research is complete. Review the findings and decide how to proceed.',
+      options: ['Proceed', 'Modify & Proceed', 'Cancel'],
+      preview,
+      resultsFile: logFile,
+      summary: `Phase 1 complete for: ${task.action}`,
+    });
+  } catch (err: any) {
+    broadcast('task:error', { id: task.id, error: `Phase 1 completion error: ${err.message}` });
+  }
+}
+
+async function startPhase2(taskId: string, logFile: string, choice: string, instructions: string): Promise<string> {
+  const storeData = loadStoreData();
+  const task = (storeData.tasks || []).find((t: any) => t.id === taskId);
+  if (!task) throw new Error(`Task not found: ${taskId}`);
+
+  broadcast('task:running', { id: taskId, action: `[Phase 2] ${task.action}` });
+
+  const { default: Anthropic } = await import('@anthropic-ai/sdk');
+  const client = new Anthropic();
+
+  const config = loadConfig();
+  const systemPrompt = buildSystemPrompt(config?.ado?.organization || '', config?.ado?.project || '');
+
+  let phase1Results = '';
+  if (fs.existsSync(logFile)) {
+    const raw = fs.readFileSync(logFile, 'utf-8');
+    phase1Results = raw.replace(/\x1b\[[0-9;?<>]*[A-Za-z]/g, '').replace(/\x1b\][^\x07]*\x07/g, '').trim();
+  }
+
+  const contextPath = path.join(CONFIG_DIR, 'task-runs', taskId);
+  fs.mkdirSync(contextPath, { recursive: true });
+  const phase2LogFile = path.join(contextPath, `phase2-${new Date().toISOString().replace(/[:.]/g, '-')}.md`);
+
+  const messages: any[] = [{
+    role: 'user',
+    content: buildPhase2Prompt(task, phase1Results, choice, instructions),
+  }];
+
+  const { resultText, paused } = await runAgentLoop(client, task, messages, systemPrompt, phase2LogFile, contextPath);
+
+  if (!paused) {
+    const result = resultText.trim() || 'Task completed.';
+    fs.writeFileSync(phase2LogFile,
+      `# Task Run — Phase 2 (Execution)\n**Task:** ${task.action}\n**User decision:** ${choice}\n${instructions ? `**Instructions:** ${instructions}\n` : ''}\n**Result:**\n${result}\n`,
+      'utf-8');
+  }
+  return phase2LogFile;
+}
+
+const APPROVAL_TOOL: any = {
+  name: 'request_approval',
+  description: 'Pause and ask the user for permission before taking a significant action. The current session will be saved and a new session will start once the user responds.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      question: { type: 'string', description: 'Clear question asking the user what to do' },
+      context: { type: 'string', description: 'What you are about to do and why you need approval' },
+      options: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Action buttons for the user (max 15 chars each). Always include at least one decline option like "No" or "Skip".',
+      },
+    },
+    required: ['question', 'options'],
+  },
+};
+
+function buildSystemPrompt(org: string, project: string): string {
+  return [
+    'IMPORTANT: This is a single one-time execution. Do NOT create cron jobs, scheduled tasks, or recurring timers.',
+    'If you need the user\'s approval before taking a significant action, call the request_approval tool. The session will be saved and resumed after the user responds.',
+    org ? `ADO context: ${org} / ${project}` : '',
+  ].filter(Boolean).join('\n');
+}
+
+/** Save context, get AI summary, persist to store, broadcast — then the caller breaks the loop. */
+async function pauseForApproval(
+  client: any,
+  task: any,
+  approvalBlock: any,
+  messages: any[],
+  systemPrompt: string,
+  logFile: string,
+  contextPath: string,
+  progressText: string,
+): Promise<void> {
+  const input = approvalBlock.input as { question: string; context?: string; options: string[] };
+  const approvalId = crypto.randomUUID();
+  const options = (input.options || ['Yes', 'No']).map((o: string) => String(o).slice(0, 15));
+
+  // Use already-accumulated text as summary; only call the API if the AI gave no output yet
+  let summary = progressText.trim();
+  if (!summary) {
+    try {
+      const summaryResp = await client.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 512,
+        system: systemPrompt,
+        messages: [
+          ...messages,
+          { role: 'user', content: [{ type: 'tool_result', tool_use_id: approvalBlock.id, content: 'Execution is paused for user approval. Briefly summarise what you have done so far and what action you need approval for. Be concise.' }] },
+        ],
+      });
+      summary = summaryResp.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('').trim();
+    } catch { /* leave summary empty */ }
+  }
+  if (!summary) summary = `Awaiting approval: ${input.question}`;
+
+  // Persist context so the session can be resumed even after app restart
+  const approvalContextFile = path.join(contextPath, `approval-${approvalId}.json`);
+  fs.writeFileSync(approvalContextFile, JSON.stringify({
+    taskId: task.id,
+    taskAction: task.action,
+    approvalId,
+    question: input.question,
+    context: input.context || '',
+    options,
+    messages,                  // full conversation up to the tool_use response
+    pendingToolUseId: approvalBlock.id,
+    systemPrompt,
+    summary,
+    timestamp: new Date().toISOString(),
+    logFile,
+  }, null, 2), 'utf-8');
+
+  // Write partial log
+  fs.writeFileSync(logFile,
+    `# Task Run (Paused for Approval)\n**Task:** ${task.action}\n\n**Progress:**\n${summary}\n\n**Awaiting approval:** ${input.question}\n`,
+    'utf-8');
+
+  // Store pending approval so it survives a restart
+  const storeData = loadStoreData();
+  storeData.pendingApprovals = storeData.pendingApprovals || [];
+  storeData.pendingApprovals.push({
+    taskId: task.id,
+    approvalId,
+    question: input.question,
+    context: input.context || '',
+    options,
+    contextFile: approvalContextFile,
+    summary,
+    timestamp: new Date().toISOString(),
+  });
+  saveStoreData(storeData);
+
+  broadcast('task:approval-request', {
+    taskId: task.id,
+    approvalId,
+    question: input.question,
+    context: input.context || '',
+    options,
+    summary,
+  });
+}
+
+/** Core SDK agentic loop — shared by initial runs and resumptions. */
+async function runAgentLoop(
+  client: any,
+  task: { id: string; action: string },
+  messages: any[],
+  systemPrompt: string,
+  logFile: string,
+  contextPath: string,
+): Promise<{ resultText: string; paused: boolean }> {
+  let resultText = '';
+
+  while (true) {
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 4096,
+      system: systemPrompt,
+      tools: [APPROVAL_TOOL],
+      messages,
+    });
+
+    for (const block of response.content) {
+      if (block.type === 'text') resultText += block.text;
+    }
+
+    if (response.stop_reason !== 'tool_use') break;
+
+    messages.push({ role: 'assistant', content: response.content });
+
+    const approvalBlock = response.content.find((b: any) => b.type === 'tool_use' && b.name === 'request_approval');
+    if (approvalBlock) {
+      await pauseForApproval(client, task, approvalBlock, messages, systemPrompt, logFile, contextPath, resultText);
+      return { resultText, paused: true };
+    }
+
+    // No other custom tools — break if nothing to do
+    break;
+  }
+
+  return { resultText, paused: false };
+}
+
+/** SDK-based execution for scheduled (background) runs. */
+async function runScheduledTask(task: any): Promise<string> {
+  broadcast('task:running', { id: task.id, action: task.action });
+  try {
+    const { default: Anthropic } = await import('@anthropic-ai/sdk');
+    const client = new Anthropic();
+
+    const config = loadConfig();
+    const systemPrompt = buildSystemPrompt(config?.ado?.organization || '', config?.ado?.project || '');
+    const now = new Date().toLocaleString();
+
+    const contextPath = path.join(CONFIG_DIR, 'task-runs', task.id);
+    fs.mkdirSync(contextPath, { recursive: true });
+    const logFile = path.join(contextPath, `run-${new Date().toISOString().replace(/[:.]/g, '-')}.md`);
+
+    const messages: any[] = [{ role: 'user', content: `Current time: ${now}\n\nTask: ${task.action}` }];
+
+    const { resultText, paused } = await runAgentLoop(client, task, messages, systemPrompt, logFile, contextPath);
+
+    if (!paused) {
+      const result = resultText.trim() || 'Task completed.';
+      fs.writeFileSync(logFile, `# Task Run\n**Task:** ${task.action}\n\n**Result:**\n${result}\n`, 'utf-8');
+    }
+    return logFile;
+  } catch (err: any) {
+    broadcast('task:error', { id: task.id, error: err.message });
+    return `Task execution failed: ${err.message}`;
+  }
+}
+
+/** Resume a task from a saved approval context after the user has responded. */
+async function continueTaskFromApproval(contextFile: string, choice: string, instructions: string): Promise<string> {
+  const ctx = JSON.parse(fs.readFileSync(contextFile, 'utf-8'));
+  const task = { id: ctx.taskId, action: ctx.taskAction };
+
+  broadcast('task:running', { id: task.id, action: `Resuming: ${task.action}` });
+
+  const { default: Anthropic } = await import('@anthropic-ai/sdk');
+  const client = new Anthropic();
+
+  const contextPath = path.join(CONFIG_DIR, 'task-runs', task.id);
+  fs.mkdirSync(contextPath, { recursive: true });
+  const logFile = path.join(contextPath, `run-${new Date().toISOString().replace(/[:.]/g, '-')}-resumed.md`);
+
+  // Replay: history + tool_result with user's answer
+  const messages = [
+    ...ctx.messages,
+    {
+      role: 'user',
+      content: [{
+        type: 'tool_result',
+        tool_use_id: ctx.pendingToolUseId,
+        content: JSON.stringify({
+          choice,
+          instructions: instructions || '',
+          message: `User responded: "${choice}"${instructions ? `\nUser instructions: ${instructions}` : ''}`,
+        }),
+      }],
+    },
+  ];
+
+  const { resultText, paused } = await runAgentLoop(client, task, messages, ctx.systemPrompt, logFile, contextPath);
+
+  if (!paused) {
+    const result = resultText.trim() || 'Task completed.';
+    fs.writeFileSync(logFile,
+      `# Task Run (Resumed)\n**Task:** ${task.action}\n**User response:** ${choice}\n${instructions ? `**Instructions:** ${instructions}\n` : ''}\n**Result:**\n${result}\n`,
+      'utf-8');
+  }
+  return logFile;
 }
 
 // Check every 60s for due automated tasks
@@ -476,13 +860,12 @@ setInterval(async () => {
       task.nextRun = task.cronExpression
         ? nextCronDate(task.cronExpression, now).toISOString()
         : new Date(now.getTime() + 86_400_000).toISOString();
-      // Increment run count and push to history
-      task.runCount = (task.runCount || 0) + 1;
-      task.runHistory = task.runHistory || [];
-      task.runHistory.push({ timestamp: now.toISOString() });
-      if (task.runHistory.length > 10) task.runHistory = task.runHistory.slice(-10);
+      recordTaskRun(task);
       changed = true;
       broadcast('task:ran', { id: task.id, lastRun: task.lastRun, nextRun: task.nextRun });
+      if (task.twoPhase) {
+        runTwoPhaseTask(task).catch(console.error);
+      } else {
       runScheduledTask(task).then(logFile => {
         const sd = loadStoreData();
         const t = (sd.tasks || []).find((t: any) => t.id === task.id);
@@ -496,6 +879,7 @@ setInterval(async () => {
         }
         broadcast('task:result', { id: task.id, result: 'AI session running', logFile, runCount: t?.runCount, runHistory: t?.runHistory });
       }).catch(() => {});
+      } // end else (non-two-phase)
     }
     if (changed) {
       storeData.tasks = tasks;
@@ -612,23 +996,22 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       const storeData = loadStoreData();
       const task = (storeData.tasks || []).find((t: any) => t.id === id);
       if (!task) throw new Error(`Task not found: ${id}`);
-      // Add a runHistory entry for this manual run
-      const now = new Date();
-      task.runCount = (task.runCount || 0) + 1;
-      task.runHistory = task.runHistory || [];
-      task.runHistory.push({ timestamp: now.toISOString() });
-      if (task.runHistory.length > 10) task.runHistory = task.runHistory.slice(-10);
+      recordTaskRun(task);
       saveStoreData(storeData);
-      runScheduledTask(task).then(logFile => {
-        const sd = loadStoreData();
-        const t = (sd.tasks || []).find((t: any) => t.id === id);
-        if (t && t.runHistory?.length) {
-          t.runHistory[t.runHistory.length - 1].result = 'Manual run';
-          t.runHistory[t.runHistory.length - 1].logFile = logFile;
-          saveStoreData(sd);
-        }
-        broadcast('task:result', { id, result: 'Manual run', logFile, runCount: t?.runCount, runHistory: t?.runHistory });
-      }).catch(console.error);
+      if (task.twoPhase) {
+        runTwoPhaseTask(task).catch(console.error);
+      } else {
+        runTaskInTerminal(task).then(logFile => {
+          const sd = loadStoreData();
+          const t = (sd.tasks || []).find((t: any) => t.id === id);
+          if (t && t.runHistory?.length) {
+            t.runHistory[t.runHistory.length - 1].result = 'Manual run';
+            t.runHistory[t.runHistory.length - 1].logFile = logFile;
+            saveStoreData(sd);
+          }
+          broadcast('task:result', { id, result: 'Manual run', logFile, runCount: t?.runCount, runHistory: t?.runHistory });
+        }).catch(console.error);
+      }
       return;
     }
     case 'tasks:toggle-ai': {
@@ -688,7 +1071,20 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
 
         const sdkCall = (async () => {
           for await (const event of query({
-            prompt: `Parse this task description into a JSON object with exactly three fields: "title" (2-4 words MAX, e.g. "Daily PR Check"), "schedule" (when/how often to run, e.g. "Every day at 9am"), and "action" (clear description of what to do). Respond with ONLY valid JSON, no explanation.\n\nInput: "${raw.replace(/"/g, '\\"')}"`,
+            prompt: `Parse this task description into a JSON object with these fields:
+- "title": 2-4 words MAX (e.g. "Daily PR Check")
+- "schedule": when/how often to run (e.g. "Every day at 9am")
+- "twoPhase": boolean — set to true if ANY of these signals are present:
+  * Explicit approval gate: "once user approves", "after approval", "pending review", "let me approve", "wait for confirmation"
+  * Two-step action: "check X then do Y", "analyze X and fix Y", "review X and update/post/send Y", "gather X and then apply"
+  * Risky action after research: looking up/reading data first, THEN writing/posting/modifying/deleting
+  Set to false only for simple single-step tasks with no approval or research step.
+- "action": if twoPhase is true, the Phase 1 research/gather instructions — what to investigate, collect, or prepare WITHOUT making any changes or posting anything. If twoPhase is false, the full task description.
+- "phase2Prompt": (only if twoPhase is true) the Phase 2 execution instructions to run AFTER the user approves the research (e.g. post comments, merge PRs, apply fixes). Be specific.
+
+Respond with ONLY valid JSON, no explanation.
+
+Input: "${raw.replace(/"/g, '\\"')}"`,
             options: { model: 'haiku', maxTurns: 1 },
           })) {
             if (event.type === 'assistant') {
@@ -724,6 +1120,118 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       if (!normalised.startsWith(path.resolve(taskRunDir))) throw new Error('Access denied');
       if (!fs.existsSync(normalised)) return '(Log not available yet — task may still be running. Try again once it completes.)';
       return fs.readFileSync(normalised, 'utf-8');
+    }
+
+    case 'tasks:get-pending-approvals':
+      return loadStoreData().pendingApprovals || [];
+
+    case 'tasks:get-pending-phase-gates':
+      return loadStoreData().pendingPhaseGates || [];
+
+    case 'tasks:respond-approval': {
+      const { approvalId, choice, instructions } = params[0] as { approvalId: string; choice: string; instructions?: string };
+
+      const storeData = loadStoreData();
+
+      // Check phase gates first
+      const allGates: any[] = storeData.pendingPhaseGates || [];
+      const gate = allGates.find((g: any) => g.approvalId === approvalId);
+      if (gate) {
+        storeData.pendingPhaseGates = allGates.filter((g: any) => g.approvalId !== approvalId);
+        const task = (storeData.tasks || []).find((t: any) => t.id === gate.taskId);
+        if (task) recordTaskRun(task);
+        saveStoreData(storeData);
+
+        broadcast('task:approval-resolved', { taskId: gate.taskId, approvalId, choice, isPhaseGate: true });
+
+        if (choice !== 'Cancel') {
+          startPhase2(gate.taskId, gate.logFile, choice, instructions || '').then(logFile => {
+            const sd = loadStoreData();
+            const t = (sd.tasks || []).find((t: any) => t.id === gate.taskId);
+            if (t?.runHistory?.length) {
+              t.runHistory[t.runHistory.length - 1].result = `Phase 2 complete: ${choice}`;
+              t.runHistory[t.runHistory.length - 1].logFile = logFile;
+              saveStoreData(sd);
+            }
+            broadcast('task:result', { id: gate.taskId, result: `Phase 2 complete: ${choice}`, logFile, runCount: t?.runCount, runHistory: t?.runHistory });
+          }).catch(err => broadcast('task:error', { id: gate.taskId, error: err.message }));
+        } else {
+          broadcast('task:result', { id: gate.taskId, result: 'Cancelled after Phase 1', runCount: task?.runCount, runHistory: task?.runHistory });
+        }
+        return null;
+      }
+
+      // Regular approval (existing behavior)
+      const all: any[] = storeData.pendingApprovals || [];
+      const approval = all.find((a: any) => a.approvalId === approvalId);
+      if (!approval) throw new Error('Approval request not found');
+      storeData.pendingApprovals = all.filter((a: any) => a.approvalId !== approvalId);
+
+      const task = (storeData.tasks || []).find((t: any) => t.id === approval.taskId);
+      if (task) recordTaskRun(task);
+      saveStoreData(storeData);
+
+      broadcast('task:approval-resolved', { taskId: approval.taskId, approvalId, choice });
+
+      // Start new session from saved context
+      continueTaskFromApproval(approval.contextFile, choice, instructions || '').then(logFile => {
+        const sd = loadStoreData();
+        const t = (sd.tasks || []).find((t: any) => t.id === approval.taskId);
+        if (t?.runHistory?.length) {
+          t.runHistory[t.runHistory.length - 1].result = `Resumed: ${choice}`;
+          t.runHistory[t.runHistory.length - 1].logFile = logFile;
+          saveStoreData(sd);
+        }
+        broadcast('task:result', { id: approval.taskId, result: `Resumed: ${choice}`, logFile, runCount: t?.runCount, runHistory: t?.runHistory });
+      }).catch(err => broadcast('task:error', { id: approval.taskId, error: err.message }));
+
+      return null;
+    }
+
+    case 'tasks:export': {
+      const ids = params[0] as string[];
+      const storeData = loadStoreData();
+      const all: any[] = storeData.tasks || [];
+      const selected = all.filter((t: any) => ids.includes(t.id));
+      const exportTasks = selected.map((t: any) => ({
+        id: t.id, title: t.title, schedule: t.schedule, action: t.action, raw: t.raw,
+        createdAt: t.createdAt, enabled: t.enabled, endTime: t.endTime,
+        aiAutomated: t.aiAutomated, cronExpression: t.cronExpression,
+      }));
+      const payload = { version: 1, exportedAt: new Date().toISOString(), tasks: exportTasks };
+      const exportsDir = path.join(CONFIG_DIR, 'exports');
+      fs.mkdirSync(exportsDir, { recursive: true });
+      const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const filePath = path.join(exportsDir, `taskdock-export-${ts}.json`);
+      fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf8');
+      return { filePath, count: exportTasks.length };
+    }
+
+    case 'tasks:import': {
+      const jsonContent = params[0] as string;
+      let parsed: any;
+      try { parsed = JSON.parse(jsonContent); } catch { throw new Error('Invalid JSON file'); }
+      if (!parsed || !Array.isArray(parsed.tasks)) throw new Error('Invalid export file format');
+      const storeData = loadStoreData();
+      const existingIds = new Set((storeData.tasks || []).map((t: any) => t.id));
+      let imported = 0, skipped = 0;
+      for (const t of parsed.tasks) {
+        if (existingIds.has(t.id)) { skipped++; continue; }
+        const task: any = {
+          id: t.id, title: t.title, schedule: t.schedule, action: t.action, raw: t.raw,
+          createdAt: t.createdAt, enabled: t.enabled, endTime: t.endTime,
+          aiAutomated: t.aiAutomated, cronExpression: t.cronExpression,
+          lastRun: undefined, lastResult: undefined, runCount: 0, runHistory: [],
+        };
+        if (task.aiAutomated && task.cronExpression) {
+          task.nextRun = nextCronDate(task.cronExpression, new Date()).toISOString();
+        }
+        storeData.tasks = storeData.tasks || [];
+        storeData.tasks.push(task);
+        imported++;
+      }
+      saveStoreData(storeData);
+      return { imported, skipped, tasks: storeData.tasks };
     }
 
     case 'wi:get-saved-queries':
@@ -1711,6 +2219,26 @@ const wss = new WebSocketServer({
 wss.on('connection', (ws) => {
   console.log('Client connected');
   clients.add(ws);
+
+  // Replay any pending approvals so the UI shows them immediately after connect/reconnect
+  const storedData = loadStoreData();
+  const stored = storedData.pendingApprovals || [];
+  for (const a of stored) {
+    ws.send(JSON.stringify({
+      type: 'event',
+      event: 'task:approval-request',
+      data: { taskId: a.taskId, approvalId: a.approvalId, question: a.question, context: a.context, options: a.options, summary: a.summary },
+    }));
+  }
+  // Replay any pending phase gates
+  const storedGates = storedData.pendingPhaseGates || [];
+  for (const g of storedGates) {
+    ws.send(JSON.stringify({
+      type: 'event',
+      event: 'task:phase1-complete',
+      data: { id: g.taskId, approvalId: g.approvalId, isPhaseGate: true, question: 'Phase 1 research is complete. Review the findings and decide how to proceed.', options: g.options || ['Proceed', 'Modify & Proceed', 'Cancel'], preview: g.preview || '', resultsFile: g.logFile, summary: `Phase 1 complete` },
+    }));
+  }
 
   ws.on('message', async (data) => {
     try {
