@@ -2612,8 +2612,8 @@ class PRReviewApp {
       settings.project,
       settings.pat || undefined
     );
-    if (!result.success && result.error) {
-      throw new Error(result.error);
+    if (!result.success) {
+      throw new Error(result.error || 'Connection failed');
     }
     return result.success;
   }
@@ -5217,9 +5217,10 @@ After this, respond with a simple text response to greet the user and ask them w
       this.loadQueryBuilderOptions();
     } catch (error) {
       console.error('Failed to load work items:', error);
+      const wiMsg = error instanceof Error ? error.message : 'Failed to load work items';
       this.workItemsListView.setWorkItems([]);
-      this.workItemsListView.setSubtitle('Failed to load work items');
-      Toast.error('Failed to load work items');
+      this.workItemsListView.setSubtitle(wiMsg);
+      Toast.error(wiMsg);
     } finally {
       this.workItemsListView.setLoading(false);
     }
@@ -5825,7 +5826,7 @@ After this, respond with a simple text response to greet the user and ask them w
     } catch (error) {
       console.error('Failed to load work item:', error);
       detailView.setLoading(false);
-      Toast.error('Failed to load work item');
+      Toast.error(error instanceof Error ? error.message : 'Failed to load work item');
     }
 
     this.switchWorkItemsTab(tabId);
