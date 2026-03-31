@@ -1446,6 +1446,8 @@ Input: "${raw.replace(/"/g, '\\"')}"`,
     // Config
     case 'config:test-connection':
       try {
+        // Use the PAT from the form if provided, so we don't fall through to az CLI
+        if (params[2]) process.env.AZURE_DEVOPS_PAT = params[2];
         await adoClient.getPullRequestsForReviewer(params[0], params[1]);
         return { success: true };
       } catch (error: any) {
