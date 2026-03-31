@@ -140,8 +140,9 @@ export class SettingsView {
           }
         });
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load plugins:', err);
+      Toast.error(err?.message || 'Failed to load plugins');
     }
   }
 
@@ -270,6 +271,11 @@ export class SettingsView {
                   <span class="theme-option-label">Auto</span>
                 </button>
               </div>
+            </div>
+            <div class="settings-section">
+              <h2 class="settings-section-title">Diagnostics</h2>
+              <p class="settings-section-description">Open the application log file to diagnose issues.</p>
+              <button type="button" class="btn btn-secondary" id="openLogFileBtn">Open Log File</button>
             </div>
           </div>
 
@@ -758,6 +764,15 @@ export class SettingsView {
       this.updateThemeButtons(pref);
       window.dispatchEvent(new CustomEvent('taskdock-theme-change', { detail: pref }));
     });
+
+    const openLogBtn = this.container.querySelector('#openLogFileBtn') as HTMLButtonElement | null;
+    openLogBtn?.addEventListener('click', async () => {
+      try {
+        await window.electronAPI.loggerOpenLogFolder();
+      } catch (err: any) {
+        Toast.error(err?.message || 'Failed to open log folder');
+      }
+    });
   }
 
   private updateThemeButtons(active: string): void {
@@ -1106,8 +1121,9 @@ export class SettingsView {
       // Merge with defaults to handle new fields added in updates
       this.consoleReviewSettings = { ...DEFAULT_CONSOLE_REVIEW_SETTINGS, ...loaded };
       this.updateConsoleReviewFormValues();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load console review settings:', error);
+      Toast.error(error?.message || 'Failed to load review settings');
     }
   }
 
@@ -1412,8 +1428,9 @@ export class SettingsView {
     try {
       this.pollingSettings = await window.electronAPI.getPollingSettings();
       this.updatePollingFormValues();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load polling settings:', error);
+      Toast.error(error?.message || 'Failed to load polling settings');
     }
   }
 
@@ -1431,8 +1448,9 @@ export class SettingsView {
     try {
       this.notificationSettings = await window.electronAPI.getNotificationSettings();
       this.updateNotificationFormValues();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load notification settings:', error);
+      Toast.error(error?.message || 'Failed to load notification settings');
     }
   }
 
@@ -1467,8 +1485,9 @@ export class SettingsView {
     try {
       this.autostartEnabled = await window.electronAPI.getAutostartEnabled();
       this.updateAutostartFormValue();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load autostart setting:', error);
+      Toast.error(error?.message || 'Failed to load autostart setting');
     }
   }
 
@@ -1481,8 +1500,9 @@ export class SettingsView {
     try {
       this.services = await window.electronAPI.getServices();
       this.renderServicesList();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load services:', error);
+      Toast.error(error?.message || 'Failed to load services');
       this.services = [];
       this.renderServicesList();
     }
@@ -1575,7 +1595,9 @@ export class SettingsView {
   private async loadScrubPatterns(): Promise<void> {
     try {
       this.scrubPatterns = await window.electronAPI.getScrubPatterns();
-    } catch {
+    } catch (error: any) {
+      console.error('Failed to load scrub patterns:', error);
+      Toast.error(error?.message || 'Failed to load privacy settings');
       this.scrubPatterns = [];
     }
     this.renderScrubPatterns();

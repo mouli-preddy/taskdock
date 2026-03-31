@@ -866,8 +866,9 @@ class PRReviewApp {
 
       // Collect hooks from all enabled plugins and render them
       this.renderPluginHooks(plugins.filter(p => p.enabled));
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load plugins:', err);
+      Toast.error(err?.message || 'Failed to load plugins');
     }
   }
 
@@ -1250,8 +1251,9 @@ class PRReviewApp {
                     filePath,
                     startLine,
                   });
-                } catch (error) {
+                } catch (error: any) {
                   console.error('Failed to persist fix:', error);
+                  Toast.error(error?.message || 'Failed to save fix');
                 }
               }
 
@@ -1488,8 +1490,9 @@ class PRReviewApp {
             savedAt: new Date().toISOString(),
             commentCount: aiComments.length,
           };
-        } catch (error) {
+        } catch (error: any) {
           console.error('Failed to auto-save review:', error);
+          Toast.error(error?.message || 'Failed to auto-save review');
         }
       }
 
@@ -1539,8 +1542,9 @@ class PRReviewApp {
             exists: true,
             savedAt: new Date().toISOString(),
           };
-        } catch (error) {
+        } catch (error: any) {
           console.error('Failed to save walkthrough:', error);
+          Toast.error(error?.message || 'Failed to save walkthrough');
         }
 
         // Add to walkthroughs sidebar
@@ -4011,8 +4015,9 @@ class PRReviewApp {
               this.diffViewer.addAICommentMarker(comment);
             }
           }
-        } catch (error) {
+        } catch (error: any) {
           console.error('Failed to reload AI comments:', error);
+          Toast.error(error?.message || 'Failed to reload comments');
         }
       })();
     }
@@ -4430,8 +4435,9 @@ After this, respond with a simple text response to greet the user and ask them w
     try {
       // Save review immediately like we do for walkthrough (don't check comments.length)
       await this.saveCurrentReview(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to auto-save review:', error);
+      Toast.error(error?.message || 'Failed to auto-save review');
     }
   }
 
@@ -4500,8 +4506,9 @@ After this, respond with a simple text response to greet the user and ask them w
           exists: true,
           savedAt: new Date().toISOString(),
         };
-      } catch (error) {
+      } catch (error: any) {
         console.error('Failed to save walkthrough from review:', error);
+        Toast.error(error?.message || 'Failed to save walkthrough');
       }
     }
   }
@@ -4862,8 +4869,9 @@ After this, respond with a simple text response to greet the user and ask them w
           exists: true,
           savedAt: new Date().toISOString(),
         };
-      } catch (error) {
+      } catch (error: any) {
         console.error('Failed to save standalone walkthrough:', error);
+        Toast.error(error?.message || 'Failed to save walkthrough');
       }
     }
   }
