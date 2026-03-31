@@ -248,7 +248,13 @@ export class WorkItemsListView {
 
   private attachEventListeners() {
     this.container.querySelector('#refreshWorkItemsBtn')?.addEventListener('click', () => {
-      this.onRefreshCallback?.();
+      const btn = this.container.querySelector('#refreshWorkItemsBtn') as HTMLButtonElement;
+      btn.disabled = true;
+      btn.classList.add('loading');
+      Promise.resolve(this.onRefreshCallback?.()).finally(() => {
+        btn.disabled = false;
+        btn.classList.remove('loading');
+      });
     });
 
     this.container.querySelectorAll('.workitems-view-btn').forEach(btn => {
@@ -334,7 +340,7 @@ export class WorkItemsListView {
   private renderTypeTabs() {
     const container = this.container.querySelector('#workItemsTypeTabs')!;
 
-    if (!this.isGroupedMode || this.groupedItems.length === 0 || this.activeView === 'active') {
+    if (!this.isGroupedMode || this.groupedItems.length === 0) {
       container.innerHTML = '';
       return;
     }
@@ -449,7 +455,7 @@ export class WorkItemsListView {
       return;
     }
 
-    if (this.activeView === 'active') {
+    if (this.activeView === 'active' && (!this.activeTypeTab || !this.groupedItems.find(g => g.type === this.activeTypeTab))) {
       this.renderActiveViewContent(container);
       return;
     }

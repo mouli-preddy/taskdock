@@ -1,6 +1,6 @@
 {
   "name": "taskdock",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "TaskDock - Desktop productivity app with PR Review and more",
   "type": "module",
   "scripts": {
@@ -14,7 +14,8 @@
     "build:sidecar": "node scripts/build-sidecar.js",
     "typecheck": "tsc --noEmit",
     "tauri": "tauri",
-    "version:bump": "node scripts/bump-version.mjs"
+    "version:bump": "node scripts/bump-version.mjs",
+    "publish-release": "powershell -ExecutionPolicy Bypass -File scripts/publish-release.ps1"
   },
   "pkg": {
     "scripts": [

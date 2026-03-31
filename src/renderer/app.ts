@@ -394,6 +394,7 @@ class PRReviewApp {
         action: parsed.action,
         raw,
         createdAt: new Date().toISOString(),
+        ...(parsed.twoPhase ? { twoPhase: true, phase2Prompt: parsed.phase2Prompt || '' } : {}),
       };
       await window.electronAPI.tasksSave(task);
 
@@ -435,6 +436,11 @@ class PRReviewApp {
     });
     this.loadTasks();
 
+    // Sidebar badge: update when approval count changes
+    document.getElementById('tasksPanel')?.addEventListener('approval-count-changed', (e) => {
+      this.sectionSidebar.setBadge('tasks', (e as CustomEvent).detail.count);
+    });
+
     // Listen for task scheduler events from backend
     window.electronAPI.onTaskRan((data) => {
       this.tasksView.markTaskRan(data.id, data.lastRun, data.nextRun);
@@ -449,6 +455,7 @@ class PRReviewApp {
     });
     window.electronAPI.onTaskResult((data) => {
       this.tasksView.updateTaskResult(data.id, data.result, data.runCount ?? 0, data.runHistory ?? []);
+      this.tasksView.setTaskPhaseState(data.id, null);
     });
     window.electronAPI.onTaskTerminalStarted((data) => {
       Toast.success(`Task running: "${data.action}" — opening terminal`);
@@ -460,9 +467,36 @@ class PRReviewApp {
     window.electronAPI.onTaskApprovalRequest((data) => {
       this.tasksView.addApprovalRequest(data);
       this.switchSection('tasks');
+      this.tasksView.switchToApprovalsTab();
     });
     window.electronAPI.onTaskApprovalResolved((data) => {
       this.tasksView.removeApprovalRequest(data.approvalId);
+      if (data.isPhaseGate) {
+        if (data.choice !== 'Cancel') {
+          this.tasksView.setTaskPhaseState(data.taskId, 'phase2-running');
+        } else {
+          this.tasksView.setTaskPhaseState(data.taskId, null);
+        }
+      }
+    });
+    window.electronAPI.onTaskPhase1Started((data) => {
+      this.tasksView.setTaskPhaseState(data.id, 'phase1-running');
+    });
+    window.electronAPI.onTaskPhase1Complete((data) => {
+      this.tasksView.setTaskPhaseState(data.id, 'awaiting-gate');
+      this.tasksView.addApprovalRequest({
+        taskId: data.id,
+        approvalId: data.approvalId,
+        isPhaseGate: true,
+        question: data.question,
+        context: '',
+        options: data.options,
+        summary: data.summary,
+        phase1ResultsPreview: data.preview,
+        phase1ResultsFile: data.resultsFile,
+      });
+      this.switchSection('tasks');
+      this.tasksView.switchToApprovalsTab();
     });
 
     // Initialize DGrep search view
@@ -1611,6 +1645,14 @@ class PRReviewApp {
 
   // Section switching
   public switchSection(section: SectionId) {
+    // Auto-save settings when navigating away from the settings page
+    if (this.activeSection === 'settings' && section !== 'settings') {
+      const current = this.settingsView.getSettings();
+      if (current.organization || current.project) {
+        this.saveSettings(current).catch(console.error);
+      }
+    }
+
     this.activeSection = section;
     this.sectionSidebar.setActive(section);
 
@@ -2447,19 +2489,29 @@ class PRReviewApp {
         this.project = config.ado.project;
         this.settingsView.setSettings({
           ...config.ado,
-          anthropicApiKey: config.anthropic?.apiKey || '',
+          anthropicApiKey: (config as any).anthropic?.apiKey || '',
         });
       }
-    } catch {
-      // Tauri native invoke may not be available, fall back to bridge settings
-      try {
-        const settings = await window.electronAPI.getSettings() as Record<string, unknown> | null;
-        if (settings?.organization && settings?.project) {
-          this.organization = settings.organization as string;
-          this.project = settings.project as string;
-        }
-      } catch { /* unable to load settings */ }
-    }
+    } catch { /* fall through */ }
+
+    // Always also check bridge store — it may have fresher values if Tauri config was empty
+    try {
+      const settings = await window.electronAPI.getSettings() as Record<string, unknown> | null;
+      if (settings?.organization && !this.organization) {
+        this.organization = settings.organization as string;
+      }
+      if (settings?.project && !this.project) {
+        this.project = settings.project as string;
+      }
+      if (this.organization || this.project) {
+        this.settingsView.setSettings({
+          organization: this.organization,
+          project: this.project,
+          pat: (settings?.pat as string) || '',
+          anthropicApiKey: (settings?.anthropicApiKey as string) || '',
+        });
+      }
+    } catch { /* unable to load settings */ }
     if (isConfigured) {
       await this.loadPRLists();
     }
@@ -2519,25 +2571,30 @@ class PRReviewApp {
 
   // Settings handlers
   private async saveSettings(settings: ReviewSettings): Promise<void> {
-    await window.electronAPI.saveConfig({
-      ado: {
-        organization: settings.organization,
-        project: settings.project,
-        pat: settings.pat,
-      },
-      anthropic: {
-        apiKey: settings.anthropicApiKey || '',
-      },
+    // Save to Tauri config (config.json)
+    try {
+      await window.electronAPI.saveConfig({
+        ado: {
+          organization: settings.organization,
+          project: settings.project,
+          pat: settings.pat,
+        },
+        anthropic: {
+          apiKey: settings.anthropicApiKey || '',
+        },
+      });
+    } catch (e) {
+      console.warn('saveConfig (Tauri) failed, falling back to bridge store:', e);
+    }
+
+    // Also save to bridge store (store.json) as reliable fallback
+    await window.electronAPI.saveSettings({
+      organization: settings.organization,
+      project: settings.project,
     });
 
     this.organization = settings.organization;
     this.project = settings.project;
-
-    // Reload PR lists
-    await this.loadPRLists();
-
-    // Switch to review section
-    this.switchSection('review');
   }
 
   private async testConnection(settings: ReviewSettings): Promise<boolean> {
@@ -5089,7 +5146,8 @@ After this, respond with a simple text response to greet the user and ask them w
   private async refreshWorkItems() {
     if (!this.organization || !this.project) {
       this.workItemsListView.setWorkItems([]);
-      this.workItemsListView.setSubtitle('Configure organization and project in settings');
+      this.workItemsListView.setSubtitle('Configure organization and project in Settings before refreshing');
+      Toast.error('Organization and project not configured — go to Settings');
       return;
     }
 
@@ -5100,7 +5158,14 @@ After this, respond with a simple text response to greet the user and ask them w
       const queryId = this.workItemsListView.getActiveQueryId();
 
       if (view === 'active') {
-        const wiql = `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.AssignedTo] = @me AND [System.WorkItemType] IN ('Bug', 'Task') AND [System.State] IN ('Active', 'In Progress') ORDER BY [System.ChangedDate] DESC`;
+        const { showAll, excludedStates, showAllTypes, includedTypes } = this.workItemsListView.getFilterState();
+        const stateFilter = (!showAll && excludedStates.length > 0)
+          ? ` AND [System.State] NOT IN (${excludedStates.map(s => `'${s}'`).join(', ')})`
+          : '';
+        const typeFilter = (!showAllTypes && includedTypes.length > 0)
+          ? ` AND [System.WorkItemType] IN (${includedTypes.map(t => `'${t}'`).join(', ')})`
+          : '';
+        const wiql = `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.AssignedTo] = @me${stateFilter}${typeFilter} ORDER BY [System.ChangedDate] DESC`;
         const groups = await window.electronAPI.wiGetGroupedByType(this.organization, this.project, wiql);
 
         let incidents: any[] = [];
@@ -5211,6 +5276,35 @@ After this, respond with a simple text response to greet the user and ask them w
     try {
       const tasks = await window.electronAPI.tasksGetAll();
       this.tasksView.setTasks(tasks);
+
+      // Restore any pending approvals (regular + phase gates) that survived a restart
+      try {
+        const approvals = await window.electronAPI.tasksGetPendingApprovals();
+        for (const a of approvals) {
+          this.tasksView.addApprovalRequest({
+            taskId: a.taskId, approvalId: a.approvalId,
+            question: a.question, context: a.context,
+            options: a.options, summary: a.summary,
+          });
+        }
+      } catch { /* not critical */ }
+
+      try {
+        const gates = await (window.electronAPI as any).tasksGetPendingPhaseGates();
+        for (const g of gates) {
+          this.tasksView.addApprovalRequest({
+            taskId: g.taskId, approvalId: g.approvalId,
+            isPhaseGate: true,
+            question: 'Phase 1 research is complete. Review the findings and decide how to proceed.',
+            context: '',
+            options: g.options || ['Proceed', 'Modify & Proceed', 'Cancel'],
+            phase1ResultsPreview: g.preview,
+            phase1ResultsFile: g.logFile,
+          });
+          this.tasksView.setTaskPhaseState(g.taskId, 'awaiting-gate');
+        }
+        if (gates.length > 0) this.tasksView.switchToApprovalsTab();
+      } catch { /* not critical */ }
     } catch (error) {
       console.error('Failed to load tasks:', error);
     }

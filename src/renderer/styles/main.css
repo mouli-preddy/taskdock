@@ -1773,7 +1773,53 @@ body.resizing-panels * {
 
 .setup-modal p {
   color: var(--text-secondary);
+  margin-bottom: var(--space-4);
+}
+
+.setup-url-group {
   margin-bottom: var(--space-6);
+  text-align: left;
+}
+
+.setup-url-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-family: var(--font-mono, monospace);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.setup-url-input:focus {
+  border-color: var(--color-accent);
+}
+
+.setup-detected {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-success, #22c55e);
+}
+
+.setup-detected.hidden {
+  display: none;
+}
+
+.setup-detected-error {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-error, #ef4444);
+}
+
+.setup-detected-error.hidden {
+  display: none;
 }
 
 /* ========================================

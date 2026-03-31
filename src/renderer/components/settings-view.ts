@@ -579,14 +579,6 @@ export class SettingsView {
               </div>
             </div>
 
-            <div class="settings-section">
-              <h2 class="settings-section-title">Updates</h2>
-              <p class="settings-section-description">TaskDock checks for updates automatically on startup and every 24 hours.</p>
-              <div class="form-group" style="display:flex;align-items:center;gap:12px;">
-                <button class="btn btn-secondary" id="checkForUpdatesBtn">Check for Updates</button>
-                <span id="updateStatusMsg" style="font-size:13px;color:var(--text-secondary);"></span>
-              </div>
-            </div>
 
             <div class="settings-section">
               <h2 class="settings-section-title">Notifications</h2>
@@ -874,31 +866,6 @@ export class SettingsView {
     // Console review settings
     const addRepoBtn = this.container.querySelector('#addRepoBtn');
     addRepoBtn?.addEventListener('click', () => this.handleAddRepo());
-
-    // Check for updates button
-    this.container.querySelector('#checkForUpdatesBtn')?.addEventListener('click', async () => {
-      const btn = this.container.querySelector('#checkForUpdatesBtn') as HTMLButtonElement;
-      const msg = this.container.querySelector('#updateStatusMsg') as HTMLElement;
-      btn.disabled = true;
-      btn.textContent = 'Checking...';
-      msg.textContent = '';
-      try {
-        const version = await window.electronAPI.checkForUpdate();
-        if (version) {
-          msg.textContent = `v${version} is available!`;
-          msg.style.color = 'var(--accent-primary, #0078d4)';
-        } else {
-          msg.textContent = 'You are on the latest version.';
-          msg.style.color = '';
-        }
-      } catch {
-        msg.textContent = 'Could not check for updates.';
-        msg.style.color = 'var(--color-error, #d83b01)';
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Check for Updates';
-      }
-    });
 
     // Global save button
     const saveAllBtn = this.container.querySelector('#saveAllSettingsBtn');

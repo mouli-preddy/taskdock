@@ -819,10 +819,13 @@ export const tauriAPI = {
   onTaskResult: (callback: (event: any) => void) => subscribe('task:result', callback),
   onTaskTerminalStarted: (callback: (event: any) => void) => subscribe('task:terminal-started', callback),
   tasksGetPendingApprovals: () => invoke('tasks:get-pending-approvals'),
+  tasksGetPendingPhaseGates: () => invoke('tasks:get-pending-phase-gates'),
   onTaskApprovalRequest: (callback: (event: any) => void) => subscribe('task:approval-request', callback),
   onTaskApprovalResolved: (callback: (event: any) => void) => subscribe('task:approval-resolved', callback),
   tasksRespondApproval: (approvalId: string, choice: string, instructions: string) =>
     invoke('tasks:respond-approval', { approvalId, choice, instructions }),
+  onTaskPhase1Started: (callback: (event: any) => void) => subscribe('task:phase1-started', callback),
+  onTaskPhase1Complete: (callback: (event: any) => void) => subscribe('task:phase1-complete', callback),
 };
 
 // Initialize connection when module loads

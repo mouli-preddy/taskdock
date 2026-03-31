@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "TaskDock",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "identifier": "com.taskdock.desktop",
   "build": {
     "frontendDist": "../dist/renderer",
@@ -38,7 +38,9 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": ["binaries/backend"]
+    "externalBin": [
+      "binaries/backend"
+    ]
   },
   "plugins": {
     "shell": {
@@ -46,13 +48,15 @@
     },
     "deep-link": {
       "desktop": {
-        "schemes": ["taskdock"]
+        "schemes": [
+          "taskdock"
+        ]
       }
     },
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI4MDZCQkI2NTdERTJGNzkKUldSNUw5NVh0cnNHS0dqSmorTklaQWtYaktwTW52U29oeTVSbjFGNlNDQUVRbkZRM1NQV0VGV3EK",
       "endpoints": [
-        "https://github.com/poreddy_microsoft/taskdock/releases/latest/download/latest.json"
+        "https://github.com/mouli-preddy/taskdock/releases/latest/download/latest.json"
       ],
       "dialog": false
     }
