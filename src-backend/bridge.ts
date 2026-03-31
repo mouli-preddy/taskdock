@@ -124,12 +124,19 @@ function loadConfig(): AppConfig | null {
   return null;
 }
 
+function syncPatToEnv(config: AppConfig | null): void {
+  if (config?.ado?.pat && !process.env.AZURE_DEVOPS_PAT) {
+    process.env.AZURE_DEVOPS_PAT = config.ado.pat;
+  }
+}
+
 function saveConfig(config: AppConfig): void {
   try {
     if (!fs.existsSync(CONFIG_DIR)) {
       fs.mkdirSync(CONFIG_DIR, { recursive: true });
     }
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
+    syncPatToEnv(config);
   } catch (error) {
     console.error('Failed to save config:', error);
     throw error;
@@ -138,6 +145,7 @@ function saveConfig(config: AppConfig): void {
 
 function isConfigured(): boolean {
   const config = loadConfig();
+  syncPatToEnv(config);
   return !!(config?.ado?.organization && config?.ado?.project);
 }
 
@@ -593,9 +601,8 @@ async function startPhase2(taskId: string, logFile: string, choice: string, inst
   broadcast('task:running', { id: taskId, action: `[Phase 2] ${task.action}` });
 
   const { default: Anthropic } = await import('@anthropic-ai/sdk');
-  const client = new Anthropic();
-
   const config = loadConfig();
+  const client = new Anthropic({ apiKey: config?.anthropic?.apiKey });
   const systemPrompt = buildSystemPrompt(config?.ado?.organization || '', config?.ado?.project || '');
 
   let phase1Results = '';
@@ -776,9 +783,9 @@ async function runScheduledTask(task: any): Promise<string> {
   broadcast('task:running', { id: task.id, action: task.action });
   try {
     const { default: Anthropic } = await import('@anthropic-ai/sdk');
-    const client = new Anthropic();
-
     const config = loadConfig();
+    const client = new Anthropic({ apiKey: config?.anthropic?.apiKey });
+
     const systemPrompt = buildSystemPrompt(config?.ado?.organization || '', config?.ado?.project || '');
     const now = new Date().toLocaleString();
 
@@ -809,7 +816,7 @@ async function continueTaskFromApproval(contextFile: string, choice: string, ins
   broadcast('task:running', { id: task.id, action: `Resuming: ${task.action}` });
 
   const { default: Anthropic } = await import('@anthropic-ai/sdk');
-  const client = new Anthropic();
+  const client = new Anthropic({ apiKey: loadConfig()?.anthropic?.apiKey });
 
   const contextPath = path.join(CONFIG_DIR, 'task-runs', task.id);
   fs.mkdirSync(contextPath, { recursive: true });

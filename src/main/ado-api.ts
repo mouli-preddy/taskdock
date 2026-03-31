@@ -51,7 +51,7 @@ export class AdoApiClient {
 
       const result = execSync(
         `${azCommand} account get-access-token --resource ${ADO_RESOURCE_ID} --output json`,
-        { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
+        { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 10000 }
       );
 
       const tokenResponse = JSON.parse(result);
