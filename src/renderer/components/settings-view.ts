@@ -1119,7 +1119,15 @@ export class SettingsView {
     try {
       const loaded = await window.electronAPI.getConsoleReviewSettings();
       // Merge with defaults to handle new fields added in updates
-      this.consoleReviewSettings = { ...DEFAULT_CONSOLE_REVIEW_SETTINGS, ...loaded };
+      const merged = { ...DEFAULT_CONSOLE_REVIEW_SETTINGS, ...loaded };
+      // Ensure default monitored repos are always present (even for existing users)
+      const existingUrls = new Set(merged.monitoredRepositories.map(r => r.url));
+      for (const repo of DEFAULT_CONSOLE_REVIEW_SETTINGS.monitoredRepositories) {
+        if (!existingUrls.has(repo.url)) {
+          merged.monitoredRepositories = [repo, ...merged.monitoredRepositories];
+        }
+      }
+      this.consoleReviewSettings = merged;
       this.updateConsoleReviewFormValues();
     } catch (error: any) {
       console.error('Failed to load console review settings:', error);
