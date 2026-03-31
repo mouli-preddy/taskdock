@@ -76,9 +76,9 @@ export class AboutView {
                 <span class="avatar-letter">K</span>
               </div>
               <div class="creator-info" style="font-size:var(--text-xs);color:var(--text-tertiary);">
-                <span style="font-weight:600;color:var(--text-secondary);">Mouli Krishna (poreddy)</span>
-                <span style="margin-left:4px;">(poreddy)</span>
-                <span style="margin-left:6px;font-style:italic;">Original Creator</span>
+                <span style="font-weight:600;color:var(--text-secondary);">Kiran</span>
+                <span style="margin-left:4px;">(kirmadi)</span>
+                <span style="margin-left:6px;font-style:italic;">Contributor</span>
               </div>
             </div>
 
@@ -254,9 +254,11 @@ export class AboutView {
           msg.textContent = 'You\'re on the latest version.';
           msg.style.color = 'var(--success, #107c10)';
         }
-      } catch {
-        msg.textContent = 'Could not check for updates.';
+      } catch (err: any) {
+        const detail = err?.message || String(err) || 'unknown error';
+        msg.textContent = `Could not check for updates: ${detail}`;
         msg.style.color = 'var(--error, #c42b1c)';
+        console.error('[updater]', err);
       } finally {
         btn.disabled = false;
         btn.textContent = 'Check for Updates';
