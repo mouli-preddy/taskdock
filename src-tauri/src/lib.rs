@@ -153,6 +153,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             commands::storage::load_config,
             commands::storage::save_config,
@@ -171,6 +172,7 @@ pub fn run() {
             commands::storage::set_scrub_patterns,
             commands::file_io::read_review_output,
             commands::deep_link::get_initial_deep_link,
+            commands::updater::check_for_update,
         ])
         .setup(|app| {
             // Register deep-link schemes for development
