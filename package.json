@@ -1,6 +1,6 @@
 {
   "name": "taskdock",
-  "version": "0.0.8",
+  "version": "0.0.14",
   "description": "TaskDock - Desktop productivity app with PR Review and more",
   "type": "module",
   "scripts": {
