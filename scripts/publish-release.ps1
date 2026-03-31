@@ -101,7 +101,7 @@ git push origin $tag
 
 # Publish release to public repo (installers only — no code)
 Write-Host "Publishing $tag to public releases repo..." -ForegroundColor Cyan
-gh release delete $tag -R $publicRepo --yes 2>$null
+try { gh release delete $tag -R $publicRepo --yes 2>&1 | Out-Null } catch {}
 gh release create $tag `
     --repo $publicRepo `
     --title "TaskDock $tag" `
