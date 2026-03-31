@@ -34,6 +34,7 @@ export class WorkItemsListView {
   private excludedStates: string[] = ['Closed', 'Resolved', 'Done', 'Removed', 'Abandoned'];
   private showAllTypes = false;
   private includedTypes: string[] = [...DEFAULT_INCLUDED_TYPES];
+  private autoRefreshDone = false;
 
   private onSelectCallback: ((item: WorkItem) => void) | null = null;
   private onRefreshCallback: (() => void) | null = null;
@@ -101,6 +102,10 @@ export class WorkItemsListView {
     this.loading = false;
     this.renderTypeTabs();
     this.renderWorkItemsList();
+    if (items.length === 0 && !this.autoRefreshDone) {
+      this.autoRefreshDone = true;
+      setTimeout(() => this.onRefreshCallback?.(), 1500);
+    }
   }
 
   setWorkItemsGrouped(groups: WorkItemGroup[]) {
@@ -113,6 +118,11 @@ export class WorkItemsListView {
     }
     this.renderTypeTabs();
     this.renderWorkItemsList();
+    const totalItems = groups.reduce((n, g) => n + g.items.length, 0);
+    if (totalItems === 0 && !this.autoRefreshDone) {
+      this.autoRefreshDone = true;
+      setTimeout(() => this.onRefreshCallback?.(), 1500);
+    }
   }
 
   setActiveItems(groups: WorkItemGroup[], incidents: any[]) {
@@ -131,6 +141,7 @@ export class WorkItemsListView {
   }
 
   setLoading(loading: boolean) {
+    if (loading) this.autoRefreshDone = false;
     this.loading = loading;
     this.renderWorkItemsList();
   }

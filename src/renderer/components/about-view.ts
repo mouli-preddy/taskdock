@@ -76,7 +76,7 @@ export class AboutView {
                 <span class="avatar-letter">K</span>
               </div>
               <div class="creator-info" style="font-size:var(--text-xs);color:var(--text-tertiary);">
-                <span style="font-weight:600;color:var(--text-secondary);">Kiran</span>
+                <span style="font-weight:600;color:var(--text-secondary);">Kiran Madipally</span>
                 <span style="margin-left:4px;">(kirmadi)</span>
                 <span style="margin-left:6px;font-style:italic;">Contributor</span>
               </div>
