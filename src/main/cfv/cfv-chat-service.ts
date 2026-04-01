@@ -88,8 +88,9 @@ export class CfvChatService extends EventEmitter {
 
   private async getClient(): Promise<CopilotClient> {
     if (!this.client) {
-      this.client = new CopilotClient();
-      await this.client.start();
+      const client = new CopilotClient();
+      await client.start(); // throws if copilot CLI is missing/fails
+      this.client = client; // only set on success so failures don't poison the singleton
     }
     return this.client;
   }

@@ -117,9 +117,26 @@
 
     <!-- Loading Overlay -->
     <div class="loading-overlay hidden" id="loadingOverlay">
-      <div class="loading-content">
+      <!-- Normal connecting / loading state -->
+      <div class="loading-content" id="loadingContent">
         <div class="loading-spinner"></div>
         <p class="loading-text">Loading...</p>
+      </div>
+      <!-- Backend startup failure state -->
+      <div class="loading-content hidden" id="backendErrorContent" style="max-width:440px;text-align:center;gap:16px;">
+        <p style="font-size:var(--text-base);font-weight:600;color:var(--text-primary);margin:0;">
+          Backend failed to start
+        </p>
+        <p class="loading-text" style="margin:0;">
+          The app backend did not start in time.
+        </p>
+        <p class="loading-text" style="margin:0;">
+          Check the log file for details, then restart the app.
+        </p>
+        <button id="openLogFolderBtn"
+                style="padding:6px 16px;border-radius:var(--radius-md);border:1px solid var(--border-color);background:var(--bg-tertiary);color:var(--text-primary);cursor:pointer;font-size:var(--text-sm);">
+          Open Log Folder
+        </button>
       </div>
     </div>
 

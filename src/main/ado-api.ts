@@ -89,6 +89,11 @@ export class AdoApiClient {
         logger.error('AdoApiClient', msg);
         throw new Error(msg);
       }
+      if (/access is denied|WinError 5/i.test(raw)) {
+        const msg = `Azure CLI has a permissions issue reading its extension files. Fix: provide a PAT in Settings, or run this as Administrator: icacls "C:\\Program Files (x86)\\Microsoft SDKs\\Azure\\CLI2\\Lib\\site-packages\\azure-cli-extensions" /grant Users:R /T. Raw error: ${raw}`;
+        logger.error('AdoApiClient', msg);
+        throw new Error(msg);
+      }
       const msg = `Azure CLI error: ${raw}`;
       logger.error('AdoApiClient', msg);
       throw new Error(msg);

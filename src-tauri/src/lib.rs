@@ -1,3 +1,4 @@
+use std::io::{BufRead, BufReader};
 use std::net::TcpStream;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -178,15 +179,38 @@ fn spawn_backend() -> Result<Child, std::io::Error> {
         let backend_path = exe_dir.join(backend_name);
         log::info!("Starting backend sidecar from: {:?}", backend_path);
 
-        let mut cmd = Command::new(backend_path);
+        // Fail fast with a clear message if the binary is missing (e.g. AV quarantined it)
+        if !backend_path.exists() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("backend binary not found at: {}", backend_path.display()),
+            ));
+        }
+
+        let mut cmd = Command::new(&backend_path);
         cmd.stdout(Stdio::null())
-            .stderr(Stdio::null());
+            .stderr(Stdio::piped()); // capture stderr so failures appear in the Tauri log
 
         // Hide console window on Windows
         #[cfg(target_os = "windows")]
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
 
-        cmd.spawn()
+        let mut child = cmd.spawn()?;
+
+        // Drain stderr on a background thread — each line is written to the Tauri log file.
+        if let Some(stderr) = child.stderr.take() {
+            thread::spawn(move || {
+                let reader = BufReader::new(stderr);
+                for line in reader.lines() {
+                    match line {
+                        Ok(l) => log::error!("Backend stderr: {}", l),
+                        Err(_) => break,
+                    }
+                }
+            });
+        }
+
+        Ok(child)
     }
 }
 
@@ -236,6 +260,25 @@ pub fn run() {
             commands::updater::install_update,
         ])
         .setup(|app| {
+            // Configure logging first so all subsequent log calls are captured
+            let log_plugin = tauri_plugin_log::Builder::default()
+                .targets([
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
+                        file_name: Some("taskdock".to_string()),
+                    }),
+                ])
+                .level(if cfg!(debug_assertions) {
+                    log::LevelFilter::Debug
+                } else {
+                    log::LevelFilter::Info
+                })
+                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
+                .max_file_size(50_000_000) // 50MB
+                .build();
+
+            app.handle().plugin(log_plugin)?;
+
             // Register deep-link schemes for development
             // (production installer handles this automatically)
             #[cfg(debug_assertions)]
@@ -264,25 +307,6 @@ pub fn run() {
 
             // Start the backend monitor thread for auto-restart
             start_backend_monitor();
-
-            // Configure logging with file output and rotation
-            let log_plugin = tauri_plugin_log::Builder::default()
-                .targets([
-                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
-                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
-                        file_name: Some("taskdock".to_string()),
-                    }),
-                ])
-                .level(if cfg!(debug_assertions) {
-                    log::LevelFilter::Debug
-                } else {
-                    log::LevelFilter::Info
-                })
-                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
-                .max_file_size(50_000_000) // 50MB
-                .build();
-
-            app.handle().plugin(log_plugin)?;
 
             // Background update check — runs 3s after startup, then every 24 hours
             let app_handle = app.handle().clone();

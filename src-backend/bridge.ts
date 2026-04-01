@@ -1,11 +1,20 @@
 /**
  * TaskDock Backend Bridge
- * 
+ *
  * This is a Node.js sidecar process that handles complex operations
  * that require Node.js capabilities (node-pty, etc.)
- * 
+ *
  * Communication: WebSocket on port 5198
  */
+
+// Prevent the process from crashing on unhandled errors from background tasks
+// (e.g. Copilot SDK stream errors when copilot CLI is not installed)
+process.on('uncaughtException', (error) => {
+  console.error('[Backend] Uncaught exception (non-fatal):', error.message);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[Backend] Unhandled rejection (non-fatal):', reason);
+});
 
 import { WebSocketServer, WebSocket } from 'ws';
 import { AdoApiClient } from '../src/main/ado-api.js';

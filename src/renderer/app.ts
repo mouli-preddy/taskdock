@@ -29,6 +29,7 @@ import type {
   WalkthroughErrorEvent,
 } from '../shared/ai-types.js';
 import type { TerminalSession } from '../shared/terminal-types.js';
+import { DEFAULT_CONSOLE_REVIEW_SETTINGS } from '../shared/terminal-types.js';
 import type { WorkItem, SavedQuery } from '../shared/workitem-types.js';
 import { DiffViewer } from './components/diff-viewer.js';
 import { FileTree } from './components/file-tree.js';
@@ -292,6 +293,19 @@ class PRReviewApp {
         this.switchSection('tasks');
         // Wait for section render before scrolling
         setTimeout(() => this.tasksView.highlightTask(taskId), 100);
+      }
+    });
+
+    // Show connecting state while backend starts up
+    window.electronAPI.onBackendStatus((status, attempt) => {
+      if (status === 'connecting' && attempt > 1) {
+        this.showLoading(`Connecting to app backend… (attempt ${attempt})`);
+      } else if (status === 'connected') {
+        this.hideLoading();
+      } else if (status === 'disconnected' && attempt > 1) {
+        // attempt > 1 means the 60s startup timeout was reached.
+        // attempt === 0 is a mid-session drop which reconnects silently.
+        this.showBackendError();
       }
     });
 
@@ -1694,6 +1708,11 @@ class PRReviewApp {
       this.terminalsView.refresh();
     }
 
+    // Close any open task detail panel when switching to tasks
+    if (section === 'tasks') {
+      this.tasksView.closeDetailPanel();
+    }
+
     // Load work items when switching to work items section
     if (section === 'workItems') {
       this.refreshWorkItems();
@@ -2635,7 +2654,22 @@ class PRReviewApp {
     try {
       // Load settings for monitored repos
       const settings = await window.electronAPI.getConsoleReviewSettings();
-      const monitoredRepos = settings.monitoredRepositories || [];
+      let monitoredRepos = settings.monitoredRepositories || [];
+
+      // On fresh install the list is empty — inject defaults so they appear immediately.
+      // settings-view.ts does the same injection when Settings is opened, but that may
+      // not happen before loadPRLists() runs on first launch.
+      const existingUrls = new Set(monitoredRepos.map((r: any) => r.url));
+      const missingDefaults = DEFAULT_CONSOLE_REVIEW_SETTINGS.monitoredRepositories
+        .filter(r => !existingUrls.has(r.url));
+      if (missingDefaults.length > 0) {
+        monitoredRepos = [...missingDefaults, ...monitoredRepos];
+        // Persist so subsequent loads (and the Settings panel) see the defaults too
+        await window.electronAPI.setConsoleReviewSettings({
+          ...settings,
+          monitoredRepositories: monitoredRepos,
+        }).catch(() => {});
+      }
 
       // Set monitored repos on home view (for tab visibility)
       this.prHomeView.setMonitoredRepos(monitoredRepos);
@@ -4210,6 +4244,27 @@ After this, respond with a simple text response to greet the user and ask them w
 
   private hideLoading() {
     this.loadingOverlay.classList.add('hidden');
+    // Reset to spinner state so any subsequent showLoading() works correctly
+    document.getElementById('loadingContent')?.classList.remove('hidden');
+    document.getElementById('backendErrorContent')?.classList.add('hidden');
+  }
+
+  private showBackendError() {
+    document.getElementById('loadingContent')?.classList.add('hidden');
+    document.getElementById('backendErrorContent')?.classList.remove('hidden');
+    this.loadingOverlay.classList.remove('hidden');
+    // Wire up the "Open Log Folder" button once
+    const btn = document.getElementById('openLogFolderBtn');
+    if (btn && !btn.dataset.wired) {
+      btn.dataset.wired = '1';
+      btn.addEventListener('click', async () => {
+        try {
+          await window.electronAPI.loggerOpenLogFolder();
+        } catch (err) {
+          console.error('Failed to open log folder:', err);
+        }
+      });
+    }
   }
 
   // AI Review Methods
