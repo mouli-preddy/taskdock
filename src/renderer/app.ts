@@ -5987,11 +5987,13 @@ After this, respond with a simple text response to greet the user and ask them w
       await this.loadIcmQueries();
     } catch (error) {
       console.error('Failed to get ICM current user:', error);
-      Toast.error('Failed to connect to ICM. Ensure you are signed into Edge.');
+      this.icmListView.setSubtitle('Not connected — open Edge, sign in, and visit portal.microsofticm.com');
+      Toast.error('Failed to connect to ICM. Open Edge, sign in, and visit portal.microsofticm.com first.');
     }
   }
 
   private async refreshIcmIncidents() {
+    if (!this.icmCurrentUser) return;
     this.icmListView.setLoading(true);
 
     try {
