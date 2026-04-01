@@ -611,6 +611,9 @@ export interface ElectronAPI {
   checkForUpdate: () => Promise<string | null>;
   installUpdate: () => Promise<void>;
   onUpdateAvailable: (callback: (version: string) => void) => () => void;
+
+  // Backend connection status
+  onBackendStatus: (callback: (status: 'connecting' | 'connected' | 'disconnected', attempt: number) => void) => () => void;
 }
 
 declare global {

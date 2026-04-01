@@ -1,12 +1,12 @@
 {
   "name": "taskdock",
-  "version": "0.0.14",
+  "version": "0.0.17",
   "description": "TaskDock - Desktop productivity app with PR Review and more",
   "type": "module",
   "scripts": {
     "dev": "concurrently -k \"npm run dev:backend\" \"tauri dev\"",
     "dev:renderer": "vite",
-    "dev:backend": "tsx src-backend/bridge.ts",
+    "dev:backend": "tsx watch src-backend/bridge.ts",
     "build": "npm run build:renderer && npm run build:sidecar && tauri build",
     "build:renderer": "vite build",
     "build:backend": "tsc -p tsconfig.backend.json",

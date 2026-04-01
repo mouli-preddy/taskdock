@@ -102,12 +102,36 @@ git push origin $tag
 
 # Publish release to public repo (installers only — no code)
 Write-Host "Publishing $tag to public releases repo..." -ForegroundColor Cyan
+
+# Switch to public GitHub.com account before interacting with public repo
+$publicUser = $publicRepo.Split('/')[0]
+Write-Host "Switching gh auth to public account '$publicUser'..." -ForegroundColor Gray
+try { gh auth switch --user $publicUser 2>&1 | Out-Null } catch {}
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Could not switch to '$publicUser'. Run:" -ForegroundColor Yellow
+    Write-Host "  gh auth login -h github.com" -ForegroundColor Cyan
+    Write-Host "  gh auth refresh -h github.com -s repo,workflow" -ForegroundColor Cyan
+    Write-Host "Then re-run this script." -ForegroundColor Yellow
+    exit 1
+}
+
 try { gh release delete $tag -R $publicRepo --yes 2>&1 | Out-Null } catch {}
-gh release create $tag `
+$releaseOutput = gh release create $tag `
     --repo $publicRepo `
     --title "TaskDock $tag" `
     --generate-notes `
-    "$nsis" "$msi" "$json"
+    "$nsis" "$msi" "$json" 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Host $releaseOutput -ForegroundColor Red
+    $publicUser = $publicRepo.Split('/')[0]
+    Write-Host ""
+    Write-Host "Auth may have failed. To fix, run:" -ForegroundColor Yellow
+    Write-Host "  gh auth switch --user $publicUser" -ForegroundColor Cyan
+    Write-Host "  gh auth refresh -h github.com -s workflow" -ForegroundColor Cyan
+    Write-Host "Then sign in as '$publicUser' in the browser (use a private window if needed)." -ForegroundColor Yellow
+    exit 1
+}
+Write-Host $releaseOutput
 
 Write-Host ""
 Write-Host "TaskDock $tag released!" -ForegroundColor Green

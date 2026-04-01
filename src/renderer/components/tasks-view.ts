@@ -96,6 +96,13 @@ export class TasksView {
     setTimeout(() => el.classList.remove('task-highlight'), 2500);
   }
 
+  closeDetailPanel() {
+    if (this.selectedTaskId) {
+      this.selectedTaskId = null;
+      this.renderDetailPanel();
+    }
+  }
+
   addApprovalRequest(request: TaskApprovalRequest) {
     if (!this.approvalRequests.find(r => r.approvalId === request.approvalId)) {
       this.approvalRequests.push(request);

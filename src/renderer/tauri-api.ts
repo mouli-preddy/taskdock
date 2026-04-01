@@ -6,6 +6,9 @@
  */
 
 const WS_PORT = 5198;
+const ATTEMPT_TIMEOUT_MS = 2000;   // per-attempt socket timeout
+const MAX_CONNECT_MS = 60000;       // total time before giving up
+
 let ws: WebSocket | null = null;
 let messageId = 0;
 const pendingCalls = new Map<number, { resolve: (value: any) => void; reject: (error: Error) => void }>();
@@ -13,75 +16,121 @@ const eventListeners = new Map<string, Set<(data: any) => void>>();
 let connectionPromise: Promise<void> | null = null;
 let reconnectTimeout: number | null = null;
 
-function connect(): Promise<void> {
-  if (connectionPromise) return connectionPromise;
-  
-  connectionPromise = new Promise((resolve, reject) => {
-    const wsUrl = `ws://localhost:${WS_PORT}`;
-    console.log('Connecting to backend bridge:', wsUrl);
-    ws = new WebSocket(wsUrl);
+type BackendStatus = 'connecting' | 'connected' | 'disconnected';
+const statusListeners = new Set<(status: BackendStatus, attempt: number) => void>();
 
-    ws.onopen = () => {
-      console.log('Connected to backend bridge');
-      resolve();
-    };
+function emitStatus(status: BackendStatus, attempt = 0) {
+  for (const cb of statusListeners) {
+    try { cb(status, attempt); } catch {}
+  }
+}
 
-    ws.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data);
-        
-        if (message.type === 'rpc-response') {
-          const pending = pendingCalls.get(message.id);
-          if (pending) {
-            pendingCalls.delete(message.id);
-            if (message.error) {
-              pending.reject(new Error(message.error));
-            } else {
-              pending.resolve(message.result);
-            }
-          }
-        } else if (message.type === 'event') {
-          const listeners = eventListeners.get(message.event);
-          if (listeners) {
-            for (const listener of listeners) {
-              try {
-                listener(message.data);
-              } catch (error) {
-                console.error('Event listener error:', error);
-              }
-            }
+function handleMessage(event: MessageEvent) {
+  try {
+    const message = JSON.parse(event.data);
+    if (message.type === 'rpc-response') {
+      const pending = pendingCalls.get(message.id);
+      if (pending) {
+        pendingCalls.delete(message.id);
+        if (message.error) {
+          pending.reject(new Error(message.error));
+        } else {
+          pending.resolve(message.result);
+        }
+      }
+    } else if (message.type === 'event') {
+      const listeners = eventListeners.get(message.event);
+      if (listeners) {
+        for (const listener of listeners) {
+          try { listener(message.data); } catch (error) {
+            console.error('Event listener error:', error);
           }
         }
-      } catch (error) {
-        console.error('Failed to parse message:', error);
       }
+    }
+  } catch (error) {
+    console.error('Failed to parse message:', error);
+  }
+}
+
+function scheduleReconnect() {
+  if (!reconnectTimeout) {
+    reconnectTimeout = window.setTimeout(() => {
+      reconnectTimeout = null;
+      connect().catch(console.error);
+    }, 2000);
+  }
+}
+
+function attemptConnect(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const socket = new WebSocket(`ws://localhost:${WS_PORT}`);
+    let settled = false;
+
+    function settle(err?: Error) {
+      if (settled) return;
+      settled = true;
+      if (err) reject(err); else resolve();
+    }
+
+    socket.onopen = () => {
+      ws = socket;
+      console.log('Connected to backend bridge');
+      settle();
     };
 
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-    };
+    socket.onmessage = handleMessage;
 
-    ws.onclose = () => {
-      console.log('Disconnected from backend bridge');
+    socket.onerror = () => settle(new Error('WebSocket error'));
+
+    socket.onclose = () => {
+      if (!settled) {
+        settle(new Error('WebSocket closed before open'));
+        return;
+      }
+      // Connection was established and then dropped
       ws = null;
       connectionPromise = null;
-      
-      // Attempt to reconnect after a delay
-      if (!reconnectTimeout) {
-        reconnectTimeout = window.setTimeout(() => {
-          reconnectTimeout = null;
-          connect().catch(console.error);
-        }, 2000);
-      }
+      console.log('Disconnected from backend bridge');
+      emitStatus('disconnected');
+      scheduleReconnect();
     };
 
-    // Timeout connection attempt
     setTimeout(() => {
-      if (ws?.readyState !== WebSocket.OPEN) {
-        reject(new Error('Connection timeout'));
+      if (!settled) {
+        socket.close();
+        settle(new Error('Connection attempt timed out'));
       }
-    }, 5000);
+    }, ATTEMPT_TIMEOUT_MS);
   });
+}
+
+function connect(): Promise<void> {
+  if (connectionPromise) return connectionPromise;
+
+  connectionPromise = (async () => {
+    const deadline = Date.now() + MAX_CONNECT_MS;
+    let attempt = 0;
+
+    while (true) {
+      attempt++;
+      emitStatus('connecting', attempt);
+      console.log(`Connecting to backend bridge (attempt ${attempt})...`);
+
+      try {
+        await attemptConnect();
+        emitStatus('connected', attempt);
+        return;
+      } catch {
+        if (Date.now() + ATTEMPT_TIMEOUT_MS >= deadline) {
+          connectionPromise = null;
+          emitStatus('disconnected', attempt);
+          throw new Error('App backend did not start in time. Try restarting the app.');
+        }
+        await new Promise(r => setTimeout(r, ATTEMPT_TIMEOUT_MS));
+      }
+    }
+  })();
 
   return connectionPromise;
 }
@@ -826,6 +875,12 @@ export const tauriAPI = {
     invoke('tasks:respond-approval', { approvalId, choice, instructions }),
   onTaskPhase1Started: (callback: (event: any) => void) => subscribe('task:phase1-started', callback),
   onTaskPhase1Complete: (callback: (event: any) => void) => subscribe('task:phase1-complete', callback),
+
+  // Backend connection status
+  onBackendStatus: (callback: (status: 'connecting' | 'connected' | 'disconnected', attempt: number) => void): (() => void) => {
+    statusListeners.add(callback);
+    return () => statusListeners.delete(callback);
+  },
 };
 
 // Initialize connection when module loads

@@ -750,6 +750,7 @@ export class SettingsView {
     this.attachSettingsTabListeners();
     this.attachScrubPatternListeners();
     this.attachThemeHandlers();
+    this.updateFormValues();
   }
 
   private attachThemeHandlers(): void {
