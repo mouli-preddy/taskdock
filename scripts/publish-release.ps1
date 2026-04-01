@@ -1,0 +1,138 @@
+# TaskDock Local Release Publisher
+# Usage: .\scripts\publish-release.ps1 [-Force]
+param([switch]$Force)
+
+$ErrorActionPreference = 'Stop'
+$privateRepo = "poreddy_microsoft/taskdock"   # private enterprise repo (code)
+$publicRepo  = "mouli-preddy/taskdock"        # public repo (releases only)
+
+# Read version from tauri.conf.json
+$tauriConf = Get-Content "src-tauri/tauri.conf.json" | ConvertFrom-Json
+$version = $tauriConf.version
+$tag = "v$version"
+
+Write-Host "Building TaskDock $tag..." -ForegroundColor Cyan
+
+# Verify signing key exists
+$keyFile = "$env:USERPROFILE\.tauri\taskdock.key"
+if (-not (Test-Path $keyFile)) {
+    Write-Error "Signing key not found at $keyFile"
+    exit 1
+}
+
+# Locate NSIS installer for current version
+$bundle  = "src-tauri/target/release/bundle"
+$nsis    = (Get-ChildItem "$bundle/nsis/*_${version}_*.exe" | Select-Object -First 1).FullName
+$msi     = (Get-ChildItem "$bundle/msi/*_${version}_*.msi"  | Select-Object -First 1).FullName
+
+# Build only if installers not already present for this version (or -Force)
+if ($Force -or -not $nsis) {
+    Write-Host "Building renderer..." -ForegroundColor Gray
+    npm run build:renderer
+
+    Write-Host "Building sidecar..." -ForegroundColor Gray
+    npm run build:sidecar
+
+    Write-Host "Building Tauri app (this takes a few minutes)..." -ForegroundColor Gray
+    $configFile = "$env:TEMP\tauri-build-config.json"
+    '{"build":{"beforeBuildCommand":""}}' | Set-Content $configFile -Encoding UTF8
+    npx @tauri-apps/cli build --bundles nsis,msi --config $configFile
+    Remove-Item $configFile -Force -ErrorAction SilentlyContinue
+
+    $nsis = (Get-ChildItem "$bundle/nsis/*_${version}_*.exe" | Select-Object -First 1).FullName
+    $msi  = (Get-ChildItem "$bundle/msi/*_${version}_*.msi"  | Select-Object -First 1).FullName
+} else {
+    Write-Host "Installers already built for $version, skipping build." -ForegroundColor Gray
+}
+
+if (-not $nsis) {
+    Write-Error "NSIS installer not found. Build failed."
+    exit 1
+}
+
+# Sign the NSIS installer with tauri signer sign
+Write-Host "Signing installer..." -ForegroundColor Gray
+
+# Resolve password from env, then prompt if not set
+$signingPassword = $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+if (-not $signingPassword) {
+    $signingPassword = [System.Environment]::GetEnvironmentVariable("TAURI_SIGNING_PRIVATE_KEY_PASSWORD", "User")
+}
+if (-not $signingPassword) {
+    $signingPassword = Read-Host "Enter signing key password (leave blank if none)" -AsSecureString
+    $signingPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
+        [Runtime.InteropServices.Marshal]::SecureStringToBSTR($signingPassword))
+}
+
+$env:TAURI_SIGNING_PRIVATE_KEY_PATH = $keyFile
+$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = $signingPassword
+npx @tauri-apps/cli signer sign "$nsis"
+
+$sigFile = "$nsis.sig"
+if (-not (Test-Path $sigFile)) {
+    Write-Error "Signature file not created at $sigFile"
+    exit 1
+}
+
+# Build latest.json
+Write-Host "Generating latest.json..." -ForegroundColor Gray
+$sig = (Get-Content $sigFile -Raw).Trim()
+$nsisName = Split-Path $nsis -Leaf
+$jsonObj = [ordered]@{
+    version   = $version
+    notes     = "See the release page for details."
+    pub_date  = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+    platforms = [ordered]@{
+        "windows-x86_64" = [ordered]@{
+            signature = $sig
+            url       = "https://github.com/$publicRepo/releases/download/$tag/$nsisName"
+        }
+    }
+}
+$json = "$bundle\latest.json"
+[System.IO.File]::WriteAllText($json, ($jsonObj | ConvertTo-Json -Depth 5), [System.Text.UTF8Encoding]::new($false))
+Write-Host "Generated latest.json" -ForegroundColor Gray
+
+# Tag private repo (code history)
+Write-Host "Tagging private repo..." -ForegroundColor Cyan
+try { git tag -d $tag 2>&1 | Out-Null } catch {}
+try { git push origin ":refs/tags/$tag" 2>&1 | Out-Null } catch {}
+git tag $tag
+git push origin $tag
+
+# Publish release to public repo (installers only — no code)
+Write-Host "Publishing $tag to public releases repo..." -ForegroundColor Cyan
+
+# Switch to public GitHub.com account before interacting with public repo
+$publicUser = $publicRepo.Split('/')[0]
+Write-Host "Switching gh auth to public account '$publicUser'..." -ForegroundColor Gray
+try { gh auth switch --user $publicUser 2>&1 | Out-Null } catch {}
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Could not switch to '$publicUser'. Run:" -ForegroundColor Yellow
+    Write-Host "  gh auth login -h github.com" -ForegroundColor Cyan
+    Write-Host "  gh auth refresh -h github.com -s repo,workflow" -ForegroundColor Cyan
+    Write-Host "Then re-run this script." -ForegroundColor Yellow
+    exit 1
+}
+
+try { gh release delete $tag -R $publicRepo --yes 2>&1 | Out-Null } catch {}
+$releaseOutput = gh release create $tag `
+    --repo $publicRepo `
+    --title "TaskDock $tag" `
+    --generate-notes `
+    "$nsis" "$msi" "$json" 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Host $releaseOutput -ForegroundColor Red
+    $publicUser = $publicRepo.Split('/')[0]
+    Write-Host ""
+    Write-Host "Auth may have failed. To fix, run:" -ForegroundColor Yellow
+    Write-Host "  gh auth switch --user $publicUser" -ForegroundColor Cyan
+    Write-Host "  gh auth refresh -h github.com -s workflow" -ForegroundColor Cyan
+    Write-Host "Then sign in as '$publicUser' in the browser (use a private window if needed)." -ForegroundColor Yellow
+    exit 1
+}
+Write-Host $releaseOutput
+
+Write-Host ""
+Write-Host "TaskDock $tag released!" -ForegroundColor Green
+Write-Host "https://github.com/$publicRepo/releases/tag/$tag"

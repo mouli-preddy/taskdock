@@ -84,27 +84,42 @@ export interface ConsoleReviewSettings {
 
 export const DEFAULT_CONSOLE_REVIEW_SETTINGS: ConsoleReviewSettings = {
   linkedRepositories: [],
-  monitoredRepositories: [],
+  monitoredRepositories: [
+    {
+      url: 'https://domoreexp.visualstudio.com/Teamspace/_git/teams-modular-packages',
+      name: 'teams-modular-packages',
+      organization: 'domoreexp',
+      project: 'Teamspace',
+      repository: 'teams-modular-packages',
+    },
+    {
+      url: 'https://domoreexp.visualstudio.com/Teamspace/_git/teams-client-cifx_tests',
+      name: 'teams-client-cifx_tests',
+      organization: 'domoreexp',
+      project: 'Teamspace',
+      repository: 'teams-client-cifx_tests',
+    },
+  ],
   whenRepoFound: 'worktree',
   whenRepoNotFound: 'immediate',
   autoCloseTerminal: true,
   showNotification: true,
   worktreeCleanup: 'auto',
-  defaultChatAI: 'copilot',
+  defaultChatAI: 'claude',
   generatedFilePatterns: [],
   enableWorkIQ: true,
   analyzeComments: {
-    provider: 'copilot-sdk',
+    provider: 'claude-terminal',
     showTerminal: false,
     timeoutMinutes: 5,
   },
   applyChanges: {
-    provider: 'copilot-sdk',
+    provider: 'claude-terminal',
     showTerminal: false,
     timeoutMinutes: 5,
   },
   dgrepAnalysis: {
-    provider: 'copilot-sdk',
+    provider: 'claude-sdk',
     sourceRepository: '',
   },
 };

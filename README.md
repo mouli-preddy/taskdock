@@ -196,6 +196,18 @@ For more details, see the [WorkIQ documentation](https://learn.microsoft.com/en-
 
 ## Installation
 
+### Quick Install (Windows)
+
+Run this in PowerShell to download and install the latest release:
+
+```powershell
+irm https://raw.githubusercontent.com/poreddy_microsoft/taskdock/main/install.ps1 | iex
+```
+
+Or download the installer directly from the [latest release](https://github.com/poreddy_microsoft/taskdock/releases/latest).
+
+### Build from Source
+
 ```bash
 # Install dependencies
 npm install
@@ -205,9 +217,6 @@ npm run dev
 
 # Build for production
 npm run build
-
-# Run production build
-npm run start
 ```
 
 ## Authentication
@@ -243,6 +252,74 @@ export AZURE_DEVOPS_PAT=your_pat_here
 - **highlight.js**: Syntax highlighting
 - **Claude SDK**: AI-powered code review
 - **GitHub Copilot SDK**: Alternative AI provider
+
+## Publishing & Auto-Updates
+
+TaskDock uses `tauri-plugin-updater` for automatic updates. When a new version is released, running instances will detect it on startup (and every 24 hours) and show an "Install & Restart" toast. Users can also check manually via **Settings → Updates → Check for Updates**.
+
+### One-Time Setup
+
+**1. Generate a signing keypair** (only needed once per repo):
+
+```bash
+npm run tauri -- signer generate -w ~/.tauri/taskdock.key
+```
+
+This creates `~/.tauri/taskdock.key` (private) and `~/.tauri/taskdock.key.pub` (public).
+
+**2. Update `src-tauri/tauri.conf.json`** with the public key and your GitHub repo:
+
+```json
+"updater": {
+  "pubkey": "<contents of taskdock.key.pub>",
+  "endpoints": [
+    "https://github.com/OWNER/REPO/releases/latest/download/latest.json"
+  ],
+  "dialog": false
+}
+```
+
+**3. Add two GitHub Secrets** at `https://github.com/OWNER/REPO/settings/secrets/actions`:
+
+| Secret | Value |
+|--------|-------|
+| `TAURI_SIGNING_PRIVATE_KEY` | Contents of `~/.tauri/taskdock.key` |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Password used during keygen (leave empty if none) |
+
+Or use the GitHub CLI:
+```bash
+gh secret set TAURI_SIGNING_PRIVATE_KEY -R OWNER/REPO --body "$(cat ~/.tauri/taskdock.key)"
+gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD -R OWNER/REPO --body ""
+```
+
+### Releasing a New Version
+
+**1. Bump the version** across all manifests (`tauri.conf.json`, `Cargo.toml`, `package.json`):
+
+```bash
+npm run version:bump 0.0.7
+```
+
+**2. Commit and push the version bump:**
+
+```bash
+git add src-tauri/tauri.conf.json src-tauri/Cargo.toml package.json
+git commit -m "chore: bump version to 0.0.7"
+git push
+```
+
+**3. Build and publish the release locally:**
+
+```bash
+npm run publish-release
+```
+
+This script (`scripts/publish-release.ps1`):
+- Builds the renderer, sidecar, and Tauri app
+- Signs the installers using `~/.tauri/taskdock.key`
+- Creates a GitHub Release with the NSIS installer, MSI installer, and `latest.json` update manifest
+
+Running instances on older versions will detect the update automatically.
 
 ## License
 

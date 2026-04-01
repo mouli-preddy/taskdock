@@ -24,10 +24,11 @@ export interface ServiceEntry {
 
 export class SettingsView {
   private container: HTMLElement;
-  private settings: ReviewSettings = { organization: '', project: '', pat: '', anthropicApiKey: '' };
+  private settings: ReviewSettings = { organization: 'domoreexp', project: 'MSTeams', pat: '', anthropicApiKey: '' };
   private consoleReviewSettings: ConsoleReviewSettings = { ...DEFAULT_CONSOLE_REVIEW_SETTINGS };
   private pollingSettings: PollingSettings = { ...DEFAULT_POLLING_SETTINGS };
   private notificationSettings: NotificationSettings = { ...DEFAULT_NOTIFICATION_SETTINGS };
+  private autostartEnabled: boolean = false;
   private saveCallback: ((settings: ReviewSettings) => Promise<void>) | null = null;
   private testCallback: ((settings: ReviewSettings) => Promise<boolean>) | null = null;
   private consoleSettingsSavedCallback: ((settings: ConsoleReviewSettings) => void) | null = null;
@@ -43,6 +44,7 @@ export class SettingsView {
     this.loadConsoleReviewSettings();
     this.loadPollingSettings();
     this.loadNotificationSettings();
+    this.loadAutostartSetting();
     this.loadPlugins();
     this.loadServices();
     this.loadScrubPatterns();
@@ -138,8 +140,9 @@ export class SettingsView {
           }
         });
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load plugins:', err);
+      Toast.error(err?.message || 'Failed to load plugins');
     }
   }
 
@@ -245,25 +248,60 @@ export class SettingsView {
           <button class="settings-tab-btn" data-settings-tab="ai">AI</button>
           <button class="settings-tab-btn" data-settings-tab="services">Services</button>
           <button class="settings-tab-btn" data-settings-tab="privacy">Privacy</button>
+          <button class="settings-tab-btn" data-settings-tab="ui">UI</button>
         </div>
         <div class="settings-content">
 
+          <!-- UI Tab -->
+          <div class="settings-tab-content" data-tab-content="ui">
+            <div class="settings-section">
+              <h2 class="settings-section-title">Appearance</h2>
+              <p class="settings-section-description">Choose how TaskDock looks on your device.</p>
+              <div class="theme-selector" id="themeSelector">
+                <button type="button" class="theme-option" data-theme-value="dark" title="Dark">
+                  <span class="theme-option-icon">🌙</span>
+                  <span class="theme-option-label">Dark</span>
+                </button>
+                <button type="button" class="theme-option" data-theme-value="light" title="Light">
+                  <span class="theme-option-icon">☀️</span>
+                  <span class="theme-option-label">Light</span>
+                </button>
+                <button type="button" class="theme-option" data-theme-value="auto" title="Use device setting">
+                  <span class="theme-option-icon">💻</span>
+                  <span class="theme-option-label">Auto</span>
+                </button>
+              </div>
+            </div>
+            <div class="settings-section">
+              <h2 class="settings-section-title">Diagnostics</h2>
+              <p class="settings-section-description">Open the application log file to diagnose issues.</p>
+              <button type="button" class="btn btn-secondary" id="openLogFileBtn">Open Log File</button>
+            </div>
+          </div>
+
           <!-- Connection Tab -->
           <div class="settings-tab-content active" data-tab-content="connection">
+
             <div class="settings-section">
               <h2 class="settings-section-title">Azure DevOps Connection</h2>
               <p class="settings-section-description">Configure your Azure DevOps connection to browse and review pull requests.</p>
 
               <form class="settings-form" id="settingsForm">
                 <div class="form-group">
+                  <label for="settingsAdoUrl">Quick Setup from URL</label>
+                  <input type="text" id="settingsAdoUrl" placeholder="https://org.visualstudio.com/Project/_workitems/edit/123" autocomplete="off" spellcheck="false">
+                  <span class="form-hint" id="settingsAdoUrlHint">Paste any work item or repo URL to auto-fill organization and project.</span>
+                </div>
+
+                <div class="form-group">
                   <label for="settingsOrganization">Organization</label>
-                  <input type="text" id="settingsOrganization" placeholder="e.g., mycompany" required>
+                  <input type="text" id="settingsOrganization" placeholder="e.g., domoreexp" required>
                   <span class="form-hint">Your Azure DevOps organization name</span>
                 </div>
 
                 <div class="form-group">
                   <label for="settingsProject">Project</label>
-                  <input type="text" id="settingsProject" placeholder="e.g., myproject" required>
+                  <input type="text" id="settingsProject" placeholder="e.g., MSTeams" required>
                   <span class="form-hint">The project containing your repositories</span>
                 </div>
 
@@ -536,6 +574,19 @@ export class SettingsView {
             </div>
 
             <div class="settings-section">
+              <h2 class="settings-section-title">Startup</h2>
+              <p class="settings-section-description">Control whether TaskDock launches automatically when Windows starts.</p>
+
+              <div class="form-group checkbox-group">
+                <label>
+                  <input type="checkbox" id="autostartEnabled">
+                  <span>Launch TaskDock automatically at Windows startup</span>
+                </label>
+              </div>
+            </div>
+
+
+            <div class="settings-section">
               <h2 class="settings-section-title">Notifications</h2>
               <p class="settings-section-description">Configure native Windows toast notifications for background events.</p>
 
@@ -698,6 +749,37 @@ export class SettingsView {
     this.attachEventListeners();
     this.attachSettingsTabListeners();
     this.attachScrubPatternListeners();
+    this.attachThemeHandlers();
+    this.updateFormValues();
+  }
+
+  private attachThemeHandlers(): void {
+    const saved = (localStorage.getItem('taskdock-theme-preference') ?? 'auto') as string;
+    this.updateThemeButtons(saved);
+
+    this.container.querySelector('#themeSelector')?.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest('[data-theme-value]') as HTMLElement | null;
+      if (!btn) return;
+      const pref = btn.dataset.themeValue!;
+      localStorage.setItem('taskdock-theme-preference', pref);
+      this.updateThemeButtons(pref);
+      window.dispatchEvent(new CustomEvent('taskdock-theme-change', { detail: pref }));
+    });
+
+    const openLogBtn = this.container.querySelector('#openLogFileBtn') as HTMLButtonElement | null;
+    openLogBtn?.addEventListener('click', async () => {
+      try {
+        await window.electronAPI.loggerOpenLogFolder();
+      } catch (err: any) {
+        Toast.error(err?.message || 'Failed to open log folder');
+      }
+    });
+  }
+
+  private updateThemeButtons(active: string): void {
+    this.container.querySelectorAll('[data-theme-value]').forEach(btn => {
+      btn.classList.toggle('active', (btn as HTMLElement).dataset.themeValue === active);
+    });
   }
 
   private attachSettingsTabListeners(): void {
@@ -749,6 +831,29 @@ export class SettingsView {
     });
     anthropicKeyInput?.addEventListener('input', () => {
       this.settings = { ...this.settings, anthropicApiKey: anthropicKeyInput.value.trim() };
+    });
+
+    // Quick Setup from URL
+    const adoUrlInput = this.container.querySelector('#settingsAdoUrl') as HTMLInputElement;
+    const adoUrlHint = this.container.querySelector('#settingsAdoUrlHint') as HTMLElement;
+    adoUrlInput?.addEventListener('input', () => {
+      const url = adoUrlInput.value.trim();
+      if (!url) {
+        adoUrlHint.textContent = 'Paste any work item or repo URL to auto-fill organization and project.';
+        adoUrlHint.style.color = '';
+        return;
+      }
+      const parsed = this.parseAdoUrl(url);
+      if (parsed) {
+        (this.container.querySelector('#settingsOrganization') as HTMLInputElement).value = parsed.organization;
+        (this.container.querySelector('#settingsProject') as HTMLInputElement).value = parsed.project;
+        this.settings = { ...this.settings, organization: parsed.organization, project: parsed.project };
+        adoUrlHint.textContent = `Detected: ${parsed.organization} / ${parsed.project}`;
+        adoUrlHint.style.color = 'var(--color-success, #22c55e)';
+      } else {
+        adoUrlHint.textContent = 'Could not parse org and project from that URL.';
+        adoUrlHint.style.color = 'var(--color-error, #ef4444)';
+      }
     });
 
     ['settingsOrganization', 'settingsProject', 'settingsPat'].forEach(id => {
@@ -866,6 +971,14 @@ export class SettingsView {
     (this.container.querySelector('#settingsProject') as HTMLInputElement).value = this.settings.project;
     (this.container.querySelector('#settingsPat') as HTMLInputElement).value = this.settings.pat;
     (this.container.querySelector('#settingsAnthropicApiKey') as HTMLInputElement).value = this.settings.anthropicApiKey || '';
+    // Reset the quick-setup URL field so it doesn't show a stale value
+    const adoUrlInput = this.container.querySelector('#settingsAdoUrl') as HTMLInputElement;
+    if (adoUrlInput) adoUrlInput.value = '';
+    const adoUrlHint = this.container.querySelector('#settingsAdoUrlHint') as HTMLElement;
+    if (adoUrlHint) {
+      adoUrlHint.textContent = 'Paste any work item or repo URL to auto-fill organization and project.';
+      adoUrlHint.style.color = '';
+    }
   }
 
   private async handleSaveAll() {
@@ -959,6 +1072,10 @@ export class SettingsView {
       await window.electronAPI.setNotificationSettings(this.notificationSettings);
       this.notificationSettingsSavedCallback?.(this.notificationSettings);
 
+      // Save autostart setting
+      this.autostartEnabled = (this.container.querySelector('#autostartEnabled') as HTMLInputElement).checked;
+      try { await window.electronAPI.setAutostartEnabled(this.autostartEnabled); } catch { /* not yet implemented */ }
+
       Toast.success('All settings saved');
       this.showStatus('connected', 'Settings saved successfully');
     } catch (error: any) {
@@ -1003,10 +1120,19 @@ export class SettingsView {
     try {
       const loaded = await window.electronAPI.getConsoleReviewSettings();
       // Merge with defaults to handle new fields added in updates
-      this.consoleReviewSettings = { ...DEFAULT_CONSOLE_REVIEW_SETTINGS, ...loaded };
+      const merged = { ...DEFAULT_CONSOLE_REVIEW_SETTINGS, ...loaded };
+      // Ensure default monitored repos are always present (even for existing users)
+      const existingUrls = new Set(merged.monitoredRepositories.map(r => r.url));
+      for (const repo of DEFAULT_CONSOLE_REVIEW_SETTINGS.monitoredRepositories) {
+        if (!existingUrls.has(repo.url)) {
+          merged.monitoredRepositories = [repo, ...merged.monitoredRepositories];
+        }
+      }
+      this.consoleReviewSettings = merged;
       this.updateConsoleReviewFormValues();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load console review settings:', error);
+      Toast.error(error?.message || 'Failed to load review settings');
     }
   }
 
@@ -1196,6 +1322,22 @@ export class SettingsView {
     });
   }
 
+  private parseAdoUrl(url: string): { organization: string; project: string } | null {
+    // https://dev.azure.com/{org}/{project}/...
+    const devAzureMatch = url.match(/https?:\/\/dev\.azure\.com\/([^/?#]+)\/([^/?#_][^/?#]*?)(?:\/|$)/);
+    if (devAzureMatch) return { organization: devAzureMatch[1], project: devAzureMatch[2] };
+
+    // https://{org}.visualstudio.com/DefaultCollection/{project}/...
+    const vsDefaultMatch = url.match(/https?:\/\/([^./?#]+)\.visualstudio\.com\/DefaultCollection\/([^/?#_][^/?#]*?)(?:\/|$)/i);
+    if (vsDefaultMatch) return { organization: vsDefaultMatch[1], project: vsDefaultMatch[2] };
+
+    // https://{org}.visualstudio.com/{project}/...
+    const vsMatch = url.match(/https?:\/\/([^./?#]+)\.visualstudio\.com\/([^/?#_][^/?#]*?)(?:\/|$)/i);
+    if (vsMatch) return { organization: vsMatch[1], project: vsMatch[2] };
+
+    return null;
+  }
+
   private parseAdoRepoUrl(url: string): { organization: string; project: string; repository: string } | null {
     // Handle supported formats:
     // https://dev.azure.com/{org}/{project}/_git/{repo}
@@ -1295,8 +1437,9 @@ export class SettingsView {
     try {
       this.pollingSettings = await window.electronAPI.getPollingSettings();
       this.updatePollingFormValues();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load polling settings:', error);
+      Toast.error(error?.message || 'Failed to load polling settings');
     }
   }
 
@@ -1314,8 +1457,9 @@ export class SettingsView {
     try {
       this.notificationSettings = await window.electronAPI.getNotificationSettings();
       this.updateNotificationFormValues();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load notification settings:', error);
+      Toast.error(error?.message || 'Failed to load notification settings');
     }
   }
 
@@ -1344,12 +1488,30 @@ export class SettingsView {
     }
   }
 
+  // Autostart Setting Methods
+
+  private async loadAutostartSetting(): Promise<void> {
+    try {
+      this.autostartEnabled = await window.electronAPI.getAutostartEnabled();
+      this.updateAutostartFormValue();
+    } catch (error: any) {
+      console.error('Failed to load autostart setting:', error);
+      Toast.error(error?.message || 'Failed to load autostart setting');
+    }
+  }
+
+  private updateAutostartFormValue(): void {
+    const checkbox = this.container.querySelector('#autostartEnabled') as HTMLInputElement;
+    if (checkbox) checkbox.checked = this.autostartEnabled;
+  }
+
   private async loadServices(): Promise<void> {
     try {
       this.services = await window.electronAPI.getServices();
       this.renderServicesList();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load services:', error);
+      Toast.error(error?.message || 'Failed to load services');
       this.services = [];
       this.renderServicesList();
     }
@@ -1442,7 +1604,9 @@ export class SettingsView {
   private async loadScrubPatterns(): Promise<void> {
     try {
       this.scrubPatterns = await window.electronAPI.getScrubPatterns();
-    } catch {
+    } catch (error: any) {
+      console.error('Failed to load scrub patterns:', error);
+      Toast.error(error?.message || 'Failed to load privacy settings');
       this.scrubPatterns = [];
     }
     this.renderScrubPatterns();

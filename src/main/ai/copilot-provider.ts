@@ -35,8 +35,9 @@ let clientInstance: CopilotClient | null = null;
 
 async function getClient(): Promise<CopilotClient> {
   if (!clientInstance) {
-    clientInstance = new CopilotClient();
-    await clientInstance.start();
+    const client = new CopilotClient();
+    await client.start(); // throws if copilot CLI is missing/fails
+    clientInstance = client; // only set on success so failures don't poison the singleton
   }
   return clientInstance;
 }

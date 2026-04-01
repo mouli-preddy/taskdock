@@ -5,31 +5,31 @@
 
 /* CSS Variables */
 :root {
-  /* Colors - Dark Theme (default for code review) */
-  --bg-primary: #0d1117;
-  --bg-secondary: #161b22;
-  --bg-tertiary: #21262d;
-  --bg-elevated: #1c2128;
-  --bg-hover: rgba(136, 153, 166, 0.12);
-  --bg-active: rgba(136, 153, 166, 0.2);
+  /* Colors - Dark Theme (Fluent 2 / Teams) */
+  --bg-primary: #292929;
+  --bg-secondary: #1f1f1f;
+  --bg-tertiary: #141414;
+  --bg-elevated: #333333;
+  --bg-hover: rgba(255, 255, 255, 0.08);
+  --bg-active: rgba(255, 255, 255, 0.12);
   --bg-overlay: rgba(0, 0, 0, 0.5);
 
-  --text-primary: #e6edf3;
-  --text-secondary: #8b949e;
-  --text-tertiary: #6e7681;
-  --text-link: #58a6ff;
-  --text-link-hover: #79c0ff;
+  --text-primary: #ffffff;
+  --text-secondary: #d6d6d6;
+  --text-tertiary: #adadad;
+  --text-link: #7f85f5;
+  --text-link-hover: #887dff;
 
-  --border-color: #30363d;
-  --border-color-muted: #21262d;
-  --border-color-emphasis: #484f58;
+  --border-color: #666666;
+  --border-color-muted: #525252;
+  --border-color-emphasis: #999999;
 
-  --accent-primary: #238636;
-  --accent-primary-hover: #2ea043;
-  --accent-blue: #1f6feb;
-  --accent-blue-hover: #388bfd;
-  --accent-purple: #8957e5;
-  --accent-color: #1f6feb;
+  --accent-primary: #654cf5;
+  --accent-primary-hover: #7769fa;
+  --accent-blue: #7f85f5;
+  --accent-blue-hover: #887dff;
+  --accent-purple: #654cf5;
+  --accent-color: #654cf5;
 
   /* Diff Colors */
   --diff-add-bg: rgba(46, 160, 67, 0.15);
@@ -41,8 +41,8 @@
   --diff-del-word: rgba(248, 81, 73, 0.4);
   --diff-del-line: #8e1519;
   --diff-neutral-bg: transparent;
-  --diff-hunk-bg: rgba(56, 139, 253, 0.15);
-  --diff-hunk-text: #58a6ff;
+  --diff-hunk-bg: rgba(101, 76, 245, 0.15);
+  --diff-hunk-text: #7f85f5;
 
   /* Status Colors */
   --success: #3fb950;
@@ -66,8 +66,8 @@
   --space-12: 48px;
 
   /* Typography */
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
-  --font-mono: ui-monospace, 'Cascadia Code', 'SF Mono', 'Fira Code', Consolas, 'Liberation Mono', Menlo, monospace;
+  --font-sans: 'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif;
+  --font-mono: Consolas, 'Cascadia Code', 'SF Mono', 'Fira Code', 'Liberation Mono', Menlo, monospace;
 
   --text-xs: 11px;
   --text-sm: 12px;
@@ -91,15 +91,15 @@
   --gutter-width: 50px;
 
   /* Border Radius */
-  --radius-sm: 4px;
-  --radius-md: 6px;
+  --radius-sm: 2px;
+  --radius-md: 4px;
   --radius-lg: 8px;
-  --radius-full: 9999px;
+  --radius-full: 10000px;
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  /* Shadows (Fluent 2) */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.14), 0 0 1px rgba(0, 0, 0, 0.12);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.14), 0 0 2px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.14), 0 0 2px rgba(0, 0, 0, 0.12);
   --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 
   /* Transitions */
@@ -108,26 +108,30 @@
   --transition-slow: 250ms ease;
 }
 
-/* Light Theme */
+/* Light Theme (Fluent 2 / Teams) */
 [data-theme="light"] {
   --bg-primary: #ffffff;
-  --bg-secondary: #f6f8fa;
-  --bg-tertiary: #eaeef2;
+  --bg-secondary: #fafafa;
+  --bg-tertiary: #f5f5f5;
   --bg-elevated: #ffffff;
-  --bg-hover: rgba(31, 35, 40, 0.04);
-  --bg-active: rgba(31, 35, 40, 0.08);
+  --bg-hover: rgba(0, 0, 0, 0.04);
+  --bg-active: rgba(0, 0, 0, 0.08);
 
-  --text-primary: #1f2328;
-  --text-secondary: #656d76;
-  --text-tertiary: #8c959f;
-  --text-link: #0969da;
-  --text-link-hover: #0550ae;
+  --text-primary: #242424;
+  --text-secondary: #424242;
+  --text-tertiary: #616161;
+  --text-link: #5b5fc7;
+  --text-link-hover: #4f52b2;
 
-  --border-color: #d0d7de;
-  --border-color-muted: #d8dee4;
-  --border-color-emphasis: #8c959f;
+  --border-color: #d1d1d1;
+  --border-color-muted: #e0e0e0;
+  --border-color-emphasis: #999999;
 
-  --accent-color: #0969da;
+  --accent-primary: #5b5fc7;
+  --accent-primary-hover: #4f52b2;
+  --accent-blue: #5b5fc7;
+  --accent-blue-hover: #4f52b2;
+  --accent-color: #5b5fc7;
 
   --diff-add-bg: rgba(46, 160, 67, 0.15);
   --diff-add-gutter: rgba(46, 160, 67, 0.4);
@@ -168,8 +172,8 @@ body {
    Scrollbar Styling
    ======================================== */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -194,27 +198,41 @@ body {
 }
 
 /* ========================================
-   Title Bar (macOS style)
+   Title Bar
    ======================================== */
 .title-bar {
-  height: 38px;
+  position: relative;
+  height: 40px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
-  justify-content: center;
+  padding: 0 var(--space-4);
   -webkit-app-region: drag;
   flex-shrink: 0;
+  gap: var(--space-2);
+}
+
+.title-bar-drag-region {
+  position: absolute;
+  inset: 0;
+  -webkit-app-region: drag;
+  pointer-events: none;
 }
 
 .title-bar-content {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   -webkit-app-region: no-drag;
+  z-index: 1;
 }
 
 .app-title {
-  font-size: var(--text-sm);
-  font-weight: 500;
-  color: var(--text-secondary);
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0;
 }
 
 /* ========================================
@@ -1755,7 +1773,53 @@ body.resizing-panels * {
 
 .setup-modal p {
   color: var(--text-secondary);
+  margin-bottom: var(--space-4);
+}
+
+.setup-url-group {
   margin-bottom: var(--space-6);
+  text-align: left;
+}
+
+.setup-url-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-family: var(--font-mono, monospace);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.setup-url-input:focus {
+  border-color: var(--color-accent);
+}
+
+.setup-detected {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-success, #22c55e);
+}
+
+.setup-detected.hidden {
+  display: none;
+}
+
+.setup-detected-error {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-error, #ef4444);
+}
+
+.setup-detected-error.hidden {
+  display: none;
 }
 
 /* ========================================

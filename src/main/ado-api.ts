@@ -1,5 +1,6 @@
 import { execSync } from 'child_process';
 import { existsSync } from 'fs';
+import { getLogger } from './services/logger-service.js';
 import type {
   PullRequest,
   PullRequestIteration,
@@ -35,23 +36,29 @@ export class AdoApiClient {
   private tokenCache: { token: string; expiresAt: number } | null = null;
 
   async getToken(): Promise<string> {
+    const logger = getLogger();
+
     // Check environment variable first
     const pat = process.env.AZURE_DEVOPS_PAT;
     if (pat) {
+      logger.debug('AdoApiClient', 'Using PAT from environment variable');
       return pat;
     }
 
     // Check cache
     if (this.tokenCache && Date.now() < this.tokenCache.expiresAt - 60000) {
+      logger.debug('AdoApiClient', 'Using cached Azure CLI token');
       return this.tokenCache.token;
     }
+
+    logger.info('AdoApiClient', 'Fetching token via Azure CLI (az account get-access-token)...');
 
     try {
       const azCommand = findAzCommand();
 
       const result = execSync(
         `${azCommand} account get-access-token --resource ${ADO_RESOURCE_ID} --output json`,
-        { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
+        { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 10000 }
       );
 
       const tokenResponse = JSON.parse(result);
@@ -62,12 +69,34 @@ export class AdoApiClient {
         expiresAt,
       };
 
+      logger.info('AdoApiClient', 'Azure CLI token acquired successfully');
       return tokenResponse.accessToken;
     } catch (error: any) {
-      const errorMessage = error.message || String(error);
-      throw new Error(
-        `Failed to get ADO token. Ensure you are logged in via 'az login' or set AZURE_DEVOPS_PAT environment variable. Error: ${errorMessage}`
-      );
+      const raw = (error.stderr || error.message || String(error)).trim();
+
+      if (error.code === 'ETIMEDOUT' || error.signal === 'SIGTERM') {
+        const msg = `Azure CLI timed out. Try running "az account get-access-token" in your terminal to diagnose. Raw error: ${raw}`;
+        logger.error('AdoApiClient', msg);
+        throw new Error(msg);
+      }
+      if (/not logged in|please run 'az login'|run 'az login'/i.test(raw)) {
+        const msg = `Not logged in to Azure CLI. Run "az login" in your terminal, then restart the app. Raw error: ${raw}`;
+        logger.error('AdoApiClient', msg);
+        throw new Error(msg);
+      }
+      if (/command not found|is not recognized|cannot find/i.test(raw) || error.code === 'ENOENT') {
+        const msg = `Azure CLI (az) not found. Install it from https://aka.ms/installazurecliwindows or provide a PAT in Settings. Raw error: ${raw}`;
+        logger.error('AdoApiClient', msg);
+        throw new Error(msg);
+      }
+      if (/access is denied|WinError 5/i.test(raw)) {
+        const msg = `Azure CLI has a permissions issue reading its extension files. Fix: provide a PAT in Settings, or run this as Administrator: icacls "C:\\Program Files (x86)\\Microsoft SDKs\\Azure\\CLI2\\Lib\\site-packages\\azure-cli-extensions" /grant Users:R /T. Raw error: ${raw}`;
+        logger.error('AdoApiClient', msg);
+        throw new Error(msg);
+      }
+      const msg = `Azure CLI error: ${raw}`;
+      logger.error('AdoApiClient', msg);
+      throw new Error(msg);
     }
   }
 

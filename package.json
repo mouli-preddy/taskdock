@@ -1,19 +1,21 @@
 {
   "name": "taskdock",
-  "version": "0.0.5",
+  "version": "0.0.17",
   "description": "TaskDock - Desktop productivity app with PR Review and more",
   "type": "module",
   "scripts": {
     "dev": "concurrently -k \"npm run dev:backend\" \"tauri dev\"",
     "dev:renderer": "vite",
-    "dev:backend": "tsx src-backend/bridge.ts",
+    "dev:backend": "tsx watch src-backend/bridge.ts",
     "build": "npm run build:renderer && npm run build:sidecar && tauri build",
     "build:renderer": "vite build",
     "build:backend": "tsc -p tsconfig.backend.json",
     "build:bundle": "esbuild src-backend/bridge.ts --bundle --platform=node --target=node20 --outfile=dist/sidecar/bridge.cjs --format=cjs --external:@lydell/node-pty --external:@lydell/node-pty-win32-x64 --external:playwright-core",
     "build:sidecar": "node scripts/build-sidecar.js",
     "typecheck": "tsc --noEmit",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "version:bump": "node scripts/bump-version.mjs",
+    "publish-release": "powershell -ExecutionPolicy Bypass -File scripts/publish-release.ps1"
   },
   "pkg": {
     "scripts": [

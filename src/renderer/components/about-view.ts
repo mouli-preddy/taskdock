@@ -13,6 +13,16 @@ export class AboutView {
     this.render();
     this.attachEventListeners();
     this.setupKonamiCode();
+    this.loadVersion();
+  }
+
+  private async loadVersion() {
+    try {
+      const { getVersion } = await import('@tauri-apps/api/app');
+      const version = await getVersion();
+      const el = this.container.querySelector('#aboutVersion') as HTMLElement;
+      if (el) el.textContent = `v${version}`;
+    } catch { /* stay as fallback */ }
   }
 
   private render() {
@@ -38,20 +48,37 @@ export class AboutView {
               <div class="logo-sparkle s3">${getIcon(Zap, 12)}</div>
             </div>
             <div class="about-tagline">Where AI agents do the heavy lifting so you don't have to</div>
-            <div class="about-version">Beta (but like, a really good beta)</div>
+            <div class="about-version">
+              <span id="aboutVersion">v0.0.6</span>
+              &mdash; Beta (but like, a really good beta)
+              <button class="btn btn-secondary" id="checkForUpdatesBtn" style="margin-left:12px;font-size:var(--text-xs);padding:2px 10px;height:auto;">Check for Updates</button>
+              <span id="updateStatusMsg" style="font-size:var(--text-xs);color:var(--text-secondary);margin-left:8px;"></span>
+            </div>
           </div>
 
           <!-- Creator Section -->
           <div class="about-section about-creator-section">
             <div class="creator-card">
               <div class="creator-avatar" id="creatorAvatar">
-                <span class="avatar-letter">K</span>
+                <span class="avatar-letter">M</span>
                 <div class="avatar-ring"></div>
               </div>
               <div class="creator-info">
-                <h2 class="creator-name">Kiran Madipally</h2>
-                <div class="creator-alias">(kirmadi)</div>
-                <div class="creator-title">AWM (Agentic Workflow Manager)</div>
+                <h2 class="creator-name">Mouli Krishna</h2>
+                <div class="creator-alias">(mouli)</div>
+                <div class="creator-title">Main Contributor</div>
+                <div class="creator-mission">"I built this app to have a scheduler and AI task executor that automatically triggers AI agents."</div>
+              </div>
+            </div>
+
+            <div class="creator-card creator-card-secondary">
+              <div class="creator-avatar creator-avatar-secondary">
+                <span class="avatar-letter">K</span>
+              </div>
+              <div class="creator-info" style="font-size:var(--text-xs);color:var(--text-tertiary);">
+                <span style="font-weight:600;color:var(--text-secondary);">Kiran Madipally</span>
+                <span style="margin-left:4px;">(kirmadi)</span>
+                <span style="margin-left:6px;font-style:italic;">Contributor</span>
               </div>
             </div>
 
@@ -77,7 +104,7 @@ export class AboutView {
                         <path d="M19.35 8.5H15.5c.28.57.5 1.15.5 1.8v4.7h2.35c.85 0 1.65-.35 2.25-.95.6-.6.9-1.35.9-2.2v-1.55c0-.95-.75-1.8-1.75-1.8h-.4zM16.5 6c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2 2-.9 2-2zm-2.75 5h-4.5c-.95 0-1.75.75-1.75 1.75v5.5c0 .95.75 1.75 1.75 1.75h4.5c.95 0 1.75-.8 1.75-1.75v-5.5c0-1-.8-1.75-1.75-1.75zM11 9c1.65 0 3-1.35 3-3s-1.35-3-3-3-3 1.35-3 3 1.35 3 3 3z"/>
                       </svg>
                     </span>
-                    <span class="handle-text">kirmadi</span>
+                    <span class="handle-text">poreddy</span>
                   </div>
                 </div>
               </div>
@@ -123,7 +150,7 @@ export class AboutView {
 
             <div class="share-cta">
               <p class="share-how">
-                <strong>The secret handshake:</strong> Tell them to message <span class="highlight">kirmadi</span> on Teams!
+                <strong>The secret handshake:</strong> Tell them to message <span class="highlight">poreddy</span> on Teams!
               </p>
             </div>
           </div>
@@ -201,9 +228,42 @@ export class AboutView {
       card.addEventListener('click', () => this.handleFactClick(index));
     });
 
+    // Teams DM button
+    const feedbackCard = this.container.querySelector('#feedbackCard');
+    feedbackCard?.addEventListener('click', () => {
+      window.electronAPI.openExternal('msteams://teams.microsoft.com/l/chat/0/0?users=poreddy@microsoft.com');
+    });
+
     // Footer hint click
     const footerHint = this.container.querySelector('#footerHint');
     footerHint?.addEventListener('click', () => this.toggleSecretSection());
+
+    // Check for updates
+    this.container.querySelector('#checkForUpdatesBtn')?.addEventListener('click', async () => {
+      const btn = this.container.querySelector('#checkForUpdatesBtn') as HTMLButtonElement;
+      const msg = this.container.querySelector('#updateStatusMsg') as HTMLElement;
+      btn.disabled = true;
+      btn.textContent = 'Checking…';
+      msg.textContent = '';
+      try {
+        const version = await window.electronAPI.checkForUpdate();
+        if (version) {
+          msg.textContent = `v${version} available — restart to install`;
+          msg.style.color = 'var(--accent-primary)';
+        } else {
+          msg.textContent = 'You\'re on the latest version.';
+          msg.style.color = 'var(--success, #107c10)';
+        }
+      } catch (err: any) {
+        const detail = err?.message || String(err) || 'unknown error';
+        msg.textContent = `Could not check for updates: ${detail}`;
+        msg.style.color = 'var(--error, #c42b1c)';
+        console.error('[updater]', err);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Check for Updates';
+      }
+    });
   }
 
   private setupKonamiCode() {
@@ -292,7 +352,7 @@ export class AboutView {
         <h3>${getIcon(Heart, 24)} How to Send Kudos</h3>
         <ol>
           <li>Open Microsoft Teams</li>
-          <li>Search for <strong>kirmadi</strong> (Kiran Madipally)</li>
+          <li>Search for <strong>poreddy</strong> (Mouli Krishna (poreddy))</li>
           <li>Click the <strong>...</strong> menu</li>
           <li>Select <strong>"Praise"</strong></li>
           <li>Pick a badge and write something nice!</li>

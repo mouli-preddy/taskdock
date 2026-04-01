@@ -164,7 +164,7 @@ export class ClaudeHeadlessExecutor extends BaseReviewExecutor {
       }
 
       // Spawn claude with -p flag to read prompt from file
-      const args = ['--dangerously-skip-permissions', '-p', promptFilePath];
+      const args = ['--dangerously-skip-permissions', '--verbose', '-p', promptFilePath];
 
       logger.info(LOG_CATEGORY, 'Spawning claude process', { args, cwd: workingDir });
 

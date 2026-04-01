@@ -35,6 +35,24 @@
   border-radius: var(--radius-md);
   transition: color var(--transition-fast), background var(--transition-fast);
   overflow: hidden;
+  position: relative;
+}
+
+.section-badge {
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  background: var(--error, #c42b1c);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  pointer-events: none;
 }
 
 .section-sidebar-item:hover {
@@ -44,11 +62,12 @@
 
 .section-sidebar-item.active {
   color: var(--text-primary);
-  background: var(--bg-tertiary);
+  background: rgba(101, 76, 245, 0.12);
+  box-shadow: inset 3px 0 0 var(--accent-primary);
 }
 
 .section-sidebar-item.active:hover {
-  background: var(--bg-active);
+  background: rgba(101, 76, 245, 0.18);
 }
 
 .section-icon {

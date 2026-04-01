@@ -1,0 +1,72 @@
+# NOTE: GitHub Actions hosted runners are disabled for this repo (enterprise policy).
+# Releases are published locally using: npm run publish-release
+# This workflow is kept for reference if self-hosted runners become available.
+
+name: Release
+
+on:
+  workflow_dispatch:  # Manual trigger only — not on tag push
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build renderer
+        run: npm run build:renderer
+
+      - name: Build Node.js sidecar
+        run: npm run build:sidecar
+
+      - name: Build Tauri app (sign + bundle)
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npx @tauri-apps/cli build --bundles nsis,msi --config "{\"build\":{\"beforeBuildCommand\":\"\"}}"
+
+      - name: Locate build artifacts
+        id: artifacts
+        shell: pwsh
+        run: |
+          $bundle = "src-tauri/target/release/bundle"
+          $nsis = (Get-ChildItem "$bundle/nsis/*.exe" | Select-Object -First 1).FullName
+          $msi  = (Get-ChildItem "$bundle/msi/*.msi"  | Select-Object -First 1).FullName
+          $json = (Get-ChildItem "$bundle" -Recurse -Filter "latest.json" | Select-Object -First 1).FullName
+          echo "NSIS=$nsis" >> $env:GITHUB_OUTPUT
+          echo "MSI=$msi"   >> $env:GITHUB_OUTPUT
+          echo "JSON=$json"  >> $env:GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: TaskDock ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            ${{ steps.artifacts.outputs.NSIS }}
+            ${{ steps.artifacts.outputs.MSI }}
+            ${{ steps.artifacts.outputs.JSON }}

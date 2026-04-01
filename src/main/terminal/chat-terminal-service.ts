@@ -6,6 +6,7 @@
 
 import * as pty from '@lydell/node-pty';
 import { EventEmitter } from 'events';
+import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
@@ -90,7 +91,88 @@ export class ChatTerminalService extends EventEmitter {
     const { ptyProcess: _, startupTimeout: __, ...publicSession } = session;
     this.emit('session-created', { session: publicSession });
 
-    // Spawn PTY
+    // autoExit sessions (phased tasks) run the CLI directly via spawn — no PTY.
+    // This avoids PTY escape codes, shell startup noise, and \r overwrites in the log file.
+    if (options.autoExit) {
+      const promptFile = path.join(options.contextPath, 'chat-prompt.txt');
+      try {
+        fs.writeFileSync(promptFile, options.initialPrompt, 'utf-8');
+      } catch (error) {
+        logger.error(LOG_CATEGORY, 'Failed to write prompt file', { error });
+        session.status = 'error';
+        session.error = `Failed to write prompt file: ${error}`;
+        this.emit('status-change', { sessionId: id, status: 'error', error: session.error });
+        return id;
+      }
+
+      const cliCommand = options.ai === 'copilot' ? 'copilot' : 'claude';
+      const instruction = `Follow the instructions in: ${promptFile}`;
+      const cliArgs = options.ai === 'copilot'
+        ? ['--allow-all', '--add-dir', options.contextPath, '-i', instruction]
+        : ['--dangerously-skip-permissions', '--print', '--verbose', instruction];
+
+      logger.info(LOG_CATEGORY, 'Launching CLI (direct spawn, autoExit)', { cliCommand });
+
+      const child = spawn(cliCommand, cliArgs, {
+        cwd: options.workingDir,
+        env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' },
+        shell: true,
+      });
+
+      // Mock ptyProcess so kill/resize calls don't throw
+      session.ptyProcess = {
+        write: () => {},
+        resize: () => {},
+        kill: () => { child.kill(); },
+        onData: () => {},
+        onExit: () => {},
+      };
+
+      const outputChunks: string[] = [];
+
+      child.stdout?.on('data', (chunk: Buffer) => {
+        const str = chunk.toString();
+        outputChunks.push(str);
+        this.emit('data', { sessionId: id, data: str });
+      });
+
+      child.stderr?.on('data', (chunk: Buffer) => {
+        // Forward stderr to terminal display but exclude from log file
+        this.emit('data', { sessionId: id, data: chunk.toString() });
+      });
+
+      child.on('error', (err) => {
+        logger.error(LOG_CATEGORY, 'Failed to spawn CLI process', { error: err });
+        session.status = 'error';
+        session.error = err.message;
+        this.emit('status-change', { sessionId: id, status: 'error', error: session.error });
+      });
+
+      child.on('exit', (exitCode: number | null) => {
+        logger.info(LOG_CATEGORY, 'Auto-exit process exited', { sessionId: id, exitCode });
+
+        if (options.logFile) {
+          try {
+            const clean = outputChunks.join('').replace(/\n{3,}/g, '\n\n');
+            const date = new Date().toLocaleString();
+            const content = `# Task Run — ${date}\n\n## Prompt\n\n${options.initialPrompt}\n\n---\n\n## Output\n\n${clean}\n`;
+            fs.writeFileSync(options.logFile, content, 'utf-8');
+          } catch (e) {
+            logger.warn(LOG_CATEGORY, 'Failed to write session log', { logFile: options.logFile, error: e });
+          }
+        }
+
+        session.status = (exitCode ?? 1) === 0 ? 'completed' : 'error';
+        this.emit('exit', { sessionId: id, exitCode: exitCode ?? 1 });
+        this.emit('status-change', { sessionId: id, status: session.status });
+      });
+
+      session.status = 'running';
+      this.emit('status-change', { sessionId: id, status: 'running' });
+      return id;
+    }
+
+    // Interactive sessions use a PTY (full terminal with ANSI support)
     let ptyProcess: IPtyProcess;
     try {
       ptyProcess = pty.spawn(this.getShell(), [], {
@@ -113,30 +195,15 @@ export class ChatTerminalService extends EventEmitter {
       return id;
     }
 
-    // Forward PTY data (and buffer for log file if requested)
-    const outputBuffer: string[] = options.logFile ? [] : (null as any);
+    // Forward PTY data
     ptyProcess.onData((data: string) => {
       this.emit('data', { sessionId: id, data });
-      if (outputBuffer) outputBuffer.push(data);
     });
 
     // Handle PTY exit
     ptyProcess.onExit(({ exitCode }: { exitCode: number }) => {
       logger.info(LOG_CATEGORY, 'PTY process exited', { sessionId: id, exitCode });
       session.status = exitCode === 0 ? 'completed' : 'error';
-
-      // Write session log if requested
-      if (options.logFile && outputBuffer?.length) {
-        try {
-          const clean = stripAnsi(outputBuffer.join(''));
-          const date = new Date().toLocaleString();
-          const content = `# Task Run — ${date}\n\n## Prompt\n\n${options.initialPrompt}\n\n---\n\n## Output\n\n${clean}\n`;
-          fs.writeFileSync(options.logFile, content, 'utf-8');
-        } catch (e) {
-          logger.warn(LOG_CATEGORY, 'Failed to write session log', { logFile: options.logFile, error: e });
-        }
-      }
-
       this.emit('exit', { sessionId: id, exitCode });
       this.emit('status-change', { sessionId: id, status: session.status });
     });
@@ -144,7 +211,6 @@ export class ChatTerminalService extends EventEmitter {
     // Launch CLI after shell initializes
     session.startupTimeout = setTimeout(() => {
       if (session.ptyProcess) {
-        // Write the initial prompt to a file
         const promptFile = path.join(options.contextPath, 'chat-prompt.txt');
         try {
           fs.writeFileSync(promptFile, options.initialPrompt, 'utf-8');
@@ -156,21 +222,13 @@ export class ChatTerminalService extends EventEmitter {
           return;
         }
 
-        // Build CLI command
         const cliCommand = options.ai === 'copilot' ? 'copilot' : 'claude';
-        const cliArgs = options.ai === 'copilot'
-          ? ['--allow-all', '--add-dir', options.contextPath, '-i']
-          : options.autoExit
-            ? ['--dangerously-skip-permissions', '--print'] // non-interactive: runs task and exits
-            : ['--dangerously-skip-permissions'];
-
+        const cliArgs = ['--dangerously-skip-permissions'];
         const safeInstruction = `Follow the instructions in: ${promptFile}`;
         const argsStr = cliArgs.join(' ');
 
-        logger.info(LOG_CATEGORY, 'Launching CLI', { cliCommand, argsStr, autoExit: options.autoExit });
-        // autoExit: --print makes claude non-interactive (exits after task); `; exit` closes the shell
-        const exitSuffix = options.autoExit ? '; exit' : '';
-        session.ptyProcess.write(`${cliCommand} ${argsStr} "${safeInstruction.replace(/"/g, '\\"')}"${exitSuffix}\r`);
+        logger.info(LOG_CATEGORY, 'Launching CLI (PTY, interactive)', { cliCommand, argsStr });
+        session.ptyProcess.write(`${cliCommand} ${argsStr} "${safeInstruction.replace(/"/g, '\\"')}"\r`);
         session.status = 'running';
         this.emit('status-change', { sessionId: id, status: 'running' });
       }

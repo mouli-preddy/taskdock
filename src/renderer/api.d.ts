@@ -28,6 +28,8 @@ export interface ElectronAPI {
   tasksRunNow: (id: string) => Promise<void>;
   tasksToggleAi: (id: string, enabled: boolean) => Promise<{ cronExpression: string; nextRun: string }>;
   tasksReadLog: (logFile: string) => Promise<string>;
+  tasksExport: (ids: string[]) => Promise<{ filePath: string; count: number }>;
+  tasksImport: (jsonContent: string) => Promise<{ imported: number; skipped: number; tasks: any[] }>;
 
   getMyPRs: (org: string, project: string) => Promise<any[]>;
   getCreatedPRs: (org: string, project: string) => Promise<any[]>;
@@ -597,6 +599,21 @@ export interface ElectronAPI {
   onTaskError: (callback: (event: { id: string; error: string }) => void) => () => void;
   onTaskResult: (callback: (event: { id: string; result: string }) => void) => () => void;
   onTaskTerminalStarted: (callback: (event: { id: string; sessionId: string; action: string }) => void) => () => void;
+  tasksGetPendingApprovals: () => Promise<Array<{ taskId: string; approvalId: string; question: string; context: string; options: string[]; summary?: string }>>;
+  tasksGetPendingPhaseGates: () => Promise<Array<{ taskId: string; approvalId: string; logFile: string; preview: string; options: string[]; timestamp: string }>>;
+  onTaskApprovalRequest: (callback: (event: { taskId: string; approvalId: string; question: string; context: string; options: string[]; summary?: string }) => void) => () => void;
+  onTaskApprovalResolved: (callback: (event: { taskId: string; approvalId: string; choice: string; isPhaseGate?: boolean }) => void) => () => void;
+  tasksRespondApproval: (approvalId: string, choice: string, instructions: string) => Promise<void>;
+  onTaskPhase1Started: (callback: (event: { id: string; sessionId: string; action: string }) => void) => () => void;
+  onTaskPhase1Complete: (callback: (event: { id: string; approvalId: string; isPhaseGate: true; question: string; options: string[]; preview: string; resultsFile: string; summary?: string }) => void) => () => void;
+
+  // Auto-updater
+  checkForUpdate: () => Promise<string | null>;
+  installUpdate: () => Promise<void>;
+  onUpdateAvailable: (callback: (version: string) => void) => () => void;
+
+  // Backend connection status
+  onBackendStatus: (callback: (status: 'connecting' | 'connected' | 'disconnected', attempt: number) => void) => () => void;
 }
 
 declare global {
