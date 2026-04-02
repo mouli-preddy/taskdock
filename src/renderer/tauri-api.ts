@@ -88,7 +88,10 @@ function attemptConnect(): Promise<void> {
         settle(new Error('WebSocket closed before open'));
         return;
       }
-      // Connection was established and then dropped
+      // Guard against stale close events from a superseded socket firing after a
+      // newer connection is already established (e.g. backend's existing.close() loop
+      // closing the old socket just as the new one opens).
+      if (ws !== socket) return;
       ws = null;
       connectionPromise = null;
       console.log('Disconnected from backend bridge');
@@ -262,6 +265,8 @@ export const tauriAPI = {
     invoke('tasks:toggle-ai', id, enabled),
   tasksReadLog: (logFile: string) =>
     invoke('tasks:read-log', logFile),
+  tasksGetDebugCommand: (id: string) =>
+    invoke('tasks:get-debug-command', id),
   tasksExport: (ids: string[]) =>
     invoke('tasks:export', ids),
   tasksImport: (jsonContent: string) =>

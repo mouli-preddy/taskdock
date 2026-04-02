@@ -26,6 +26,7 @@ export interface ChatTerminalSession {
   ai: 'copilot' | 'claude';
   workingDir: string;
   contextPath: string;
+  command?: string; // exact shell command being run
   status: 'starting' | 'running' | 'completed' | 'error';
   createdAt: string;
   error?: string;
@@ -106,11 +107,27 @@ export class ChatTerminalService extends EventEmitter {
       workingDir: options.workingDir,
     });
 
+    // Pre-compute the display command so it's available in the session-created event
+    let command: string | undefined;
+    if (options.autoExit) {
+      const promptFile = path.join(options.contextPath, `prompt-${id}.txt`);
+      if (process.platform === 'win32') {
+        command = options.ai === 'copilot'
+          ? `copilot --allow-all --add-dir "${options.contextPath}"`
+          : `type "${promptFile}" | claude --dangerously-skip-permissions --print`;
+      } else {
+        command = options.ai === 'copilot'
+          ? `copilot --allow-all --add-dir "${options.contextPath}"`
+          : `claude --dangerously-skip-permissions --print < "${promptFile}"`;
+      }
+    }
+
     const session: SessionInternal = {
       id,
       ai: options.ai,
       workingDir: options.workingDir,
       contextPath: options.contextPath,
+      command,
       status: 'starting',
       createdAt: new Date().toISOString(),
       ptyProcess: null,
@@ -119,7 +136,7 @@ export class ChatTerminalService extends EventEmitter {
 
     this.sessions.set(id, session);
 
-    // Emit session-created event
+    // Emit session-created event (includes command for display in the UI)
     const { ptyProcess: _, startupTimeout: __, ...publicSession } = session;
     this.emit('session-created', { session: publicSession });
 
@@ -130,8 +147,10 @@ export class ChatTerminalService extends EventEmitter {
     if (options.autoExit) {
       const outputChunks: string[] = [];
 
-      // Write the full prompt to a file so we can redirect stdin without echo
-      const promptFile = path.join(options.contextPath, `prompt-${id}.txt`);
+      // Use chat-prompt.md as the persistent prompt file — it survives between runs
+      // so the user can inspect or manually re-run it. Never deleted on exit.
+      const promptFile = path.join(options.contextPath, 'chat-prompt.md');
+      fs.mkdirSync(options.contextPath, { recursive: true });
       try {
         fs.writeFileSync(promptFile, options.initialPrompt, 'utf-8');
       } catch (e) {
@@ -140,21 +159,28 @@ export class ChatTerminalService extends EventEmitter {
 
       let shellExe: string;
       let shellArgs: string[];
+      let fullCommand: string;
       if (process.platform === 'win32') {
-        // On Windows use cmd.exe /c so the shell exits when the command finishes
-        const cliCommand = options.ai === 'copilot'
-          ? `copilot --allow-all --add-dir "${options.contextPath}"`
-          : `claude --dangerously-skip-permissions --print < "${promptFile}"`;
+        // Write a persistent run.bat (no UUID) — embeds the path so pty.spawn's
+        // arg-quoting can't break the inner quotes, and stays for manual re-runs.
+        const batFile = path.join(options.contextPath, 'run.bat');
+        const batContent = options.ai === 'copilot'
+          ? `@echo off\r\ncopilot --allow-all --add-dir "${options.contextPath}"\r\n`
+          : `@echo off\r\ntype "${promptFile}" | claude --dangerously-skip-permissions --print\r\n`;
+        fs.writeFileSync(batFile, batContent, 'utf-8');
         shellExe = 'cmd.exe';
-        shellArgs = ['/c', cliCommand];
+        shellArgs = ['/c', batFile];
+        fullCommand = options.ai === 'copilot'
+          ? `copilot --allow-all --add-dir "${options.contextPath}"`
+          : `type "${promptFile}" | claude --dangerously-skip-permissions --print`;
       } else {
         const cliCommand = options.ai === 'copilot'
           ? `copilot --allow-all --add-dir "${options.contextPath}"`
           : `claude --dangerously-skip-permissions --print < "${promptFile}"`;
         shellExe = 'sh';
         shellArgs = ['-c', cliCommand];
+        fullCommand = cliCommand;
       }
-
       logger.info(LOG_CATEGORY, 'Launching CLI via PTY shell (autoExit)', { shellExe, shellArgs });
 
       let ptyProc: any;
@@ -183,13 +209,30 @@ export class ChatTerminalService extends EventEmitter {
 
       ptyProc.onExit(({ exitCode }: { exitCode: number }) => {
         logger.info(LOG_CATEGORY, 'Auto-exit PTY exited', { sessionId: id, exitCode });
-        // Clean up prompt file
-        try { fs.unlinkSync(promptFile); } catch {}
+        // prompt file (chat-prompt.md) and run.bat are intentionally kept for re-runs
         if (options.logFile) {
           try {
             const clean = cleanLogOutput(outputChunks.join(''));
             const date = new Date().toLocaleString();
-            const content = `# Task Run — ${date}\n\n## Prompt\n\n${options.initialPrompt}\n\n---\n\n## Output\n\n${clean}\n`;
+            const content = [
+              `# Task Run — ${date}`,
+              ``,
+              `## Prompt`,
+              ``,
+              options.initialPrompt,
+              ``,
+              `## Execution`,
+              ``,
+              `- **Command:** \`${fullCommand}\``,
+              `- **Working directory:** \`${options.workingDir}\``,
+              ``,
+              `---`,
+              ``,
+              `## Output`,
+              ``,
+              clean,
+              ``,
+            ].join('\n');
             fs.writeFileSync(options.logFile, content, 'utf-8');
           } catch (e) {
             logger.warn(LOG_CATEGORY, 'Failed to write session log', { logFile: options.logFile, error: e });
@@ -202,6 +245,17 @@ export class ChatTerminalService extends EventEmitter {
 
       session.status = 'running';
       this.emit('status-change', { sessionId: id, status: 'running' });
+      // Show prompt, command, and working dir at the top of the terminal
+      const promptText = options.initialPrompt.replace(/\r?\n/g, '\r\n');
+      this.emit('data', { sessionId: id, data: [
+        `\x1b[33m=== Task Prompt ===\x1b[0m`,
+        promptText,
+        `\x1b[33m===================\x1b[0m`,
+        `\x1b[36mCommand:\x1b[0m  ${fullCommand}`,
+        `\x1b[36mDirectory:\x1b[0m ${options.workingDir}`,
+        `\x1b[33m===================\x1b[0m`,
+        ``, ``,
+      ].join('\r\n') });
       return id;
     }
 

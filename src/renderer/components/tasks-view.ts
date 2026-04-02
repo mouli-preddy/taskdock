@@ -1,5 +1,5 @@
 import { escapeHtml, formatTimeAgo } from '../utils/html-utils.js';
-import { getIcon, Plus, Trash2, Clock, Zap, Loader, Bot, CalendarClock, CalendarX, ChevronDown, ChevronRight, Play, FileText, Download, Upload } from '../utils/icons.js';
+import { getIcon, Plus, Trash2, Clock, Zap, Loader, Bot, CalendarClock, CalendarX, ChevronDown, ChevronRight, Play, FileText, ArrowUp, ArrowDown, Terminal } from '../utils/icons.js';
 import { renderMarkdown } from '../utils/markdown.js';
 
 export interface TaskApprovalRequest {
@@ -168,11 +168,11 @@ export class TasksView {
             </button>
             <input type="file" id="tasksImportFile" accept=".json" style="display:none" />
             <button class="btn btn-secondary tasks-import-btn" id="tasksImportBtn">
-              ${getIcon(Upload, 14)} Import
+              ${getIcon(ArrowDown, 14)} Import
             </button>
             ${this.selectionMode && this.selectedIds.size > 0 ? `
             <button class="btn btn-primary tasks-export-btn" id="tasksExportBtn">
-              ${getIcon(Download, 14)} Export (${this.selectedIds.size})
+              ${getIcon(ArrowUp, 14)} Export (${this.selectedIds.size})
             </button>` : ''}
           </div>
         </header>
@@ -264,7 +264,11 @@ export class TasksView {
     const selectBtn = this.container.querySelector('#tasksSelectBtn') as HTMLButtonElement;
     selectBtn?.addEventListener('click', () => {
       this.selectionMode = !this.selectionMode;
-      if (!this.selectionMode) this.selectedIds.clear();
+      if (!this.selectionMode) {
+        this.selectedIds.clear();
+      } else {
+        this.getFilteredTasks().forEach(t => this.selectedIds.add(t.id));
+      }
       this.render();
     });
 
@@ -385,12 +389,12 @@ export class TasksView {
     const existing = headerActions?.querySelector('.tasks-export-btn') as HTMLElement | null;
     if (this.selectionMode && this.selectedIds.size > 0) {
       if (existing) {
-        existing.innerHTML = `${getIcon(Download, 14)} Export (${this.selectedIds.size})`;
+        existing.innerHTML = `${getIcon(ArrowUp, 14)} Export (${this.selectedIds.size})`;
       } else if (headerActions) {
         const btn = document.createElement('button');
         btn.className = 'btn btn-primary tasks-export-btn';
         btn.id = 'tasksExportBtn';
-        btn.innerHTML = `${getIcon(Download, 14)} Export (${this.selectedIds.size})`;
+        btn.innerHTML = `${getIcon(ArrowUp, 14)} Export (${this.selectedIds.size})`;
         btn.addEventListener('click', () => this.handleExport());
         headerActions.appendChild(btn);
       }
@@ -707,6 +711,9 @@ export class TasksView {
               <button class="btn task-detail-delete-btn">
                 ${getIcon(Trash2, 14)} Delete
               </button>
+              <button class="btn btn-secondary task-detail-debug-btn" title="Show the exact command that will be run">
+                ${getIcon(Terminal, 14)} Debug
+              </button>
               <button class="btn btn-secondary task-detail-test-btn"
                 ${this.testingIds.has(task.id) ? 'disabled' : ''}>
                 ${this.testingIds.has(task.id) ? getIcon(Loader, 14) : getIcon(Play, 14)}
@@ -829,6 +836,16 @@ export class TasksView {
       task.endTime = undefined;
       this.onUpdateCallback?.(task);
       this.renderDetailPanel();
+    });
+
+    // Debug command button
+    panel.querySelector('.task-detail-debug-btn')?.addEventListener('click', async () => {
+      try {
+        const info = await (window.electronAPI as any).tasksGetDebugCommand(task.id) as { command: string; workingDir: string; prompt: string; promptFile: string };
+        this.showDebugModal(info);
+      } catch (err: any) {
+        this.showLogModal(`Could not get debug info:\n${err.message}`);
+      }
     });
 
     // Test button
@@ -1041,6 +1058,46 @@ export class TasksView {
     backdrop.appendChild(modal);
     document.body.appendChild(backdrop);
     (modal.querySelector('.confirm-ok-btn') as HTMLButtonElement).focus();
+  }
+
+  private showDebugModal(info: { command: string; workingDir: string; prompt: string; promptFile: string }) {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'task-log-modal-backdrop';
+    backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;';
+
+    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const modal = document.createElement('div');
+    modal.style.cssText = 'background:var(--bg-secondary,#1e1e1e);border:1px solid var(--border-color,#333);border-radius:8px;width:760px;max-width:92vw;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;';
+    modal.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border-color,#333);">
+        <span style="font-weight:600;">Debug — Exact Run Command</span>
+        <button class="btn btn-icon" style="padding:4px;">✕</button>
+      </div>
+      <div style="flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:14px;">
+        <div>
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-tertiary);margin-bottom:4px;">Command</div>
+          <pre style="margin:0;padding:10px 12px;background:var(--bg-primary,#141414);border:1px solid var(--border-color,#333);border-radius:6px;font-size:12px;white-space:pre-wrap;word-break:break-all;">${esc(info.command)}</pre>
+        </div>
+        <div>
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-tertiary);margin-bottom:4px;">Working Directory</div>
+          <pre style="margin:0;padding:10px 12px;background:var(--bg-primary,#141414);border:1px solid var(--border-color,#333);border-radius:6px;font-size:12px;">${esc(info.workingDir)}</pre>
+        </div>
+        <div>
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-tertiary);margin-bottom:4px;">Prompt File</div>
+          <pre style="margin:0;padding:10px 12px;background:var(--bg-primary,#141414);border:1px solid var(--border-color,#333);border-radius:6px;font-size:12px;white-space:pre-wrap;word-break:break-all;">${esc(info.promptFile)}</pre>
+        </div>
+        <div>
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-tertiary);margin-bottom:4px;">Prompt Content</div>
+          <pre style="margin:0;padding:10px 12px;background:var(--bg-primary,#141414);border:1px solid var(--border-color,#333);border-radius:6px;font-size:12px;line-height:1.5;white-space:pre-wrap;">${esc(info.prompt)}</pre>
+        </div>
+      </div>
+    `;
+
+    const close = () => backdrop.remove();
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
+    modal.querySelector('button')!.addEventListener('click', close);
+    backdrop.appendChild(modal);
+    document.body.appendChild(backdrop);
   }
 
   private showLogModal(rawContent: string) {

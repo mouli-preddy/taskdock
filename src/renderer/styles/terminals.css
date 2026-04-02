@@ -161,8 +161,26 @@
   border-bottom: 1px solid var(--border-color);
 }
 
+.terminal-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
 .terminal-title {
   font-weight: 500;
+}
+
+.terminal-command {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60vw;
+  user-select: all;
 }
 
 .terminal-actions {

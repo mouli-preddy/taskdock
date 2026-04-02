@@ -305,8 +305,14 @@ pub fn run() {
             // Enable autostart on first run (new installation)
             initialize_autostart_if_needed();
 
-            // Start the backend monitor thread for auto-restart
-            start_backend_monitor();
+            // Start the backend monitor thread for auto-restart.
+            // Only monitor if we own the process — if it was already running (e.g. tsx
+            // in dev mode) we have no handle, and the monitor would spuriously respawn
+            // a second backend whenever tsx briefly drops the port during a file-change
+            // restart, causing two backends to fight over port 5198.
+            if BACKEND_PROCESS.lock().unwrap().is_some() {
+                start_backend_monitor();
+            }
 
             // Background update check — runs 3s after startup, then every 24 hours
             let app_handle = app.handle().clone();

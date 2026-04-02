@@ -188,7 +188,10 @@ export class TerminalsView {
         <div class="terminal-panel">
           ${this.activeSessionId ? `
             <div class="terminal-toolbar">
-              <span class="terminal-title">${this.getActiveSession()?.label || ''}</span>
+              <div class="terminal-title-group">
+                <span class="terminal-title">${escapeHtml(this.getActiveSession()?.label || '')}</span>
+                ${this.getActiveSession()?.command ? `<code class="terminal-command">${escapeHtml(this.getActiveSession()!.command!)}</code>` : ''}
+              </div>
               <div class="terminal-actions">
                 <button class="btn btn-icon kill-btn" title="Stop">
                   ${getIcon(Square, 16)}

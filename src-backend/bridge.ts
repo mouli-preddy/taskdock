@@ -51,6 +51,7 @@ import { DEFAULT_POLLING_SETTINGS } from '../src/shared/types.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { exec } from 'child_process';
 
 const PORT = 5198;
 const CONFIG_DIR = path.join(os.homedir(), '.taskdock');
@@ -462,6 +463,8 @@ async function runTaskInTerminal(task: any): Promise<string> {
     const contextPath = path.join(taskRunDir, task.id);
     if (!fs.existsSync(contextPath)) fs.mkdirSync(contextPath, { recursive: true });
 
+
+
     const runTimestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const logFile = path.join(contextPath, `run-${runTimestamp}.md`);
 
@@ -808,6 +811,7 @@ async function runScheduledTask(task: any): Promise<string> {
 
     const contextPath = path.join(CONFIG_DIR, 'task-runs', task.id);
     fs.mkdirSync(contextPath, { recursive: true });
+    fs.writeFileSync(path.join(contextPath, 'chat-prompt.md'), prompt, 'utf-8');
     const logFile = path.join(contextPath, `run-${new Date().toISOString().replace(/[:.]/g, '-')}.md`);
 
     const sessionId = chatTerminalService.createSession({
@@ -1017,6 +1021,45 @@ async function handleRpc(method: string, params: any[]): Promise<any> {
       saveStoreData(storeData);
       return;
     }
+    case 'tasks:get-debug-command': {
+      const taskId = params[0] as string;
+      const storeData = loadStoreData();
+      const task = (storeData.tasks || []).find((t: any) => t.id === taskId);
+      if (!task) throw new Error(`Task not found: ${taskId}`);
+      const config = loadConfig();
+      const org = config?.ado?.organization || '';
+      const project = config?.ado?.project || '';
+      const now = new Date().toLocaleString();
+      const prompt = [
+        `IMPORTANT: This is a single one-time execution. Do NOT create cron jobs, scheduled tasks, recurring timers, or any form of automation setup. The scheduling is handled externally. Just perform the action below once and exit.`,
+        ``,
+        `Current time: ${now}`,
+        org ? `ADO context: ${org} / ${project}` : '',
+        ``,
+        `Task: ${task.action}`,
+      ].filter(Boolean).join('\n');
+      const workingDir = task.workingDir || os.homedir();
+      const contextPath = path.join(CONFIG_DIR, 'task-runs', taskId);
+      fs.mkdirSync(contextPath, { recursive: true });
+      // Write a real preview file so the command is immediately runnable
+      const promptFile = path.join(contextPath, 'prompt-debug-preview.txt');
+      fs.writeFileSync(promptFile, prompt, 'utf-8');
+      let command: string;
+      if (process.platform === 'win32') {
+        const batFile = path.join(contextPath, 'run-debug-preview.bat');
+        fs.writeFileSync(batFile, `@echo off\r\ntype "${promptFile}" | claude --dangerously-skip-permissions --print\r\n`, 'utf-8');
+        command = `cmd.exe /c "${batFile}"`;
+      } else {
+        command = `sh -c "claude --dangerously-skip-permissions --print < '${promptFile}'"`;
+      }
+      console.log(`\n[TaskDock Debug] Task: ${task.title || task.action}`);
+      console.log(`[TaskDock Debug] Working dir: ${workingDir}`);
+      console.log(`[TaskDock Debug] Command: ${command}`);
+      console.log(`[TaskDock Debug] Prompt file: ${promptFile}`);
+      console.log(`[TaskDock Debug] Prompt:\n${prompt}\n`);
+      return { command, workingDir, prompt, promptFile };
+    }
+
     case 'tasks:run-now': {
       const id = params[0] as string;
       const storeData = loadStoreData();
@@ -1225,11 +1268,15 @@ Input: "${raw.replace(/"/g, '\\"')}"`,
         aiAutomated: t.aiAutomated, cronExpression: t.cronExpression,
       }));
       const payload = { version: 1, exportedAt: new Date().toISOString(), tasks: exportTasks };
-      const exportsDir = path.join(CONFIG_DIR, 'exports');
+      const exportsDir = path.join(os.homedir(), 'Downloads');
       fs.mkdirSync(exportsDir, { recursive: true });
       const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
       const filePath = path.join(exportsDir, `taskdock-export-${ts}.json`);
       fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf8');
+      const openCmd = process.platform === 'win32' ? `explorer.exe "${exportsDir}"`
+        : process.platform === 'darwin' ? `open "${exportsDir}"`
+        : `xdg-open "${exportsDir}"`;
+      exec(openCmd);
       return { filePath, count: exportTasks.length };
     }
 

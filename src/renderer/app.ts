@@ -1358,7 +1358,7 @@ class PRReviewApp {
       // Add to terminals view so it's visible in the Terminals tab
       this.terminalsView.addSession({
         id: event.session.id,
-        label: `AI Chat (${event.session.ai})`,
+        label: `AI Task (${event.session.ai})`,
         status: event.session.status || 'running',
         prId: 0,
         organization: '',
@@ -1366,6 +1366,7 @@ class PRReviewApp {
         workingDir: event.session.workingDir || '',
         contextPath: event.session.contextPath || '',
         createdAt: event.session.createdAt || new Date().toISOString(),
+        command: event.session.command,
       }, true /* isChat */);
     });
 
@@ -1408,7 +1409,6 @@ class PRReviewApp {
             if (completedTaskId) {
               setTimeout(() => {
                 this.tasksView.highlightTask(completedTaskId!);
-                this.tasksView.showLatestLog(completedTaskId!);
               }, 150);
             }
           }
