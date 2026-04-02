@@ -172,16 +172,20 @@
 
 .terminal-container {
   flex: 1;
+  display: flex;
+  flex-direction: column;
   padding: var(--space-2);
   overflow: hidden;
   min-height: 0;
   background: #1e1e1e;
 }
 
-/* Inner terminal div - following electron-terminal sample pattern */
+/* Inner terminal div — flex:1 gives a definite height without relying on height:100% */
 .terminal-inner {
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   width: 100%;
+  overflow: hidden;
 }
 
 /* The actual xterm container element created by xterm.js */

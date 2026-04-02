@@ -88,6 +88,17 @@ export class TasksView {
     if (task) { task.lastRun = lastRun; task.nextRun = nextRun; this.renderList(); }
   }
 
+  showLatestLog(taskId: string): void {
+    const task = this.tasks.find(t => t.id === taskId);
+    if (!task) return;
+    const latestWithLog = [...(task.runHistory || [])].reverse().find(r => r.logFile);
+    if (latestWithLog?.logFile) {
+      window.electronAPI.tasksReadLog(latestWithLog.logFile)
+        .then(content => this.showLogModal(content))
+        .catch(() => {});
+    }
+  }
+
   highlightTask(id: string) {
     const el = this.container.querySelector(`.task-card[data-id="${id}"]`) as HTMLElement;
     if (!el) return;
@@ -409,7 +420,7 @@ export class TasksView {
     const emptyMessages: Record<TaskTab, [string, string]> = {
       all: ['No scheduled tasks yet.', 'Use the input above to add one.'],
       inactive: ['No inactive tasks.', 'Paused tasks will appear here.'],
-      'needs-approval': ['All tasks are AI-automated.', 'Tasks without AI automation will appear here.'],
+      'needs-approval': ['No approvals pending.', 'Tasks needing approval will appear here.'],
     };
 
     if (filtered.length === 0) {

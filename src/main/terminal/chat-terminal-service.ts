@@ -57,6 +57,39 @@ function stripAnsi(str: string): string {
     .replace(/\n{3,}/g, '\n\n');                 // collapse runs of blank lines
 }
 
+/**
+ * Post-process raw captured output into clean markdown suitable for a log file.
+ * Strips shell banner/command-echo noise (present when PTY was used) and ensures
+ * markdown block elements have blank lines before them.
+ */
+function cleanLogOutput(raw: string): string {
+  let text = stripAnsi(raw);
+
+  // If the output contains a PS prompt, strip everything up to and including
+  // the last claude command-echo line (PS banner + prompt + command replay).
+  if (/\nPS [A-Z]:\\/.test(text)) {
+    const cmdEchoRe = /claude --dangerously-skip-permissions --print[^\n]*/g;
+    let lastMatch: RegExpExecArray | null = null;
+    let m: RegExpExecArray | null;
+    // eslint-disable-next-line no-cond-assign
+    while ((m = cmdEchoRe.exec(text)) !== null) lastMatch = m;
+    if (lastMatch) {
+      const after = lastMatch.index + lastMatch[0].length;
+      // Skip any trailing "; exit>" / ">" / whitespace that PowerShell echoes
+      text = text.slice(after).replace(/^[;\s>]+/, '');
+    }
+  }
+
+  // Ensure a blank line before markdown headings (## / ###) when run together
+  text = text.replace(/([^\n])(#{1,6} )/g, '$1\n\n$2');
+  // Ensure a blank line before horizontal rules (---) when run together
+  text = text.replace(/([^\n])(---\s*\n)/g, '$1\n\n$2');
+  // Re-collapse any triple+ blank lines introduced above
+  text = text.replace(/\n{3,}/g, '\n\n');
+
+  return text.trim();
+}
+
 export class ChatTerminalService extends EventEmitter {
   private sessions: Map<string, SessionInternal> = new Map();
 
@@ -91,25 +124,17 @@ export class ChatTerminalService extends EventEmitter {
     const { ptyProcess: _, startupTimeout: __, ...publicSession } = session;
     this.emit('session-created', { session: publicSession });
 
-    // autoExit sessions (phased tasks) run the CLI directly via spawn — no PTY.
-    // This avoids PTY escape codes, shell startup noise, and \r overwrites in the log file.
+    // autoExit sessions use direct spawn (no PTY) to get clean, undecorated stdout for the
+    // log file. Output is forwarded to the xterm display via data events; the TerminalsView
+    // buffer ensures it is replayed correctly even after re-renders.
     if (options.autoExit) {
-      const promptFile = path.join(options.contextPath, 'chat-prompt.txt');
-      try {
-        fs.writeFileSync(promptFile, options.initialPrompt, 'utf-8');
-      } catch (error) {
-        logger.error(LOG_CATEGORY, 'Failed to write prompt file', { error });
-        session.status = 'error';
-        session.error = `Failed to write prompt file: ${error}`;
-        this.emit('status-change', { sessionId: id, status: 'error', error: session.error });
-        return id;
-      }
-
       const cliCommand = options.ai === 'copilot' ? 'copilot' : 'claude';
-      const instruction = `Follow the instructions in: ${promptFile}`;
+      // Prompt is delivered via stdin to avoid shell quoting issues with arbitrary text.
+      // shell: true is required on Windows so .cmd wrappers (npm-installed CLIs) resolve.
+      // Claude CLI reads stdin when --print is given without a positional argument.
       const cliArgs = options.ai === 'copilot'
-        ? ['--allow-all', '--add-dir', options.contextPath, '-i', instruction]
-        : ['--dangerously-skip-permissions', '--print', '--verbose', instruction];
+        ? ['--allow-all', '--add-dir', options.contextPath]
+        : ['--dangerously-skip-permissions', '--print'];
 
       logger.info(LOG_CATEGORY, 'Launching CLI (direct spawn, autoExit)', { cliCommand });
 
@@ -117,7 +142,12 @@ export class ChatTerminalService extends EventEmitter {
         cwd: options.workingDir,
         env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' },
         shell: true,
+        stdio: ['pipe', 'pipe', 'pipe'],
       });
+
+      // Write the full prompt to stdin and close it so the CLI knows input is done
+      child.stdin!.write(options.initialPrompt, 'utf-8');
+      child.stdin!.end();
 
       // Mock ptyProcess so kill/resize calls don't throw
       session.ptyProcess = {
@@ -137,7 +167,7 @@ export class ChatTerminalService extends EventEmitter {
       });
 
       child.stderr?.on('data', (chunk: Buffer) => {
-        // Forward stderr to terminal display but exclude from log file
+        // Forward stderr to display only — exclude from log
         this.emit('data', { sessionId: id, data: chunk.toString() });
       });
 
@@ -150,10 +180,9 @@ export class ChatTerminalService extends EventEmitter {
 
       child.on('exit', (exitCode: number | null) => {
         logger.info(LOG_CATEGORY, 'Auto-exit process exited', { sessionId: id, exitCode });
-
         if (options.logFile) {
           try {
-            const clean = outputChunks.join('').replace(/\n{3,}/g, '\n\n');
+            const clean = cleanLogOutput(outputChunks.join(''));
             const date = new Date().toLocaleString();
             const content = `# Task Run — ${date}\n\n## Prompt\n\n${options.initialPrompt}\n\n---\n\n## Output\n\n${clean}\n`;
             fs.writeFileSync(options.logFile, content, 'utf-8');
@@ -161,7 +190,6 @@ export class ChatTerminalService extends EventEmitter {
             logger.warn(LOG_CATEGORY, 'Failed to write session log', { logFile: options.logFile, error: e });
           }
         }
-
         session.status = (exitCode ?? 1) === 0 ? 'completed' : 'error';
         this.emit('exit', { sessionId: id, exitCode: exitCode ?? 1 });
         this.emit('status-change', { sessionId: id, status: session.status });

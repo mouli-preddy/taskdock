@@ -564,14 +564,19 @@ async function handlePhase1Complete(task: any, logFile: string): Promise<void> {
     if (fs.existsSync(logFile)) {
       const raw = fs.readFileSync(logFile, 'utf-8');
       // Strip ANSI escape codes
-      phase1Results = raw.replace(/\x1b\[[0-9;?<>]*[A-Za-z]/g, '').replace(/\x1b\][^\x07]*\x07/g, '').trim();
+      const stripped = raw.replace(/\x1b\[[0-9;?<>]*[A-Za-z]/g, '').replace(/\x1b\][^\x07]*\x07/g, '').trim();
+      // Show only the output section (after "## Output") — skips the prompt header noise
+      const outputMarker = stripped.indexOf('\n## Output');
+      phase1Results = outputMarker !== -1
+        ? stripped.slice(outputMarker + '\n## Output'.length).trim()
+        : stripped;
     }
     // Try to extract the structured summary section (## headings at end of output)
     const summaryMatch = phase1Results.match(/(#{1,3} Summary[\s\S]*)/i);
     const preview = summaryMatch
       ? summaryMatch[1].trim()
       : phase1Results.length > 3000
-        ? '…(see beginning truncated)\n\n' + phase1Results.slice(-3000)
+        ? '…(truncated — showing last 3000 chars)\n\n' + phase1Results.slice(-3000)
         : phase1Results;
 
     const approvalId = crypto.randomUUID();

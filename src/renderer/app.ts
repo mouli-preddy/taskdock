@@ -175,6 +175,7 @@ class PRReviewApp {
   private workspaceSection!: WorkspaceSection;
   private tasksView!: TasksView;
   private taskTerminalSessionIds = new Set<string>();
+  private taskSessionMap = new Map<string, string>(); // taskId → sessionId
 
   private activeSection: SectionId = 'workItems';
   private systemTheme: 'dark' | 'light' = 'dark';
@@ -473,7 +474,21 @@ class PRReviewApp {
     });
     window.electronAPI.onTaskTerminalStarted((data) => {
       Toast.success(`Task running: "${data.action}" — opening terminal`);
-      this.taskTerminalSessionIds.add(data.sessionId);
+      // If a previous terminal for this task is still open, remove it immediately
+      const prevSessionId = this.taskSessionMap.get(data.id);
+      if (prevSessionId && prevSessionId !== data.sessionId) {
+        this.taskTerminalSessionIds.delete(prevSessionId);
+        this.terminalsView.removeSession(prevSessionId);
+        window.electronAPI.chatTerminalRemove(prevSessionId).catch(() => {});
+      }
+      this.taskSessionMap.set(data.id, data.sessionId);
+      // Phase 1 terminals are NOT added to taskTerminalSessionIds — their removal is handled
+      // by the taskSessionMap dedup above when Phase 2 starts. Adding them here caused a race
+      // where the 2s auto-close timer overlapped with Phase 2 opening, showing 2 terminals.
+      const isPhase1 = data.action.startsWith('[Phase 1]');
+      if (!isPhase1) {
+        this.taskTerminalSessionIds.add(data.sessionId);
+      }
       this.switchSection('terminals');
       // The session-created event will add it to terminalsView; set it active once added
       setTimeout(() => this.terminalsView.setActiveSession(data.sessionId), 300);
@@ -1369,11 +1384,34 @@ class PRReviewApp {
       // Auto-close terminals that were opened by task scheduler
       if (this.taskTerminalSessionIds.has(event.sessionId)) {
         this.taskTerminalSessionIds.delete(event.sessionId);
+        // Find the taskId — don't delete from taskSessionMap here; let onTaskTerminalStarted own that
+        let completedTaskId: string | undefined;
+        for (const [taskId, sessionId] of this.taskSessionMap) {
+          if (sessionId === event.sessionId) {
+            completedTaskId = taskId;
+            break;
+          }
+        }
         setTimeout(async () => {
+          // Clean up map only now (terminal is being removed)
+          // Only clean up the map entry if it still points to THIS session —
+          // if the task was re-run within 2s a newer session already replaced it.
+          if (completedTaskId && this.taskSessionMap.get(completedTaskId) === event.sessionId) {
+            this.taskSessionMap.delete(completedTaskId);
+          }
           await window.electronAPI.chatTerminalRemove(event.sessionId);
           this.terminalsView.removeSession(event.sessionId);
-          // Switch back to Tasks section
-          this.switchSection('tasks');
+          // Only navigate away / show log if no newer session is now running for this task
+          const newerRunning = completedTaskId && this.taskSessionMap.has(completedTaskId);
+          if (!newerRunning) {
+            this.switchSection('tasks');
+            if (completedTaskId) {
+              setTimeout(() => {
+                this.tasksView.highlightTask(completedTaskId!);
+                this.tasksView.showLatestLog(completedTaskId!);
+              }, 150);
+            }
+          }
           Toast.success('Task completed — terminal closed');
         }, 2000);
       }
@@ -6050,11 +6088,13 @@ After this, respond with a simple text response to greet the user and ask them w
       await this.loadIcmQueries();
     } catch (error) {
       console.error('Failed to get ICM current user:', error);
-      Toast.error('Failed to connect to ICM. Ensure you are signed into Edge.');
+      this.icmListView.setSubtitle('Not connected — open Edge, sign in, and visit portal.microsofticm.com');
+      Toast.error('Failed to connect to ICM. Open Edge, sign in, and visit portal.microsofticm.com first.');
     }
   }
 
   private async refreshIcmIncidents() {
+    if (!this.icmCurrentUser) return;
     this.icmListView.setLoading(true);
 
     try {
