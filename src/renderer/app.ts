@@ -1413,7 +1413,7 @@ class PRReviewApp {
             }
           }
           Toast.success('Task completed — terminal closed');
-        }, 2000);
+        }, 30000);
       }
     });
 

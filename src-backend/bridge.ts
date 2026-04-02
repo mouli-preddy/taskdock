@@ -224,7 +224,9 @@ terminalManager.on('review-complete', (event) => broadcast('terminal:review-comp
 
 // Chat Terminal events
 chatTerminalService.on('session-created', (event) => broadcast('chat-terminal:session-created', event));
-chatTerminalService.on('data', (event) => broadcast('chat-terminal:data', event));
+chatTerminalService.on('data', (event) => {
+  broadcast('chat-terminal:data', event);
+});
 chatTerminalService.on('exit', (event) => {
   broadcast('chat-terminal:exit', event);
   const phase1Info = phase1Sessions.get(event.sessionId);
@@ -2243,6 +2245,12 @@ const wss = new WebSocketServer({
 });
 
 wss.on('connection', (ws) => {
+  // Close any stale connections — the renderer reconnects on HMR/reload and
+  // a leftover socket causes every broadcast to fire twice in the UI.
+  for (const existing of clients) {
+    existing.close();
+  }
+  clients.clear();
   console.log('Client connected');
   clients.add(ws);
 
