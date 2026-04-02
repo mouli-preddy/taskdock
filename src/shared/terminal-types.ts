@@ -12,8 +12,9 @@ export interface TerminalSession {
   createdAt: string;
   completedAt?: string;
   error?: string;
-  worktreeCreated?: boolean; // true if we created the worktree (for cleanup)
-  mainRepoPath?: string; // the main repo path (for worktree removal)
+  worktreeCreated?: boolean;
+  mainRepoPath?: string;
+  command?: string; // exact shell command run (set for task terminals)
 }
 
 export interface CreateTerminalOptions {

@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { execSync, spawnSync } from 'child_process';
 import { existsSync } from 'fs';
 import { getLogger } from './services/logger-service.js';
 import type {
@@ -12,9 +12,9 @@ import type {
 const ADO_RESOURCE_ID = '499b84ac-1321-427f-aa17-267ca6975798';
 const API_VERSION = '7.1';
 
-function findAzCommand(): string {
+function findAzPath(): string | null {
   if (process.platform !== 'win32') {
-    return 'az';
+    return null; // use 'az' via PATH
   }
 
   const knownPaths = [
@@ -24,12 +24,11 @@ function findAzCommand(): string {
 
   for (const azPath of knownPaths) {
     if (existsSync(azPath)) {
-      return `"${azPath}"`;
+      return azPath;
     }
   }
 
-  // Fall back to PATH lookup
-  return 'az';
+  return null; // fall back to PATH lookup
 }
 
 export class AdoApiClient {
@@ -54,14 +53,28 @@ export class AdoApiClient {
     logger.info('AdoApiClient', 'Fetching token via Azure CLI (az account get-access-token)...');
 
     try {
-      const azCommand = findAzCommand();
+      const azPath = findAzPath();
+      const args = ['account', 'get-access-token', '--resource', ADO_RESOURCE_ID, '--output', 'json'];
 
-      const result = execSync(
-        `${azCommand} account get-access-token --resource ${ADO_RESOURCE_ID} --output json`,
-        { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 10000 }
-      );
+      // On Windows, invoke via cmd.exe /c so the .cmd path is passed as a proper
+      // argument (avoids backslash-stripping that occurs with execSync shell escaping)
+      let spawnResult;
+      if (process.platform === 'win32' && azPath) {
+        spawnResult = spawnSync('cmd.exe', ['/c', azPath, ...args], { encoding: 'utf-8', timeout: 10000 });
+      } else {
+        spawnResult = spawnSync(azPath ?? 'az', args, { encoding: 'utf-8', timeout: 10000 });
+      }
 
-      const tokenResponse = JSON.parse(result);
+      if (spawnResult.error) throw spawnResult.error;
+      if (spawnResult.status !== 0) {
+        const err = new Error(`Command failed with exit code ${spawnResult.status}`) as any;
+        err.stderr = spawnResult.stderr;
+        err.stdout = spawnResult.stdout;
+        err.status = spawnResult.status;
+        throw err;
+      }
+
+      const tokenResponse = JSON.parse(spawnResult.stdout);
       const expiresAt = new Date(tokenResponse.expiresOn).getTime();
 
       this.tokenCache = {
@@ -72,7 +85,7 @@ export class AdoApiClient {
       logger.info('AdoApiClient', 'Azure CLI token acquired successfully');
       return tokenResponse.accessToken;
     } catch (error: any) {
-      const raw = (error.stderr || error.message || String(error)).trim();
+      const raw = (error.stderr || error.stdout || error.message || String(error)).trim();
 
       if (error.code === 'ETIMEDOUT' || error.signal === 'SIGTERM') {
         const msg = `Azure CLI timed out. Try running "az account get-access-token" in your terminal to diagnose. Raw error: ${raw}`;
@@ -94,7 +107,12 @@ export class AdoApiClient {
         logger.error('AdoApiClient', msg);
         throw new Error(msg);
       }
-      const msg = `Azure CLI error: ${raw}`;
+      // If raw is just the command invocation with no real detail, add guidance
+      const isUseless = raw.startsWith('Command failed:') && !raw.includes('\n');
+      const detail = isUseless
+        ? `${raw}\n\nRun "az account get-access-token --resource ${ADO_RESOURCE_ID}" in your terminal to see the real error, then try "az login" if needed.`
+        : raw;
+      const msg = `Azure CLI error: ${detail}`;
       logger.error('AdoApiClient', msg);
       throw new Error(msg);
     }

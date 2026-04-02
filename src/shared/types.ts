@@ -198,12 +198,12 @@ export function getVoteInfo(vote: number): ReviewVote {
 // Polling settings for PR tab auto-refresh
 export interface PollingSettings {
   enabled: boolean;
-  intervalSeconds: number;  // Default: 30, min: 10, max: 300
+  intervalSeconds: number;  // Default: 3600 (60 mins), min: 60, max: 3600
 }
 
 export const DEFAULT_POLLING_SETTINGS: PollingSettings = {
   enabled: true,
-  intervalSeconds: 30,
+  intervalSeconds: 3600,
 };
 
 // Notification settings for native Windows toast notifications

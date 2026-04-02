@@ -447,9 +447,9 @@ export class SettingsView {
               </div>
 
               <div class="form-group">
-                <label for="pollingInterval">Polling Interval (seconds)</label>
-                <input type="number" id="pollingInterval" min="10" max="300" step="5" value="30">
-                <span class="form-hint">How often to check for updates (10-300 seconds)</span>
+                <label for="pollingInterval">Polling Interval (minutes)</label>
+                <input type="number" id="pollingInterval" min="1" max="60" step="1" value="60">
+                <span class="form-hint">How often to check for updates (1–60 minutes)</span>
               </div>
             </div>
           </div>
@@ -1018,10 +1018,11 @@ export class SettingsView {
       const dgrepAnalysisProvider = (this.container.querySelector('#dgrepAnalysisProvider') as HTMLSelectElement).value as 'claude-sdk' | 'copilot-sdk';
       const dgrepAnalysisSourceRepo = (this.container.querySelector('#dgrepAnalysisSourceRepo') as HTMLSelectElement).value;
 
-      // 4. Gather Polling settings
+      // 4. Gather Polling settings (UI is in minutes, stored as seconds)
       const pollingEnabled = (this.container.querySelector('#pollingEnabled') as HTMLInputElement).checked;
-      let pollingIntervalSeconds = parseInt((this.container.querySelector('#pollingInterval') as HTMLInputElement).value, 10);
-      pollingIntervalSeconds = Math.max(10, Math.min(300, pollingIntervalSeconds || 30));
+      let pollingIntervalMinutes = parseInt((this.container.querySelector('#pollingInterval') as HTMLInputElement).value, 10);
+      pollingIntervalMinutes = Math.max(1, Math.min(60, pollingIntervalMinutes || 60));
+      const pollingIntervalSeconds = pollingIntervalMinutes * 60;
 
       // Update and save Console Review settings (includes AI providers)
       this.consoleReviewSettings = {
@@ -1448,7 +1449,7 @@ export class SettingsView {
     const pollingInterval = this.container.querySelector('#pollingInterval') as HTMLInputElement;
 
     if (pollingEnabled) pollingEnabled.checked = this.pollingSettings.enabled;
-    if (pollingInterval) pollingInterval.value = String(this.pollingSettings.intervalSeconds);
+    if (pollingInterval) pollingInterval.value = String(Math.round(this.pollingSettings.intervalSeconds / 60));
   }
 
   // Notification Settings Methods

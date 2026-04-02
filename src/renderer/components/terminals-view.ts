@@ -12,6 +12,8 @@ export class TerminalsView {
   private terminals: Map<string, any> = new Map();
   private fitAddons: Map<string, any> = new Map();
   private chatSessionIds: Set<string> = new Set(); // Track chat terminal sessions
+  private dataBuffers: Map<string, string[]> = new Map(); // Buffer output per session for replay after re-renders
+  private pendingRafs: Map<string, number> = new Map(); // Cancel stale deferred inits
 
   private selectCallback?: (sessionId: string) => void;
   private closeCallback?: (sessionId: string, isChat: boolean) => void;
@@ -20,6 +22,8 @@ export class TerminalsView {
     this.container = document.getElementById(containerId)!;
     this.render();
   }
+
+  getTerminalCount(): number { return this.terminals.size; }
 
   onSelect(callback: (sessionId: string) => void): void {
     this.selectCallback = callback;
@@ -42,6 +46,31 @@ export class TerminalsView {
   }
 
   refresh(): void {
+    // If the active session already has a live terminal, skip full re-render.
+    // Re-rendering would destroy the working xterm instance; a duplicate event
+    // (e.g. two WS clients) would then trigger a second open() on the same container
+    // which causes an xterm internal crash (stale setTimeout from the first open fires
+    // after dispose and reads a null _renderService).
+    if (this.activeSessionId && this.terminals.has(this.activeSessionId)) {
+      const activeId = this.activeSessionId;
+      setTimeout(() => {
+        const fitAddon = this.fitAddons.get(activeId);
+        const container = document.getElementById(`terminal-${activeId}`);
+        if (fitAddon) {
+          fitAddon.fit();
+          const terminal = this.terminals.get(activeId);
+          if (terminal) {
+            const { cols, rows } = terminal;
+            if (this.chatSessionIds.has(activeId)) {
+              window.electronAPI.chatTerminalResize(activeId, cols, rows);
+            } else {
+              window.electronAPI.terminalResize(activeId, cols, rows);
+            }
+          }
+        }
+      }, 0);
+      return;
+    }
     this.render();
     // After render, refit any active terminal (fixes visibility after section switch)
     if (this.activeSessionId) {
@@ -67,27 +96,59 @@ export class TerminalsView {
   }
 
   addSession(session: TerminalSession, isChat = false): void {
-    console.log('[TerminalsView] addSession called:', session?.id, session?.label, 'isChat:', isChat, 'current sessions:', this.sessions.length);
+    if (this.sessions.some(s => s.id === session.id)) return; // already present, skip
     this.sessions.push(session);
     if (isChat) this.chatSessionIds.add(session.id);
     this.activeSessionId = session.id; // Set before render so container is created
     this.render();
-    console.log('[TerminalsView] After render, sessions:', this.sessions.length, 'activeSessionId:', this.activeSessionId);
   }
 
   updateSession(sessionId: string, updates: Partial<TerminalSession>): void {
     const session = this.sessions.find(s => s.id === sessionId);
     if (session) {
       Object.assign(session, updates);
-      this.render();
+      // Targeted DOM update — avoid full re-render which destroys the live xterm instance
+      this.patchSessionDOM(sessionId);
+    }
+  }
+
+  private patchSessionDOM(sessionId: string): void {
+    const session = this.sessions.find(s => s.id === sessionId);
+    if (!session) return;
+
+    // Update sidebar item class (status dot color)
+    const item = this.container.querySelector(`.terminal-item[data-id="${sessionId}"]`) as HTMLElement | null;
+    if (item) {
+      item.className = `terminal-item ${sessionId === this.activeSessionId ? 'active' : ''} ${session.status}`;
+      const label = item.querySelector('.terminal-label');
+      if (label) label.textContent = session.label;
+    }
+
+    // Update status bar and toolbar title if this is the active session
+    if (sessionId === this.activeSessionId) {
+      const indicator = this.container.querySelector('.status-indicator');
+      if (indicator) {
+        indicator.className = `status-indicator ${session.status}`;
+        const text = indicator.querySelector('.status-text');
+        if (text) text.textContent = this.getStatusText(session.status);
+      }
+      const title = this.container.querySelector('.terminal-title');
+      if (title) title.textContent = session.label;
     }
   }
 
   removeSession(sessionId: string): void {
+    // Cancel any pending deferred init for this session
+    const pendingRaf = this.pendingRafs.get(sessionId);
+    if (pendingRaf !== undefined) {
+      cancelAnimationFrame(pendingRaf);
+      this.pendingRafs.delete(sessionId);
+    }
     this.sessions = this.sessions.filter(s => s.id !== sessionId);
     this.terminals.delete(sessionId);
     this.fitAddons.delete(sessionId);
     this.chatSessionIds.delete(sessionId);
+    this.dataBuffers.delete(sessionId);
     if (this.activeSessionId === sessionId) {
       this.activeSessionId = this.sessions[0]?.id || null;
     }
@@ -95,6 +156,12 @@ export class TerminalsView {
   }
 
   writeToTerminal(sessionId: string, data: string): void {
+    // Buffer data so it can be replayed if the xterm instance is recreated
+    if (!this.dataBuffers.has(sessionId)) {
+      this.dataBuffers.set(sessionId, []);
+    }
+    this.dataBuffers.get(sessionId)!.push(data);
+
     const terminal = this.terminals.get(sessionId);
     if (terminal) {
       terminal.write(data);
@@ -121,7 +188,10 @@ export class TerminalsView {
         <div class="terminal-panel">
           ${this.activeSessionId ? `
             <div class="terminal-toolbar">
-              <span class="terminal-title">${this.getActiveSession()?.label || ''}</span>
+              <div class="terminal-title-group">
+                <span class="terminal-title">${escapeHtml(this.getActiveSession()?.label || '')}</span>
+                ${this.getActiveSession()?.command ? `<code class="terminal-command">${escapeHtml(this.getActiveSession()!.command!)}</code>` : ''}
+              </div>
               <div class="terminal-actions">
                 <button class="btn btn-icon kill-btn" title="Stop">
                   ${getIcon(Square, 16)}
@@ -185,6 +255,13 @@ export class TerminalsView {
   }
 
   private initTerminal(sessionId: string): void {
+    // Cancel any stale deferred init — this call supersedes it
+    const pendingRaf = this.pendingRafs.get(sessionId);
+    if (pendingRaf !== undefined) {
+      cancelAnimationFrame(pendingRaf);
+      this.pendingRafs.delete(sessionId);
+    }
+
     const container = document.getElementById(`terminal-${sessionId}`);
     if (!container) {
       return;
@@ -202,11 +279,13 @@ export class TerminalsView {
       this.fitAddons.delete(sessionId);
     }
 
-    // If container has zero dimensions, wait for next frame
+    // If container has zero dimensions, defer — but only one rAF per session at a time
     if (container.offsetWidth === 0 || container.offsetHeight === 0) {
-      requestAnimationFrame(() => {
+      const rafId = requestAnimationFrame(() => {
+        this.pendingRafs.delete(sessionId);
         this.initTerminal(sessionId);
       });
+      this.pendingRafs.set(sessionId, rafId);
       return;
     }
 
@@ -252,10 +331,22 @@ export class TerminalsView {
       terminal.loadAddon(fitAddon);
 
       terminal.open(container);
-      fitAddon.fit();
 
+      // Register the terminal immediately so data can be written even if fit() is delayed
       this.terminals.set(sessionId, terminal);
       this.fitAddons.set(sessionId, fitAddon);
+
+      // Fit — may be a no-op if font metrics aren't ready yet; retry via setTimeout
+      fitAddon.fit();
+      if (terminal.cols <= 2 || terminal.rows <= 1) {
+        setTimeout(() => { fitAddon.fit(); }, 100);
+      }
+
+      // Replay any buffered data that arrived before/during re-renders
+      const buffered = this.dataBuffers.get(sessionId);
+      if (buffered && buffered.length > 0) {
+        terminal.write(buffered.join(''));
+      }
 
       // Send initial resize to PTY
       const { cols, rows } = terminal;
@@ -314,7 +405,7 @@ export class TerminalsView {
         fitAddon.fit();
       });
     } catch (error) {
-      // Terminal creation failed silently
+      console.error('[TerminalsView] initTerminal failed for', sessionId, error);
     }
   }
 
