@@ -23,6 +23,8 @@ export class TerminalsView {
     this.render();
   }
 
+  getTerminalCount(): number { return this.terminals.size; }
+
   onSelect(callback: (sessionId: string) => void): void {
     this.selectCallback = callback;
   }
@@ -44,6 +46,31 @@ export class TerminalsView {
   }
 
   refresh(): void {
+    // If the active session already has a live terminal, skip full re-render.
+    // Re-rendering would destroy the working xterm instance; a duplicate event
+    // (e.g. two WS clients) would then trigger a second open() on the same container
+    // which causes an xterm internal crash (stale setTimeout from the first open fires
+    // after dispose and reads a null _renderService).
+    if (this.activeSessionId && this.terminals.has(this.activeSessionId)) {
+      const activeId = this.activeSessionId;
+      setTimeout(() => {
+        const fitAddon = this.fitAddons.get(activeId);
+        const container = document.getElementById(`terminal-${activeId}`);
+        if (fitAddon) {
+          fitAddon.fit();
+          const terminal = this.terminals.get(activeId);
+          if (terminal) {
+            const { cols, rows } = terminal;
+            if (this.chatSessionIds.has(activeId)) {
+              window.electronAPI.chatTerminalResize(activeId, cols, rows);
+            } else {
+              window.electronAPI.terminalResize(activeId, cols, rows);
+            }
+          }
+        }
+      }, 0);
+      return;
+    }
     this.render();
     // After render, refit any active terminal (fixes visibility after section switch)
     if (this.activeSessionId) {
@@ -69,13 +96,11 @@ export class TerminalsView {
   }
 
   addSession(session: TerminalSession, isChat = false): void {
-    console.log('[TerminalsView] addSession called:', session?.id, session?.label, 'isChat:', isChat, 'current sessions:', this.sessions.length);
     if (this.sessions.some(s => s.id === session.id)) return; // already present, skip
     this.sessions.push(session);
     if (isChat) this.chatSessionIds.add(session.id);
     this.activeSessionId = session.id; // Set before render so container is created
     this.render();
-    console.log('[TerminalsView] After render, sessions:', this.sessions.length, 'activeSessionId:', this.activeSessionId);
   }
 
   updateSession(sessionId: string, updates: Partial<TerminalSession>): void {
